@@ -1,0 +1,43 @@
+[project]
+name = "traenslenzor"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastmcp>=2.12.4",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18.2",
+    "pre-commit>=4.3.0",
+    "pytest>=8.4.2",
+    "ruff>=0.14.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+extend-select = ["I"]  # import sorting
+
+[tool.mypy]
+python_version = "3.13"
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+check_untyped_defs = true
+no_implicit_optional = true
+pretty = true
+mypy_path = ["src"]
+files = ["src", "tests"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
