@@ -1,0 +1,6 @@
+[submodule "external/ADL-Project"]
+	path = external/ADL-Project
+	url = git@github.com:JanDuchscherer104/ADL-Project.git
+[submodule "external/UniTraj"]
+	path = external/UniTraj
+	url = git@github.com:JanDuchscherer104/UniTraj.git

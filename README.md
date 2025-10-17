@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- [uv](https://docs.astral.sh/uv/install/) - Fast Python package installer (required)
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) - Fast Python package installer (required)
 
 ## Run Project
 
