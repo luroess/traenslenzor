@@ -1,11 +1,19 @@
 from typing import Literal
 
+import requests
 from langchain.messages import AIMessage, AnyMessage, SystemMessage, ToolMessage
 from langchain.tools import tool
 from langchain_ollama import ChatOllama
 from langgraph.graph import END
 
 from traenslenzor.supervisor.state import MessagesState
+
+try:
+    # check ollama server
+    requests.get("http://localhost:11434", timeout=2)
+except Exception:
+    print("Error: Ollama server not running")
+    exit(-1)
 
 llm = ChatOllama(
     model="llama3.1",
