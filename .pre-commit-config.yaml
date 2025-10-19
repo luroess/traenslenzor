@@ -5,8 +5,12 @@ repos:
       - id: ruff
         args: [--fix]
       - id: ruff-format
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.18.2
+
+  - repo: local
     hooks:
-      - id: mypy
-        additional_dependencies: []
+      - id: mypy-uv
+        name: mypy (uv)
+        entry: uv run mypy
+        language: system
+        pass_filenames: true
+        types_or: [python]
