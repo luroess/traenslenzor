@@ -1,9 +1,12 @@
-import operator
+from typing import List, Optional
 
 from langchain.messages import AnyMessage
-from typing_extensions import Annotated, TypedDict
+from typing_extensions import TypedDict
 
 
-class MessagesState(TypedDict):
-    messages: Annotated[list[AnyMessage], operator.add]
-    llm_calls: int
+class State(TypedDict):
+    messages: List[AnyMessage]
+    doc_loaded: bool
+    language: Optional[str]
+    allowed_tools: List[str]
+    next_node: str
