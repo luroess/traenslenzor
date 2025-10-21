@@ -11,42 +11,61 @@
 
 == General
 
-- Arbeitsaufteilung in erster Gruppensitzung
-- Repository Erstellung, Python setup 
+- Task distribution in first group session
+- Repository creation, Python setup
 - Research and familiarization into the Topic
 
 
 == Overview
 
-Wer was wie wann wo.
+Who does what?
 
-#figure(caption: [Vorläufige Arbeitsaufteilung nach Komponenten])[
+#figure(caption: [Preliminary task distribution by components])[
   #image("imgs/whowhatwhenwhere.png")
 ]
 
+
 == Supervisor
-*Was wurde gemacht?*
+*What was done?*
 
-- Erste experimente mit langschain/langgraph
-- Experimenteller langchain supervisor mit dynamic tooling
+- First experiments with langchain/langgraph
+- Experimental langchain supervisor with dynamic tooling
 
 
-*Was für Fragen gibt es?*
+*What questions are there?*
 
-- Gemma3 scheint keinen Tooling support zu haben. 
-  - Ist das bekannt? Es gibt hacks um das zu umgehen. 
-  - Kann alternativ auch ein Modell wie llama3.1 verwendet werden?
+- Gemma3 seems to have no tooling support.
+  - Is this known? There are hacks to work around this.
+  - Can an alternative model like llama3.1 be used instead?
 
-- Tools als Tools oder als Nodes?
-  - Was sind ihre Erfahrungen?
+- Tools as Tools or as Nodes?
+  - What are your experiences?
 
 #pagebreak()
 
-*Plan für die nächsten zwei Wochen*
-- Erste MCP server mocks anbinden
-- Entscheidung für einen Langgraph Design Ansatz
+*Plan for the next two weeks*
+- Connect first MCP server mocks
+- Decision for a Langgraph design approach
 - Document Provider
 \
 \
 *TODOs*
-- Couple counseling für Jan + Felix
+- Couple counseling for Jan + Felix
+
+
+== Plans for Next Week
+*Jan S.:*
+- void
+
+*Felix:*
+- void
+
+*Jan D.:*
+- void
+
+*Benedikt:*
+- void
+
+*Lukas:*
+- Read about MLP architecture
+- Create concept for document translator
