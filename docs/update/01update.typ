@@ -125,6 +125,16 @@ Who does what?
   - Optuna and WandB Integration for Hyperparameter Tuning and Experiment Tracking
 
 
+== Document Font Detector — Lukas Röß
+*Tasks worked on*
+- Created roadmap
+- Researched existing font detection models
+- Planned dataset generation for synthetic text boxes (5 fonts × multiple sizes)
+
+*Questions*
+- Final submission date of project?
+
+
 == Plans for Next Week
 *Jan D.:*
 - Update and optimize factory for LitTrainer
@@ -137,5 +147,6 @@ Who does what?
 - void
 
 *Lukas:*
-- Read about MLP architecture
-- Create concept for document translator
+- Research about MLP architecture
+- Create synthetic font dataset
+- Implement MLP baseline model
