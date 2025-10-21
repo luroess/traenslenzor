@@ -25,6 +25,61 @@ Who does what?
 ]
 
 
+== Roadmap
+
+#table(
+  columns: (auto, auto, auto, auto),
+  align: (left, center, center, left),
+  stroke: none,
+  table.header(
+    [*Milestone*], [*Duration*], [*Timeline*], [*Deliverables*]
+  ),
+  table.hline(),
+  
+  [*M1* – Module Prototyping & Architecture],
+  [7 weeks],
+  [Week 3–9],
+  [
+    - Prototype MCP servers
+    - Working supervisor skeleton
+    - First end-to-end pipeline mock
+  ],
+  
+  table.hline(stroke: 0.5pt),
+  
+  [*M2* – Integration & Refinement],
+  [2 weeks],
+  [Week 10–11],
+  [
+    - Fully integrated pipeline
+    - Core testing metrics
+    - UI mock integration
+  ],
+  
+  table.hline(stroke: 0.5pt),
+  
+  [*M3* – Evaluation & Optimization],
+  [2 weeks],
+  [Week 12–13],
+  [
+    - Evaluation report
+    - Performance plots
+    - Final system demo
+  ],
+  
+  table.hline(stroke: 0.5pt),
+  
+  [*M4* – Documentation & Delivery],
+  [2 weeks],
+  [Week 14–15],
+  [
+    - Complete documentation
+    - Demo video
+    - Final submission
+  ],
+)
+
+
 == Supervisor
 *What was done?*
 
@@ -55,6 +110,7 @@ Who does what?
 *TODOs*
 - Couple counseling for Jan + Felix
 
+
 == Document Class Detector
 
 *What has been done?*
@@ -68,13 +124,8 @@ Who does what?
   - Augmentation Pipeline using Albumentations
   - Optuna and WandB Integration for Hyperparameter Tuning and Experiment Tracking
 
+
 == Plans for Next Week
-*Jan S.:*
-- void
-
-*Felix:*
-- void
-
 *Jan D.:*
 - Update and optimize factory for LitTrainer
   - Optimizer Config, LR Scheduler, Callbacks, ...
