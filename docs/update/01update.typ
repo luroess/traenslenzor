@@ -46,5 +46,7 @@ Wer was wie wann wo.
 
 *Nächste Schritte*
 
+- LaMa paper lesen
+- test cases bauen -> richtigen text entfernen
 - das generieren der Maske anhand der Textboxen
-- Das Inpainting model als mcp-tool verfügbar machen
+- evtl. andere Modelle testen
