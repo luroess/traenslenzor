@@ -1,7 +1,7 @@
 #import "template.typ": *
 
 #show: slides.with(
-  title: "Update Meeting",
+  title: "Update Meeting - tränslenzor",
   date: datetime.today().display("[day]. [month repr:long] [year]"),
   ratio: 16/9,
   layout: "medium",
@@ -35,7 +35,8 @@ Wer was wie wann wo.
 - Gemma3 scheint keinen Tooling support zu haben.
   - Ist das bekannt? Es gibt hacks um das zu umgehen.
   - Kann alternativ auch ein Modell wie llama3.1 verwendet werden?
-
+- Tools als Tools oder als Nodes?
+  - Was sind ihre Erfahrungen?
 
 == Image Renderer
 
