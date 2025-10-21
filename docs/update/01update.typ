@@ -12,7 +12,7 @@
 == General
 
 - Arbeitsaufteilung in erster Gruppensitzung
-- Repository Erstellung, Python setup 
+- Repository Erstellung, Python setup
 - Research and familiarization into the Topic
 
 
@@ -32,10 +32,21 @@ Wer was wie wann wo.
 
 *Was für Fragen gibt es?*
 
-- Gemma3 scheint keinen Tooling support zu haben. 
-  - Ist das bekannt? Es gibt hacks um das zu umgehen. 
+- Gemma3 scheint keinen Tooling support zu haben.
+  - Ist das bekannt? Es gibt hacks um das zu umgehen.
   - Kann alternativ auch ein Modell wie llama3.1 verwendet werden?
-
 - Tools als Tools oder als Nodes?
   - Was sind ihre Erfahrungen?
 
+== Image Renderer
+
+*Was wurde gemacht?*
+
+- download und tests von LaMa model
+
+*Nächste Schritte*
+
+- LaMa paper lesen
+- test cases bauen -> richtigen text entfernen
+- das generieren der Maske anhand der Textboxen
+- evtl. andere Modelle testen
