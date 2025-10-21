@@ -52,6 +52,18 @@ Who does what?
 *TODOs*
 - Couple counseling for Jan + Felix
 
+== Document Class Detector
+
+*What has been done?*
+
+- Setup ML Infrastructure:
+  - PyTorch Lightning Module
+    - `nn.CrossEntropyLoss`
+    - `torchmetrics.Accuracy` & `torchmetrics.ConfusionMatrix`
+    - setup logging, custom TQDM progress bar
+  - Config Handling using Pydantic with _ConfigAsFactory_ design pattern.
+  - Augmentation Pipeline using Albumentations
+  - Optuna and WandB Integration for Hyperparameter Tuning and Experiment Tracking
 
 == Plans for Next Week
 *Jan S.:*
@@ -61,7 +73,11 @@ Who does what?
 - void
 
 *Jan D.:*
-- void
+- Update and optimize factory for LitTrainer
+  - Optimizer Config, LR Scheduler, Callbacks, ...
+- Implement Dataset Class
+- Implement AlexNet from scratch
+- Improve config handling and logging & satisfy _ruff_
 
 *Benedikt:*
 - void
