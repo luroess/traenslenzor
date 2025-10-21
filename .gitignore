@@ -216,4 +216,5 @@ __marimo__/
 .streamlit/secrets.toml
 
 main.pdf
+*update.pdf
 .DS_Store
