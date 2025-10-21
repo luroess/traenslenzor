@@ -25,10 +25,11 @@ Wer was wie wann wo.
 ]
 
 == Supervisor
-
 *Was wurde gemacht?*
 
 - Erste experimente mit langschain/langgraph
+- Experimenteller langchain supervisor mit dynamic tooling
+
 
 *Was für Fragen gibt es?*
 
@@ -39,3 +40,13 @@ Wer was wie wann wo.
 - Tools als Tools oder als Nodes?
   - Was sind ihre Erfahrungen?
 
+#pagebreak()
+
+*Plan für die nächsten zwei Wochen*
+- Erste MCP server mocks anbinden
+- Entscheidung für einen Langgraph Design Ansatz
+- Document Provider
+\
+\
+*TODOs*
+- Couple counseling für Jan + Felix
