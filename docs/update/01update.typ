@@ -43,3 +43,8 @@ Wer was wie wann wo.
 *Was wurde gemacht?*
 
 - download und tests von LaMa model
+
+*Nächste Schritte*
+
+- das generieren der Maske anhand der Textboxen
+- Das Inpainting model als mcp-tool verfügbar machen
