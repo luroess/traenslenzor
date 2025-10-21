@@ -41,6 +41,9 @@ Who does what?
 - Tools as Tools or as Nodes?
   - What are your experiences?
 
+- Muss MCP wirklich für alle Tools verwendet werden?
+  - Z.B. Image provider ist schwierig da wir nicht einfach Bilder über MCP teilen können (zumindest wenig sinnvoll)
+
 #pagebreak()
 
 *Plan for the next two weeks*
