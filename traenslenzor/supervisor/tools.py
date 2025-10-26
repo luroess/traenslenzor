@@ -1,58 +1,69 @@
 from langchain.tools import tool
-
-from traenslenzor.supervisor.state import State
+from langgraph.types import interrupt
 
 
 @tool
-def set_language(language: str) -> str:
+def request_user_input(user_question: str) -> str:
+    """Requests input from the user with the given prompt."""
+    return interrupt(user_question)  # type: ignore[no-any-return]
+
+
+# 1. Stage
+@tool
+def language_setter(language: str) -> str:
     """Sets the language for translation."""
     return f"Language set to {language}"
 
 
 @tool
-def load_document(filepath: str) -> str:
+def document_loader(filepath: str) -> str:
     """Loads a document from the given filepath."""
     return f"Document loaded from {filepath}"
 
 
+# # 2. Stage
+# @tool
+# def document_preprocessor(document: str) -> str:
+#     """Preprocesses the document content."""
+#     return f"Document preprocessed: {document}"
+
+
+# 3. Stage
 @tool
-def preprocess_document(content: str) -> str:
-    """Preprocesses the document content."""
-    return f"Document preprocessed: {content}"
-
-
-@tool
-def translate_document(content: str, target_language: str) -> str:
-    """Translates the document content to the target language."""
-    return f"Document translated to {target_language}: {content}"
-
-
-@tool
-def classify_document(content: str) -> str:
+def document_classifier(document: str) -> str:
     """Classifies the document content."""
-    return f"Document classified: {content}"
+    return f"Document classified: {document}"
 
 
-TOOLS = {
-    "set_language": set_language,
-    "load_document": load_document,
-    "preprocess_document": preprocess_document,
-    "translate_document": translate_document,
-    "classify_document": classify_document,
-}
+@tool
+def font_extractor(document: str) -> str:
+    """Extracts fonts used in the document content."""
+    return f"Fonts extracted from document: {document}"
 
 
-def policy(state: State) -> State:
-    """Policy: derives allowed_tools from state and sets next_node"""
-    if state.get("doc_loaded", False):
-        allowed = [
-            "preprocess_document",
-            "translate_document",
-            "classify_document",
-            "load_document",
-            "set_language",
-        ]
-    else:
-        allowed = ["set_language", "load_document"]
+# 4. Stage
+@tool
+def document_translator(document: str, target_language: str) -> str:
+    """Translates the document content to the target language."""
+    return f"Document translated to {target_language}: {document}"
 
-    return {**state, "allowed_tools": allowed, "next_node": "supervisor"}
+
+# 5. Stage
+@tool
+def document_image_renderer(document: str, format: str) -> str:
+    """Renders the document content in the specified format."""
+    return f"Document rendered in {format} format: {document}"
+
+
+TOOLS = [
+    request_user_input,
+    language_setter,
+    document_loader,
+    # document_preprocessor,
+    document_translator,
+    document_classifier,
+    font_extractor,
+    document_image_renderer,
+]
+
+TOOLS_NAME_MAP = {t.name: t for t in TOOLS}

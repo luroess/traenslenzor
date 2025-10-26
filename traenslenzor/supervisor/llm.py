@@ -1,9 +1,13 @@
+from pprint import pprint
+
 import requests
-from langchain.messages import AIMessage, AnyMessage, SystemMessage, ToolMessage
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables.base import Runnable
 from langchain_ollama import ChatOllama
 
-from traenslenzor.supervisor.state import State
-from traenslenzor.supervisor.tools import TOOLS
+from traenslenzor.supervisor.state import PlanStep, State
+from traenslenzor.supervisor.tools import TOOLS, TOOLS_NAME_MAP
 
 try:
     # check ollama server
@@ -12,108 +16,87 @@ except Exception:
     print("Error: Ollama server not running")
     exit(-1)
 
-llm = ChatOllama(model="llama3.1", temperature=0, seed=69)
+llm = ChatOllama(model="llama3.1", temperature=0, seed=69).bind_tools(TOOLS)
 
+SYSTEM = (
+    "You are a careful reasoner using tools. "
+    "Think step by step **internally**. "
+    # "When ready, emit a JSON PlanStep {{action, rationale, output}}" f"with one of actions: {', '.join(TOOLS_NAME_MAP.keys())}, finish. "
+    "Never reveal your rationale to the user. If finish, put the final answer in output."
+)
 
-def supervisor_call(state: State) -> State:
-    """Supervisor call: binds dynamically only the allowed tools"""
-    print(f"DEBUG: allowed_tools = {state['allowed_tools']}")
-    print(f"DEBUG: doc_loaded = {state.get('doc_loaded', False)}")
-
-    tools = [TOOLS[name] for name in state["allowed_tools"]]
-    print(f"DEBUG: actual tools bound = {[tool.name for tool in tools]}")
-    llm_with_tools = llm.bind_tools(tools)
-
-    doc_status = "loaded" if state.get("doc_loaded", False) else "not loaded"
-
-    tool_descriptions = {
-        "set_language": "- Set language: Change the language setting",
-        "load_document": "- Load document: Load a document from a file path",
-        "preprocess_document": "- Preprocess document: Clean and prepare the loaded document",
-        "translate_document": "- Translate document: Translate the loaded document",
-        "classify_document": "- Classify document: Classify the loaded document",
-    }
-
-    capability_descriptions = [
-        tool_descriptions[name] for name in state["allowed_tools"] if name in tool_descriptions
+prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", SYSTEM),
+        (
+            "user",
+            "Question: {question}\n"
+            "LastObservation: {last_observation}\n"
+            "So far you did {step_count} steps. "
+            "Propose the next PlanStep as JSON.",
+        ),
     ]
-    capabilities_text = "\n".join(capability_descriptions)
-
-    previous_messages = [
-        SystemMessage(
-            content=f"""You are a helpful assistant for document operations.
-
-Document status: {doc_status}
-
-Your current capabilities:
-{capabilities_text}
-
-CRITICAL RULES YOU MUST FOLLOW:
-1. NEVER call tools to answer questions about what you can do or your capabilities
-2. NEVER call tools unless the user EXPLICITLY provides a file path or EXPLICITLY requests an action
-3. For questions like "what can you do?", "what tools do you have?", "help", etc. - ONLY respond with text
-4. Do NOT make up file paths or parameters - wait for the user to provide them
-5. Please tell the user what you can do based on your current capabilities
-
-Examples of when NOT to call tools (respond with text only):
-- "What can you do?" → List your capabilities from above
+)
+parser = JsonOutputParser(pydantic_object=PlanStep)
 
 
-Examples of when TO call tools (user provides specific request):
-- "Load /home/user/document.txt" → Call load_document with that path
-- "Set language to Spanish" → Call set_language with Spanish"""
+class LoggingRunnable(Runnable):
+    def __init__(self, runnable, name=None):
+        self.runnable = runnable
+        self.name = name or runnable.__class__.__name__
+
+    def invoke(  # type: ignore[override]
+        self,
+        input,
+        config,
+        **kwargs,
+    ):
+        print(f"[{self.name}] Input:", input)
+        result = self.runnable(input, config, **kwargs)
+        print(f"[{self.name}] Output:", result)
+        return result
+
+
+logger = LoggingRunnable(pprint)
+plan_runnable = prompt | llm | parser
+
+
+# ---- Nodes
+def plan(state: State) -> State:
+    step = plan_runnable.invoke(
+        {
+            "question": state["question"],
+            "last_observation": state.get("last_observation", None),
+            "step_count": state.get("step_count", 0),
+        }
+    )
+    state["steps"].append(step)
+    return state
+
+
+def act(state: State) -> State:
+    step = state["steps"][-1]
+    print(f"Acting on step: {step}")
+    if step["action"] == "finish":
+        state["answer"] = step.get("output", "")  # type: ignore[typeddict-item]
+        return state
+    tool = TOOLS_NAME_MAP[step["action"]]
+    obs = tool.invoke(step.get("output", ""))  # type: ignore
+    state["last_observation"] = obs
+    state["step_count"] = state.get("step_count", 0) + 1
+    return state
+
+
+def should_continue(state: State):
+    print(state)
+    last = state["steps"][-1]
+    print(last)
+    if last["action"] == "finish":
+        return "finish"
+    if state.get("step_count", 0) >= 6:  # hard stop to avoid loops
+        # force finish with best effort
+        state["answer"] = (
+            f"Partial answer (step cap reached). Latest info: {state.get('last_observation', '')}"
         )
-    ] + state["messages"]
-
-    ai = llm_with_tools.invoke(previous_messages)
-
-    if hasattr(ai, "tool_calls") and ai.tool_calls:
-        next_node = "tools"
-    else:
-        next_node = "END"
-
-    return {**state, "messages": state["messages"] + [ai], "next_node": next_node}
-
-
-def execute_tools(state: State) -> State:
-    """Execute the tool calls from the last AI message"""
-    last_message = state["messages"][-1]
-    if not isinstance(last_message, AIMessage) or not hasattr(last_message, "tool_calls"):
-        return {**state, "next_node": "END"}
-
-    tool_messages: list[ToolMessage] = []
-    doc_loaded = state.get("doc_loaded", False)
-    language = state.get("language")
-
-    for tool_call in last_message.tool_calls:
-        tool = TOOLS[tool_call["name"]]
-        try:
-            tool_result = tool.invoke(tool_call["args"])
-            tool_messages.append(
-                ToolMessage(content=str(tool_result), tool_call_id=tool_call["id"])
-            )
-
-            if tool_call["name"] == "load_document":
-                doc_loaded = True
-            elif tool_call["name"] == "set_language":
-                language = tool_call["args"].get("language")
-        except Exception as e:
-            tool_messages.append(
-                ToolMessage(content=f"Error: {str(e)}", tool_call_id=tool_call["id"])
-            )
-
-    messages: list[AnyMessage] = state["messages"] + [*tool_messages]
-
-    state_result: State = {
-        "messages": messages,
-        "doc_loaded": doc_loaded,
-        "language": language,
-        "allowed_tools": state["allowed_tools"],
-        "next_node": "policy",
-    }
-    return state_result
-
-
-def route(state: State) -> str:
-    """Router: purely deterministic, NO state changes"""
-    return state.get("next_node", "policy")
+        return "finish"
+    return "continue"
