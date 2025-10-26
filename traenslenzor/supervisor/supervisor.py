@@ -40,6 +40,7 @@ class Supervisor:
                 Recreate the image by rendering the translated text in the original or a matching font style.
 
                 Always keep the workflow clear and confirm each step with the user before moving on to the next.
+                Do not stop calling tools until the Rendering step is complete.
             """,
         )  # type: ignore
 
