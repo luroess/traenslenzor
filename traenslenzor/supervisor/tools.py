@@ -3,9 +3,12 @@ from langgraph.types import interrupt
 
 
 @tool
-def request_user_input(user_question: str) -> str:
-    """Requests input from the user with the given prompt."""
-    return interrupt(user_question)  # type: ignore[no-any-return]
+def request_user_input(prompt: str) -> str:
+    """Requests input from the user with the given prompt.
+    Args:
+        prompt (str): Question or answer to interact with the user.
+    """
+    return interrupt(prompt)  # type: ignore[no-any-return]
 
 
 # 1. Stage
