@@ -215,6 +215,10 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# translenzor
+.supervisor_graph.png
+
+# docs
 main.pdf
 *update.pdf
 .DS_Store
