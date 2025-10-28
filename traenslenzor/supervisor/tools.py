@@ -1,5 +1,10 @@
-from langchain.tools import tool
-from langgraph.types import interrupt
+import logging
+
+from langchain.tools import ToolRuntime, tool
+from langchain_core.messages import ToolMessage
+from langgraph.types import Command, interrupt
+
+logger = logging.getLogger(__name__)
 
 
 @tool
@@ -8,20 +13,46 @@ def request_user_input(prompt: str) -> str:
     Args:
         prompt (str): Question or answer to interact with the user.
     """
+    logger.info(f"Asking user question a {prompt}")
     return interrupt(prompt)  # type: ignore[no-any-return]
 
 
 # 1. Stage
 @tool
-def language_setter(language: str) -> str:
-    """Sets the language for translation."""
-    return f"Language set to {language}"
+def language_setter(language: str, runtime: ToolRuntime) -> Command:
+    """Sets the language so it can be recalled later.
+    Args:
+        language (str): the language to remember
+    """
+    logger.info(f"Setting language to {language}")
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(
+                    content=f"Language set successfully to {language}",
+                    tool_call_id=runtime.tool_call_id,
+                )
+            ],
+            "language": language,
+        }
+    )
 
 
 @tool
-def document_loader(filepath: str) -> str:
+def document_loader(filepath: str, runtime: ToolRuntime) -> Command:
     """Loads a document from the given filepath."""
-    return f"Document loaded from {filepath}"
+    logger.info(f"Loading document from {filepath}")
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(
+                    content=f"Document loaded successfully from {filepath}",
+                    tool_call_id=runtime.tool_call_id,
+                )
+            ],
+            "doc_loaded": True,
+        }
+    )
 
 
 # # 2. Stage
