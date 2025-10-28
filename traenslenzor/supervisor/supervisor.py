@@ -1,5 +1,8 @@
 import logging
 
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+
 from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRequest, dynamic_prompt
 from langchain_core.runnables.config import RunnableConfig
