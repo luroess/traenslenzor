@@ -219,5 +219,8 @@ __marimo__/
 
 data/
 
-.DS_Store
 traenslenzor/image_renderer/lama/big-lama.pt
+
+main.pdf
+*update.pdf
+.DS_Store
