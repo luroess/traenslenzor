@@ -1,5 +1,7 @@
+import logging
 import time
 from pathlib import Path
+from urllib.request import urlretrieve
 
 import numpy as np
 import onnxruntime
@@ -7,22 +9,69 @@ from numpy.typing import NDArray
 from PIL import Image
 from PIL.Image import Image as PILImage, Resampling
 
+logger = logging.getLogger(__name__)
 
-class Inpainter:
-    def __init__(self):
-        print("Available providers:")
-        for provider in onnxruntime.get_available_providers():
-            print(f"  - {provider}")
+MODEL_URL = "https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx"
 
-        sess_options = onnxruntime.SessionOptions()
-        rmodel = onnxruntime.InferenceSession(
-            "traenslenzor/image_renderer/lama/lama_fp32_1024.onnx",
-            sess_options=sess_options,
-            # providers=["CoreMLExecutionProvider", "CPUExecutionProvider"],
+
+def _download_progress(block_num: int, block_size: int, total_size: int) -> None:
+    downloaded = block_num * block_size
+    if total_size > 0:
+        percent = min(downloaded * 100.0 / total_size, 100.0)
+        logger.info(
+            "Download progress: %.1f%% (%d/%d bytes)",
+            percent,
+            downloaded,
+            total_size,
         )
 
-        self.size = 1024
+
+class Inpainter:
+    def __init__(
+        self,
+        path_to_model: str = "./traenslenzor/image_renderer/lama/lama_fp32.onnx",
+        device: str = "cpu",
+    ):
+        """Initialize ONNX-based inpainter.
+
+        Args:
+            path_to_model: Path to ONNX model file. Downloads if not found.
+                Default uses public 512x512 model. Use lama_fp32_1024.onnx for 1024x1024.
+            device: Device specification for API compatibility (unused by ONNX).
+        """
+        logger.info("Initializing ONNX Inpainter")
+        # logger.info("Available providers:")
+        # for provider in onnxruntime.get_available_providers():
+        #     logger.info(f"  - {provider}")
+
+        try:
+            model_path = Path(path_to_model)
+            if not model_path.exists():
+                logger.info("Downloading LaMa ONNX model from %s", MODEL_URL)
+                model_path.parent.mkdir(parents=True, exist_ok=True)
+                _ = urlretrieve(MODEL_URL, model_path, reporthook=_download_progress)
+                logger.info("done downloading")
+
+            logger.debug("Loading LaMa ONNX model from %s", model_path)
+            sess_options = onnxruntime.SessionOptions()
+            rmodel = onnxruntime.InferenceSession(
+                str(model_path),
+                sess_options=sess_options,
+                # providers=["CoreMLExecutionProvider", "CPUExecutionProvider"],
+            )
+            logger.info("LaMa ONNX model loaded successfully")
+
+            # Auto-detect model input size from model metadata
+            input_shape = rmodel.get_inputs()[0].shape
+            self.size = input_shape[2]  # Assumes shape is [batch, channels, height, width]
+            logger.info(f"Model input size: {self.size}x{self.size}")
+
+        except Exception as e:
+            logger.error("Failed to load LaMa ONNX model: %s", e, exc_info=True)
+            raise
+
         self.model = rmodel
+        self.device = device  # Store for API compatibility
 
     def preprocess_image(self, image: PILImage):
         original_size = image.size
@@ -35,40 +84,65 @@ class Inpainter:
     def postprocess_image(self, image: PILImage, original_size: tuple[int, int]):
         return image.resize(original_size, Resampling.LANCZOS)
 
-    def inpaint(self, image: PILImage, mask: PILImage):
-        image, original_size = self.preprocess_image(image.convert("RGB"))
-        image = np.expand_dims(image, axis=0)  # (C, H, W)
-        print("image shape")
-        print(image.shape)
-        mask = mask.resize((self.size, self.size))
+    def inpaint(self, image: PILImage, mask: NDArray[np.uint8]) -> NDArray[np.float32]:
+        """Inpaint masked regions of an image.
 
-        mask = np.expand_dims(mask, axis=0)  # (C, H, W)
-        mask = self._pad_img_to_modulo(np.array(mask), 8)
-        mask = mask.astype(np.float32) / 255.0
-        # mask = np.transpose(mask, (2, 0, 1))  # (C, H, W)
-        mask = np.expand_dims(mask, axis=0)  # (1, C, H, W)
-        mask = (mask > 0) * 1
+        Args:
+            image: Input PIL Image to inpaint.
+            mask: Binary mask array of shape (1, H, W) with uint8 values (0 or 1).
+
+        Returns:
+            Inpainted image as float32 numpy array of shape (H, W, 3) with values in [0, 1].
+        """
+        # Store original dimensions for final output
+        original_height, original_width = image.height, image.width
+
+        # Preprocess image
+        processed_image, original_size = self.preprocess_image(image.convert("RGB"))
+        processed_image = np.expand_dims(processed_image, axis=0)  # (1, C, H, W)
+
+        # Preprocess mask: convert from (1, H, W) to model input format
+        # Remove batch dimension temporarily
+        mask_2d = mask[0]  # (H, W)
+
+        # Resize mask to match model input size
+        mask_pil = Image.fromarray((mask_2d * 255).astype(np.uint8), mode="L")
+        mask_resized = mask_pil.resize((self.size, self.size), Resampling.NEAREST)
+        mask_array = np.array(mask_resized)
+
+        # Pad and normalize
+        mask_padded = self._pad_img_to_modulo(mask_array, 8)
+        mask_normalized = mask_padded.astype(np.float32) / 255.0
+        mask_model = np.expand_dims(mask_normalized, axis=0)  # (1, H, W)
+        mask_model = np.expand_dims(mask_model, axis=0)  # (1, 1, H, W)
+        mask_model = (mask_model > 0) * 1
 
         start = time.time()
-        # Placeholder for inpainting logic
         inpainted_image = self.model.run(
             None,
             {
-                "image": np.array(image).astype(np.float32),
-                "mask": np.array(mask).astype(np.float32),
+                "image": processed_image.astype(np.float32),
+                "mask": mask_model.astype(np.float32),
             },
         )
         end = time.time()
         print(f"ONNX: Inpainting took {end - start:.3f} seconds")
-        inpainted_image = inpainted_image[0][0]
-        inpainted_image = inpainted_image.transpose(1, 2, 0)
-        # inpainted_image = np.clip(inpainted_image * 255, 0, 255)
-        inpainted_image = inpainted_image.astype(np.uint8)
 
-        inpainted_image = Image.fromarray(inpainted_image)
-        inpainted_image = self.postprocess_image(inpainted_image, original_size)
+        # Post-process output
+        inpainted_image = inpainted_image[0][0]  # Remove batch dimension
+        inpainted_image = inpainted_image.transpose(1, 2, 0)  # (H, W, C)
 
-        return inpainted_image
+        # Model outputs values in [0, 255] range, convert to uint8 for PIL
+        inpainted_uint8 = inpainted_image.clip(0, 255).astype(np.uint8)
+        inpainted_pil = Image.fromarray(inpainted_uint8)
+        inpainted_resized = inpainted_pil.resize(
+            (original_width, original_height), Resampling.LANCZOS
+        )
+
+        # Convert back to normalized float32 numpy array [0, 1]
+        result = np.array(inpainted_resized).astype(np.float32) / 255.0
+
+        return result
 
     def _normalize_img(self, np_img: NDArray[np.float32]) -> NDArray[np.float32]:
         if len(np_img.shape) == 2:
@@ -114,6 +188,15 @@ if __name__ == "__main__":
     output_path2 = Path("./data/test_onnx_result.png")
     output_path3 = Path("./data/sbahn-door-defect-result.png")
 
-    with Image.open(img_path3) as img, Image.open(mask_path3).convert("L") as mask:
+    with Image.open(img_path3) as img, Image.open(mask_path3).convert("L") as mask_pil:
+        # Convert mask to numpy array format (1, H, W)
+        mask_array = np.array(mask_pil)
+        mask_binary = (mask_array > 127).astype(np.uint8)
+        mask = mask_binary[np.newaxis, :, :]
+
         result = inpainter.inpaint(img, mask)
-        result.save(output_path3)
+
+        # Convert result back to PIL Image for saving
+        result_uint8 = (result * 255).clip(0, 255).astype(np.uint8)
+        result_image = Image.fromarray(result_uint8)
+        result_image.save(output_path3)
