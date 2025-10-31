@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import numpy as np
@@ -7,6 +8,12 @@ from PIL import Image
 from PIL.Image import Image as PILImage
 
 from traenslenzor.image_renderer.onnx_inpainting import Inpainter
+
+# Skip tests that require model downloads when running in CI
+IN_CI = os.getenv("CI") == "true"
+
+# Skip all tests in this module when running in CI
+pytestmark = pytest.mark.skipif(IN_CI, reason="Skip model download in CI")
 
 
 @pytest.fixture

@@ -27,14 +27,23 @@ class Text(TypedDict):
 class ImageRenderer:
     def __init__(self, img_provider: ImageProvider, device="mps") -> None:
         """
-        Initialize the ImageRenderer with LaMa model.
+        Initialize the ImageRenderer with lazy model loading.
 
         Args:
             img_provider: ImageProvider instance for handling image I/O. If None, creates default instance.
             device: Device to run the model on (e.g., 'mps', 'cuda', 'cpu')
         """
-        self.inpainter = Inpainter(device=device)
+        self._inpainter: Inpainter | None = None
+        self._device = device
         self.img_provider = img_provider
+
+    @property
+    def inpainter(self) -> Inpainter:
+        """Lazily initialize the inpainter model when first accessed."""
+        if self._inpainter is None:
+            logger.info("Initializing inpainter model (lazy loading)")
+            self._inpainter = Inpainter(device=self._device)
+        return self._inpainter
 
     def create_mask(self, texts: list[Text], mask_shape: tuple[int, int]) -> NDArray[np.uint8]:
         mask = np.zeros(mask_shape, dtype=np.uint8)
@@ -57,15 +66,15 @@ class ImageRenderer:
         pil_draw = ImageDraw.Draw(pil_image)
 
         for text in texts:
-            x = text.get("left")
-            y = text.get("top")
-            font_size = text.get("font_size")
-            color = text.get("color")
+            x = text["left"]
+            y = text["top"]
+            font_size = text["font_size"]
+            color = text["color"]
             font_family = text.get("font_family", "Arial")
-            text_str = text.get("text")
+            text_str = text["text"]
 
-            font = ImageFont.truetype(font_family, font_size)
-            pil_draw.text((x, y), text_str, fill=color, font=font)
+            font = ImageFont.truetype(font_family, float(font_size))
+            pil_draw.text((float(x), float(y)), text_str, fill=color, font=font)
         return (np.array(pil_image) / 255).astype(np.float32)
 
     def replace_text(

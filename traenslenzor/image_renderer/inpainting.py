@@ -83,21 +83,23 @@ class Inpainter:
         image = self._normalize_img(img_array)
 
         # Pad to be divisible by 8
-        image = self._pad_img_to_modulo(image, 8)
-        mask = self._pad_img_to_modulo(mask_in, 8)
-        logger.debug("After padding: image shape=%s, mask shape=%s", image.shape, mask.shape)
+        padded_image = self._pad_img_to_modulo(image, 8)
+        padded_mask = self._pad_img_to_modulo(mask_in, 8)
+        logger.debug(
+            "After padding: image shape=%s, mask shape=%s", padded_image.shape, padded_mask.shape
+        )
 
         # Convert to tensors and add batch dimension
-        image = torch.from_numpy(image).unsqueeze(0).to(self.device)
-        mask = torch.from_numpy(mask).unsqueeze(0).to(self.device)
-        logger.debug("Tensor shapes: image=%s, mask=%s", image.shape, mask.shape)
+        image_tensor = torch.from_numpy(padded_image).unsqueeze(0).to(self.device)
+        mask_tensor = torch.from_numpy(padded_mask).unsqueeze(0).to(self.device)
+        logger.debug("Tensor shapes: image=%s, mask=%s", image_tensor.shape, mask_tensor.shape)
 
         # Run inpainting
         logger.info("Running LaMa inpainting")
         try:
             with torch.inference_mode():
                 start = time.time()
-                inpainted_images: torch.Tensor = self.LaMa(image, mask)
+                inpainted_images: torch.Tensor = self.LaMa(image_tensor, mask_tensor)
                 end = time.time()
             logger.info(f"JIT: Inpainting took {end - start:.3f} seconds")
         except Exception as e:
@@ -125,18 +127,20 @@ class Inpainter:
     ) -> NDArray[np.generic]:
         """Pad image to make dimensions divisible by mod"""
         if len(np_img.shape) == 2:
-            height, width = np_img.shape
+            height = int(np_img.shape[0])
+            width = int(np_img.shape[1])
             out_height = (height + mod - 1) // mod * mod
             out_width = (width + mod - 1) // mod * mod
             pad_h = out_height - height
             pad_w = out_width - width
-            return np.pad(np_img, ((0, pad_h), (0, pad_w)), mode=mode)
+            return np.pad(np_img, ((0, pad_h), (0, pad_w)), mode=mode)  # type: ignore[no-any-return,call-overload]
         elif len(np_img.shape) == 3:
-            channels, height, width = np_img.shape
+            height = int(np_img.shape[1])
+            width = int(np_img.shape[2])
             out_height = (height + mod - 1) // mod * mod
             out_width = (width + mod - 1) // mod * mod
             pad_h = out_height - height
             pad_w = out_width - width
-            return np.pad(np_img, ((0, 0), (0, pad_h), (0, pad_w)), mode=mode)
+            return np.pad(np_img, ((0, 0), (0, pad_h), (0, pad_w)), mode=mode)  # type: ignore[no-any-return,call-overload]
         else:
             raise ValueError(f"Expected 2D or 3D array, got shape {np_img.shape}")

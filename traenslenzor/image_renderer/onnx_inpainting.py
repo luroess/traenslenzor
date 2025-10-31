@@ -75,11 +75,11 @@ class Inpainter:
 
     def preprocess_image(self, image: PILImage):
         original_size = image.size
-        image = image.resize((self.size, self.size), Resampling.LANCZOS)
-        image = np.array(image)
-        image = self._normalize_img(image)
-        image = self._pad_img_to_modulo(image, 8)
-        return (image, original_size)
+        resized_image = image.resize((self.size, self.size), Resampling.LANCZOS)
+        image_array = np.array(resized_image)
+        normalized_image = self._normalize_img(image_array)
+        padded_image = self._pad_img_to_modulo(normalized_image, 8)
+        return (padded_image, original_size)
 
     def postprocess_image(self, image: PILImage, original_size: tuple[int, int]):
         return image.resize(original_size, Resampling.LANCZOS)
@@ -156,19 +156,21 @@ class Inpainter:
     ) -> NDArray[np.generic]:
         """Pad image to make dimensions divisible by mod"""
         if len(np_img.shape) == 2:
-            height, width = np_img.shape
+            height = int(np_img.shape[0])
+            width = int(np_img.shape[1])
             out_height = (height + mod - 1) // mod * mod
             out_width = (width + mod - 1) // mod * mod
             pad_h = out_height - height
             pad_w = out_width - width
-            return np.pad(np_img, ((0, pad_h), (0, pad_w)), mode=mode)
+            return np.pad(np_img, ((0, pad_h), (0, pad_w)), mode=mode)  # type: ignore[no-any-return,call-overload]
         elif len(np_img.shape) == 3:
-            channels, height, width = np_img.shape
+            height = int(np_img.shape[1])
+            width = int(np_img.shape[2])
             out_height = (height + mod - 1) // mod * mod
             out_width = (width + mod - 1) // mod * mod
             pad_h = out_height - height
             pad_w = out_width - width
-            return np.pad(np_img, ((0, 0), (0, pad_h), (0, pad_w)), mode=mode)
+            return np.pad(np_img, ((0, 0), (0, pad_h), (0, pad_w)), mode=mode)  # type: ignore[no-any-return,call-overload]
         else:
             raise ValueError(f"Expected 2D or 3D array, got shape {np_img.shape}")
 
