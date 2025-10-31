@@ -73,7 +73,11 @@ class ImageRenderer:
             font_family = text.get("font_family", "Arial")
             text_str = text["text"]
 
-            font = ImageFont.truetype(font_family, float(font_size))
+            try:
+                font = ImageFont.truetype(font_family, float(font_size))
+            except OSError:
+                logger.warning(f"Font '{font_family}' not found, falling back to default font")
+                font = ImageFont.load_default()
             pil_draw.text((float(x), float(y)), text_str, fill=color, font=font)
         return (np.array(pil_image) / 255).astype(np.float32)
 
