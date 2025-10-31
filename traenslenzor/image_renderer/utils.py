@@ -1,22 +1,38 @@
+import logging
+from pathlib import Path
+
 import numpy as np
-from numpy.typing import NDArray
+from PIL import Image
+
+logger = logging.getLogger(__name__)
 
 
-def norm_img(np_img: NDArray[np.float64]) -> NDArray[np.float64]:
-    if len(np_img.shape) == 2:
-        np_img = np_img[:, :, np.newaxis]
-    np_img = np.transpose(np_img, (2, 0, 1))
-    np_img = np_img.astype("float32") / 255
-    return np_img
+def diagnose_png(path: Path) -> None:
+    """Diagnose PNG file properties for debugging."""
+    logger.info("Diagnosing PNG: %s", path)
 
+    with Image.open(path).convert("L") as img:
+        logger.info("=== %s ===", path)
+        logger.info("Mode: %s, Size: %s, Format: %s", img.mode, img.size, img.format)
 
-def pad_img_to_modulo(img: NDArray[np.float64], mod: int) -> NDArray[np.float64]:
-    """Pad image to make dimensions divisible by mod"""
-    channels, height, width = img.shape
-    out_height = (height + mod - 1) // mod * mod
-    out_width = (width + mod - 1) // mod * mod
+        # Check for transparency
+        if img.mode == "RGBA":
+            alpha = img.split()[3]
+            alpha_arr = np.array(alpha)
+            logger.info(
+                "Alpha channel: min=%s, max=%s, has_transparency=%s",
+                alpha_arr.min(),
+                alpha_arr.max(),
+                alpha_arr.min() < 255,
+            )
 
-    pad_h = out_height - height
-    pad_w = out_width - width
-
-    return np.pad(img, ((0, 0), (0, pad_h), (0, pad_w)), mode="edge")
+        # Get pixel value range
+        arr = np.array(img)
+        logger.info(
+            "Array: shape=%s, dtype=%s, range=[%s, %s], mean=%.2f",
+            arr.shape,
+            arr.dtype,
+            arr.min(),
+            arr.max(),
+            arr.mean(),
+        )

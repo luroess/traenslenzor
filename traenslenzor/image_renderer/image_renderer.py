@@ -1,123 +1,157 @@
-from pathlib import Path
+import logging
+from typing import TypedDict
 
 import numpy as np
-import torch
-from PIL import Image
-from PIL.Image import Image as PILImage, Resampling
+from numpy.typing import NDArray
+from PIL import Image, ImageDraw, ImageFont
+from PIL.Image import Image as PILImage
 
-from traenslenzor.image_renderer.utils import norm_img, pad_img_to_modulo
+from traenslenzor.image_provider.image_provider import ImageProvider
+from traenslenzor.image_renderer.inpainting import Inpainter
+
+logger = logging.getLogger(__name__)
+
+
+class Text(TypedDict):
+    text: str
+    left: int
+    top: int
+    width: int
+    height: int
+    rotation_in_degrees: int
+    font_size: int
+    color: tuple[int, int, int]
+    font_family: str
 
 
 class ImageRenderer:
-    def __init__(self) -> None:
-        self.lama: torch.jit.ScriptModule = torch.jit.load(
-            "./traenslenzor/image_renderer/lama/big-lama.pt", map_location="cpu"
-        )
-        self.lama.eval()
-        self.debug = True
-
-    def inpaint_mask(self, img: PILImage, mask_in: PILImage) -> PILImage:
-        """Input image and output image have same size
-        image: [H, W, C] RGB
-        mask: [H, W]
-        return: BGR IMAGE
+    def __init__(self, img_provider: ImageProvider, device="mps") -> None:
         """
-        if img.mode != "RGB":
-            if self.debug:
-                print("converting img to RGB")
-            img = img.convert("RGB")
+        Initialize the ImageRenderer with LaMa model.
 
-        if mask_in.mode != "L":
-            if self.debug:
-                print("converting mask to L")
-            mask_in = mask_in.convert("L")
+        Args:
+            img_provider: ImageProvider instance for handling image I/O. If None, creates default instance.
+            device: Device to run the model on (e.g., 'mps', 'cuda', 'cpu')
+        """
+        self.inpainter = Inpainter(device=device)
+        self.img_provider = img_provider
 
-        if mask_in.size != img.size:
-            if self.debug:
-                print("img and mask size differ")
-            mask_in = mask_in.resize(img.size, Resampling.NEAREST)
+    def create_mask(self, texts: list[Text], mask_shape: tuple[int, int]) -> NDArray[np.uint8]:
+        mask = np.zeros(mask_shape, dtype=np.uint8)
 
-        image = norm_img(np.array(img))
-        mask = norm_img(np.array(mask_in))
+        for text in texts:
+            x = text["left"]
+            y = text["top"]
+            w = text["width"]
+            h = text["height"]
 
-        if self.debug:
-            print(f"Image shape after norm_img: {image.shape}")
-            print(f"Mask shape after norm_img: {mask.shape}")
+            y_end = min(y + h, mask_shape[0])
+            x_end = min(x + w, mask_shape[1])
 
-        # Pad to be divisible by 8
-        image = pad_img_to_modulo(image, 8)
-        mask = pad_img_to_modulo(mask, 8)
+            mask[y:y_end, x:x_end] = 1
 
-        if self.debug:
-            print(f"Image shape after padding: {image.shape}")
-            print(f"Mask shape after padding: {mask.shape}")
+        return mask.reshape((1, mask_shape[0], mask_shape[1]))
 
-            print(f"Mask unique values before thresholding: {np.unique(mask)}")
-        mask = (mask > 0.5) * 1
-        if self.debug:
-            print(f"Mask unique values after thresholding: {np.unique(mask)}")
-        image = torch.from_numpy(image).unsqueeze(0)
-        mask = torch.from_numpy(mask).unsqueeze(0)
+    def draw_texts(self, image: NDArray[np.float32], texts: list[Text]) -> NDArray[np.float32]:
+        pil_image = Image.fromarray((image * 255).astype(np.uint8))
+        pil_draw = ImageDraw.Draw(pil_image)
 
-        if self.debug:
-            print(f"Image tensor shape: {image.shape}")
-            print(f"Mask tensor shape: {mask.shape}")
+        for text in texts:
+            x = text.get("left")
+            y = text.get("top")
+            font_size = text.get("font_size")
+            color = text.get("color")
+            font_family = text.get("font_family", "Arial")
+            text_str = text.get("text")
 
-        inpainted_image: torch.Tensor = self.lama(image, mask)
+            font = ImageFont.truetype(font_family, font_size)
+            pil_draw.text((x, y), text_str, fill=color, font=font)
+        return (np.array(pil_image) / 255).astype(np.float32)
 
-        cur_res = inpainted_image[0].permute(1, 2, 0).cpu().detach().numpy()
-        cur_res = np.clip(cur_res * 255, 0, 255).astype("uint8")
-        # cur_res = cv2.cvtColor(cur_res, cv2.COLOR_RGB2BGR)
-        return Image.fromarray(cur_res)
+    def replace_text(
+        self,
+        image_path: str,
+        texts: list[Text],
+        inverse_transformation: NDArray[np.float64],
+        save_debug: bool = False,
+    ) -> PILImage:
+        """
+        Replace text in an image using inpainting.
 
+        Args:
+            image_path: Path to the image file (relative to ImageProvider's image_dir)
+            texts: List of text regions to replace
+            inverse_transformation: Transformation matrix (currently unused)
+            save_debug: If True, save debug images (mask and overlay)
 
-def diagnose_png(path):
-    with Image.open(path).convert("L") as img:
-        print(f"\n=== {path} ===")
-        print(f"Mode: {img.mode}")
-        print(f"Size: {img.size}")
-        print(f"Format: {img.format}")
-        # print(f"Info: {img.info}")
+        Returns:
+            PIL Image with replaced text
+        """
+        # Load image using ImageProvider
+        rectified_image = self.img_provider.get_image(image_path)
 
-        # Check for transparency
-        if img.mode == "RGBA":
-            alpha = img.split()[3]
-            alpha_arr = np.array(alpha)
-            print(f"Has alpha channel: min={alpha_arr.min()}, max={alpha_arr.max()}")
-            print(f"Has transparency: {alpha_arr.min() < 255}")
+        # Create mask from text regions
+        mask = self.create_mask(texts, (rectified_image.height, rectified_image.width))
 
-        # Get pixel value range
-        arr = np.array(img)
-        print(f"Array shape: {arr.shape}")
-        print(f"Array dtype: {arr.dtype}")
-        print(f"Pixel value range: min={arr.min()}, max={arr.max()}")
-        print(f"Mean: {arr.mean()}")
+        # Save debug mask if requested
+        if save_debug:
+            overlay = Image.fromarray((mask[0] * 255).astype(np.uint8))
+            self.img_provider.save_image(overlay, "debug-mask.png")
+
+        # Inpaint the masked regions
+        result = self.inpainter.inpaint(rectified_image, mask)
+
+        # Save debug overlay if requested
+        if save_debug:
+            base = Image.fromarray((result * 255).astype(np.uint8))
+            overlay = Image.fromarray((mask[0] * 255).astype(np.uint8))
+            debug = ImageProvider.highlight_mask(base, overlay)
+            self.img_provider.save_image(debug, "debug-overlay.png")
+
+        # Draw new text on inpainted image
+        result = self.draw_texts(result, texts)
+
+        # result = result * inverse_transformation
+
+        return Image.fromarray(np.clip(result * 255, 0, 255).astype(np.uint8))
 
 
 if __name__ == "__main__":
-    img_path = Path("./data/sbahn-betriebsstoerung.png")
-    img_path_2 = Path("./data/image_1.png")
+    # Configure logging for the script
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
-    # diagnose_png(img_path)
-    # diagnose_png(img_path_2)
-    mask_path = Path("./data/sbahn-betriebsstoerung-mask.png")
-    mask_path2 = Path("./data/mask_1.png")
+    logger.info("Starting image inpainting script")
 
-    diagnose_png(mask_path)
-    diagnose_png(mask_path2)
+    # Initialize ImageProvider with data directory
+    img_provider = ImageProvider("./data")
+    renderer = ImageRenderer(img_provider=img_provider)
 
-    renderer = ImageRenderer()
+    # Define text regions to replace
+    texts: list[Text] = [
+        {
+            "text": "Betriebsstörung",
+            "left": 571,
+            "top": 238,
+            "width": 460,
+            "height": 80,
+            "rotation_in_degrees": 0,
+            "font_family": "Arial",
+            "color": (0, 0, 0),
+            "font_size": 50,
+        }
+    ]
 
-    with Image.open(img_path) as img, Image.open(mask_path).convert("L") as mask:
-        img_array = np.array(img)
-        # mask2 = create_box_mask(0, 0, 800, 40, (img_array.shape[0], img_array.shape[1]))
-        # mask2 = Image.fromarray(mask2)
-        print("\n\ngoing to inpaint")
-        in_painted = renderer.inpaint_mask(img, mask)
-        print("inpainting done")
+    # Process image (path is relative to img_provider's image_dir)
+    logger.info("Starting inpainting process")
+    result = renderer.replace_text(
+        "sbahn-betriebsstoerung.png", texts, np.identity(4), save_debug=True
+    )
 
-        # result = Image.fromarray(in_painted)
-
-        print("showing result")
-        # in_painted.show()
-        in_painted.save(Path("./data/sbahn-betriebsstoerung-inpainted.png"))
+    # Save result
+    logger.info("Saving result")
+    img_provider.save_image(result, "sbahn-betriebsstoerung-replaced.png")
+    logger.info("Done!")

@@ -219,7 +219,7 @@ __marimo__/
 
 data/
 
-traenslenzor/image_renderer/lama/big-lama.pt
+traenslenzor/image_renderer/lama/*
 
 main.pdf
 *update.pdf
