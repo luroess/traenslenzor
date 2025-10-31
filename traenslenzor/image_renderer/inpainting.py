@@ -75,8 +75,12 @@ class Inpainter:
             logger.debug("Converting image from %s to RGB", img.mode)
             img = img.convert("RGB")
 
+        # Store original dimensions for cropping after inpainting
+        img_array = np.array(img)
+        original_height, original_width = img_array.shape[:2]
+
         # Normalize images
-        image = self._normalize_img(np.array(img))
+        image = self._normalize_img(img_array)
 
         # Pad to be divisible by 8
         image = self._pad_img_to_modulo(image, 8)
@@ -102,6 +106,10 @@ class Inpainter:
 
         # Post-process result
         result = inpainted_images[0].permute(1, 2, 0).cpu().detach().numpy()
+
+        # Crop back to original dimensions
+        result = result[:original_height, :original_width, :]
+        logger.debug("Cropped result to original size: %s", result.shape)
 
         return result
 

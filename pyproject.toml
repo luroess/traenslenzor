@@ -1,3 +1,11 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["traenslenzor*"]
+exclude = ["data*"]
+
 [project]
 name = "traenslenzor"
 version = "0.1.0"
@@ -19,6 +27,7 @@ dev = [
     "mypy>=1.18.2",
     "pre-commit>=4.3.0",
     "pytest>=8.4.2",
+    "pytest-image-diff>=0.0.14",
     "ruff>=0.14.1",
 ]
 

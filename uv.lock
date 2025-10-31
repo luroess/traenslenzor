@@ -341,6 +341,15 @@ wheels = [
 ]
 
 [[package]]
+name = "diffimg"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pillow" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e6/21/cc36f7de1c9af6f890798e013f21f9fc09490eb39f58864be6a1e9da14d4/diffimg-0.3.0.tar.gz", hash = "sha256:5f9bfc5417430729205b70e68f22bade19fed43d963daa7fb45d9447d0a01a24", size = 4310, upload-time = "2021-01-02T18:37:27.11Z" }
+
+[[package]]
 name = "diskcache"
 version = "5.6.3"
 source = { registry = "https://pypi.org/simple" }
@@ -566,6 +575,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/6f/6d/0703ccc57f3a7233505399edb88de3cbd678da106337b9fcde432b65ed60/idna-3.11.tar.gz", hash = "sha256:795dafcc9c04ed0c1fb032c2aa73654d8e8c5023a7df64a53f39190ada629902", size = 194582, upload-time = "2025-10-12T14:55:20.501Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0e/61/66938bbb5fc52dbdf84594873d5b51fb1f7c7794e9c0f5bd885f30bc507b/idna-3.11-py3-none-any.whl", hash = "sha256:771a87f49d9defaf64091e6e6fe9c18d4833f140bd19464795bc32d966ca37ea", size = 71008, upload-time = "2025-10-12T14:55:18.883Z" },
+]
+
+[[package]]
+name = "imgdiff"
+version = "1.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pillow" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f0/a3/dafd8c9b51673f520fd4d6288bb167287af494821a5d60503bd6bb09c642/imgdiff-1.8.0.tar.gz", hash = "sha256:ee8d6da71fe74ca27cc1086a133e91028a7dea7690c09d37077dcda0150f4677", size = 1351317, upload-time = "2024-10-09T12:26:25.743Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9f/11/82887197b4de962726a9fd83832a1ef3190e41c68c42474e72f61d173852/imgdiff-1.8.0-py3-none-any.whl", hash = "sha256:10b351e52d6fe2c8ecd586d3cf655445afa2fb0fea3aa40ac84776c8a58310f9", size = 10358, upload-time = "2024-10-09T12:26:21.076Z" },
 ]
 
 [[package]]
@@ -1508,6 +1529,21 @@ wheels = [
 ]
 
 [[package]]
+name = "pytest-image-diff"
+version = "0.0.14"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "diffimg" },
+    { name = "imgdiff" },
+    { name = "pytest" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/be/75/64a17eb4b43d01437387e463a2c3083fe27d169174d9fade0cc52f18bfe1/pytest_image_diff-0.0.14.tar.gz", hash = "sha256:2405dba60c8009c93a7cafc15976cc8f2b1b8f33ffe8126e35d72a6d22e19850", size = 11596, upload-time = "2024-12-31T09:08:24.458Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/40/7d/be27575980da987cc7af4d7e9f27f2bc141a8e002a7e6809e16e71c13a1a/pytest_image_diff-0.0.14-py2.py3-none-any.whl", hash = "sha256:106642ab02c7be579aed7085f5ca670108ad43cfaff0980690383185a2fb5ad4", size = 10859, upload-time = "2024-12-31T09:08:23.321Z" },
+]
+
+[[package]]
 name = "python-dateutil"
 version = "2.9.0.post0"
 source = { registry = "https://pypi.org/simple" }
@@ -1912,6 +1948,7 @@ dev = [
     { name = "mypy" },
     { name = "pre-commit" },
     { name = "pytest" },
+    { name = "pytest-image-diff" },
     { name = "ruff" },
 ]
 
@@ -1931,6 +1968,7 @@ dev = [
     { name = "mypy", specifier = ">=1.18.2" },
     { name = "pre-commit", specifier = ">=4.3.0" },
     { name = "pytest", specifier = ">=8.4.2" },
+    { name = "pytest-image-diff", specifier = ">=0.0.14" },
     { name = "ruff", specifier = ">=0.14.1" },
 ]
 
