@@ -92,7 +92,7 @@ def test_highlight_mask_applies_red_overlay() -> None:
     result = ImageProvider.highlight_mask(base, mask)
 
     # Check center pixel has red overlay applied
-    center_pixel: tuple[int, int, int] = result.getpixel((50, 50))  # pyright: ignore[reportAssignmentType]
+    center_pixel: tuple[int, int, int] = result.getpixel((50, 50))  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
     assert center_pixel[0] > center_pixel[1]  # R > G (more red than green)
     assert center_pixel[0] > center_pixel[2]  # R > B (more red than blue)
 
@@ -105,8 +105,8 @@ def test_highlight_mask_respects_opacity() -> None:
     result_low = ImageProvider.highlight_mask(base.copy(), mask, opacity=0.3)
     result_high = ImageProvider.highlight_mask(base.copy(), mask, opacity=0.9)
 
-    pixel_low: tuple[int, int, int] = result_low.getpixel((50, 50))  # pyright: ignore[reportAssignmentType]
-    pixel_high: tuple[int, int, int] = result_high.getpixel((50, 50))  # pyright: ignore[reportAssignmentType]
+    pixel_low: tuple[int, int, int] = result_low.getpixel((50, 50))  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
+    pixel_high: tuple[int, int, int] = result_high.getpixel((50, 50))  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
 
     # Higher opacity = more red overlay influence
     # Alpha blending: result = base * (1-alpha) + overlay * alpha
@@ -130,7 +130,7 @@ def test_highlight_mask_preserves_base_dimensions() -> None:
     assert result.size == (200, 150)
 
     # Inside masked region: should have red overlay
-    inside_pixel: tuple[int, int, int] = result.getpixel((100, 75))  # pyright: ignore[reportAssignmentType]
+    inside_pixel: tuple[int, int, int] = result.getpixel((100, 75))  # type: ignore[assignment]  # pyright: ignore[reportAssignmentType]
     assert inside_pixel[0] > inside_pixel[1]  # Red component dominant
 
     # Outside masked region: should remain white

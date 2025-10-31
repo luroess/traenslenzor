@@ -66,7 +66,6 @@ warn_return_any = true
 check_untyped_defs = true
 no_implicit_optional = true
 pretty = true
-mypy_path = ["traenslenzor"]
 files = ["traenslenzor", "tests"]
 
 [[tool.mypy.overrides]]
