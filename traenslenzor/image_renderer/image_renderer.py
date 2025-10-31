@@ -5,6 +5,7 @@ import numpy as np
 from numpy.typing import NDArray
 from PIL import Image, ImageDraw, ImageFont
 from PIL.Image import Image as PILImage
+from PIL.ImageFont import FreeTypeFont, ImageFont as ImageFontType
 
 from traenslenzor.image_provider.image_provider import ImageProvider
 from traenslenzor.image_renderer.inpainting import Inpainter
@@ -73,6 +74,7 @@ class ImageRenderer:
             font_family = text.get("font_family", "Arial")
             text_str = text["text"]
 
+            font: FreeTypeFont | ImageFontType
             try:
                 font = ImageFont.truetype(font_family, float(font_size))
             except OSError:
