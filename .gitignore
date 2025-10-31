@@ -221,6 +221,11 @@ data/
 
 traenslenzor/image_renderer/lama/*
 
+=======
+# translenzor
+.supervisor_graph.png
+
+# docs
 main.pdf
 *update.pdf
 .DS_Store
