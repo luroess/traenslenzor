@@ -1,5 +1,9 @@
 name: ci
-on: [push, pull_request]
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
 
 jobs:
   test:
@@ -17,5 +21,5 @@ jobs:
         run: |
           uv run ruff check .
           uv run ruff format --check .
-          uv run mypy
+          uv run mypy --explicit-package-bases
           uv run pytest
