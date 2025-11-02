@@ -5,10 +5,13 @@ from langchain_ollama import ChatOllama
 
 logger = logging.getLogger(__name__)
 
-base_model = "llama3.1"
-model_name = "traenslenzor_2000:0.1"
-ollama_url = "http://localhost:11434"
-template = """
+SEED = 69
+TEMPERATURE = 0
+
+BASE_MODEL = "llama3.1"
+MODEL_NAME = "traenslenzor_2000:0.1"
+OLLAMA_URL = "http://localhost:11434"
+TEMPLATE = """
 {{- if or .System .Tools }}<|start_header_id|>system<|end_header_id|>
 {{- if .System }}
 
@@ -58,54 +61,56 @@ Question: {{ .Content }}<|eot_id|>
 
 try:
     # check ollama server
-    requests.get(ollama_url, timeout=2)
+    requests.get(OLLAMA_URL, timeout=2)
 except Exception:
     print("Error: Ollama server not running")
     exit(-1)
 
 
 def pull_base_model():
-    response = requests.post(f"{ollama_url}/api/pull", json={"model": base_model})
+    response = requests.post(f"{OLLAMA_URL}/api/pull", json={"model": BASE_MODEL})
     if response.status_code != 200:
-        logger.error(f"failed to pull the base model '{base_model}': \n{response.json()}")
+        logger.error(f"failed to pull the base model '{BASE_MODEL}': \n{response.json()}")
         exit(-1)
 
 
 def exists_model():
-    response = requests.get(f"{ollama_url}/api/tags")
+    response = requests.get(f"{OLLAMA_URL}/api/tags")
     if response.status_code != 200:
         logger.error(f"failed to request model information: \n{response.json()}")
         exit(-1)
     present_models = response.json()["models"]
     model_names = [m["name"] for m in present_models]
-    return model_name in model_names
+    return MODEL_NAME in model_names
 
 
 def delete():
     logger.info("Deleting model")
-    response = requests.delete(f"{ollama_url}/api/delete", json={"model": model_name})
+    response = requests.delete(f"{OLLAMA_URL}/api/delete", json={"model": MODEL_NAME})
     if response.status_code != 200:
-        logger.error(f"failed to delete the model '{model_name}': \n{response.json()}")
+        logger.error(f"failed to delete the model '{MODEL_NAME}': \n{response.json()}")
         exit(-1)
 
 
 def create():
     logger.debug("Creating model")
     response = requests.post(
-        f"{ollama_url}/api/create",
-        json={"model": model_name, "from": base_model, "template": template},
+        f"{OLLAMA_URL}/api/create",
+        json={"model": MODEL_NAME, "from": BASE_MODEL, "template": TEMPLATE},
     )
     if response.status_code != 200:
-        logger.error(f"failed to create the model '{model_name}': \n{response.json()}")
+        logger.error(f"failed to create the model '{MODEL_NAME}': \n{response.json()}")
         exit(-1)
 
 
-if exists_model():
-    delete()
-create()
+def initialize_model():
+    if not exists_model():
+        create()
 
+
+initialize_model()
 llm = ChatOllama(
-    model=model_name,
-    temperature=0,
-    seed=69,
+    model=MODEL_NAME,
+    temperature=TEMPERATURE,
+    seed=SEED,
 )

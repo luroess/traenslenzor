@@ -4,6 +4,9 @@ from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command, interrupt
 
+from traenslenzor.supervisor.tools.document_loader import document_loader
+from traenslenzor.supervisor.tools.mcp import get_mcp_tools
+
 logger = logging.getLogger(__name__)
 
 
@@ -13,7 +16,7 @@ def request_user_input(prompt: str) -> str:
     Args:
         prompt (str): Question or answer to interact with the user.
     """
-    logger.info(f"Asking user question a {prompt}")
+    logger.info(f"Asking user a question: {prompt}")
     return interrupt(prompt)  # type: ignore[no-any-return]
 
 
@@ -34,23 +37,6 @@ def language_setter(language: str, runtime: ToolRuntime) -> Command:
                 )
             ],
             "language": language,
-        }
-    )
-
-
-@tool
-def document_loader(filepath: str, runtime: ToolRuntime) -> Command:
-    """Loads a document from the given filepath."""
-    logger.info(f"Loading document from {filepath}")
-    return Command(
-        update={
-            "messages": [
-                ToolMessage(
-                    content=f"Document loaded successfully from {filepath}",
-                    tool_call_id=runtime.tool_call_id,
-                )
-            ],
-            "doc_loaded": True,
         }
     )
 
@@ -89,15 +75,16 @@ def document_image_renderer(document: str, format: str) -> str:
     return f"Document rendered in {format} format: {document}"
 
 
-TOOLS = [
-    request_user_input,
-    language_setter,
-    document_loader,
-    # document_preprocessor,
-    document_translator,
-    document_classifier,
-    font_extractor,
-    document_image_renderer,
-]
-
-TOOLS_NAME_MAP = {t.name: t for t in TOOLS}
+async def get_tools():
+    mcp_tools = await get_mcp_tools()
+    return [
+        request_user_input,
+        language_setter,
+        document_loader,
+        # document_preprocessor,
+        document_translator,
+        document_classifier,
+        font_extractor,
+        document_image_renderer,
+        *mcp_tools,
+    ]

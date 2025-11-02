@@ -4,9 +4,9 @@ from langchain.agents.middleware.types import AgentState
 
 
 class SupervisorState(AgentState):
-    doc_loaded: bool
     language: Optional[str]
+    original_document: Optional[str]
 
 
 def initialize_supervisor_state() -> SupervisorState:
-    return SupervisorState(doc_loaded=False, language=None, messages=[])
+    return SupervisorState(language=None, original_document=None, messages=[])

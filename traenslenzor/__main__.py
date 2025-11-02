@@ -1,5 +1,8 @@
+from traenslenzor.app import app
+
+
 def main():
-    print("Hello from traenslenzor!")
+    app.run()
 
 
 if __name__ == "__main__":
