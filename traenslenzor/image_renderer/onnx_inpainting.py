@@ -70,7 +70,7 @@ class Inpainter:
         self.model = rmodel
         self.device = device  # Store for API compatibility
 
-    def preprocess_image(self, image: PILImage) -> tuple[NDArray[np.float32], tuple[int, int]]:
+    def preprocess_image(self, image: PILImage) -> tuple[NDArray[np.generic], tuple[int, int]]:
         original_size = image.size
         resized_image = image.resize((self.size, self.size), Resampling.LANCZOS)
         image_array = np.array(resized_image)
