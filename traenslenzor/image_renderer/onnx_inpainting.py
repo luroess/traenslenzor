@@ -40,9 +40,6 @@ class Inpainter:
             device: Device specification for API compatibility (unused by ONNX).
         """
         logger.info("Initializing ONNX Inpainter")
-        # logger.info("Available providers:")
-        # for provider in onnxruntime.get_available_providers():
-        #     logger.info(f"  - {provider}")
 
         try:
             model_path = Path(path_to_model)
@@ -73,7 +70,7 @@ class Inpainter:
         self.model = rmodel
         self.device = device  # Store for API compatibility
 
-    def preprocess_image(self, image: PILImage):
+    def preprocess_image(self, image: PILImage) -> tuple[NDArray[np.float32], tuple[int, int]]:
         original_size = image.size
         resized_image = image.resize((self.size, self.size), Resampling.LANCZOS)
         image_array = np.array(resized_image)
@@ -126,7 +123,7 @@ class Inpainter:
             },
         )
         end = time.time()
-        print(f"ONNX: Inpainting took {end - start:.3f} seconds")
+        logger.info("ONNX: Inpainting took %.3f seconds", end - start)
 
         # Post-process output
         inpainted_image = inpainted_image[0][0]  # Remove batch dimension
@@ -177,17 +174,17 @@ class Inpainter:
 
 if __name__ == "__main__":
     inpainter = Inpainter()
-    img_path = Path("./data/sbahn-betriebsstoerung.png")
-    mask_path = Path("./data/sbahn-betriebsstoerung-mask.png")
+    # img_path = Path("./data/sbahn-betriebsstoerung.png")
+    # mask_path = Path("./data/sbahn-betriebsstoerung-mask.png")
 
-    img_path2 = Path("./data/test_onnx_img.jpg")
-    mask_path2 = Path("./data/test_onnx_mask.png")
+    # img_path2 = Path("./data/test_onnx_img.jpg")
+    # mask_path2 = Path("./data/test_onnx_mask.png")
 
     img_path3 = Path("./data/sbahn-door-defect.jpg")
     mask_path3 = Path("./data/sbahn-door-defect-mask.png")
 
-    output_path = Path("./data/sbahn-betriebsstoerung-inpainted_onnx.png")
-    output_path2 = Path("./data/test_onnx_result.png")
+    # output_path = Path("./data/sbahn-betriebsstoerung-inpainted_onnx.png")
+    # output_path2 = Path("./data/test_onnx_result.png")
     output_path3 = Path("./data/sbahn-door-defect-result.png")
 
     with Image.open(img_path3) as img, Image.open(mask_path3).convert("L") as mask_pil:

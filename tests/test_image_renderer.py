@@ -183,7 +183,7 @@ def test_replace_text_with_debug_saves_overlay(
     path = Path(temp_dir) / "test.png"
     img.save(path)
 
-    _result = renderer.replace_text("test.png", [sample_text], np.identity(4), save_debug=True)
+    renderer.replace_text("test.png", [sample_text], np.identity(4), save_debug=True)
     assert (Path(temp_dir) / "debug-overlay.png").exists()
 
 
