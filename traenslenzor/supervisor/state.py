@@ -1,9 +1,12 @@
-import operator
+from typing import Optional
 
-from langchain.messages import AnyMessage
-from typing_extensions import Annotated, TypedDict
+from langchain.agents.middleware.types import AgentState
 
 
-class MessagesState(TypedDict):
-    messages: Annotated[list[AnyMessage], operator.add]
-    llm_calls: int
+class SupervisorState(AgentState):
+    language: Optional[str]
+    original_document: Optional[str]
+
+
+def initialize_supervisor_state() -> SupervisorState:
+    return SupervisorState(language=None, original_document=None, messages=[])
