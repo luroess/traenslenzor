@@ -23,3 +23,9 @@ install pre-commit hooks:
 ```sh
 uv run pre-commit install
 ```
+
+## Running only the supervisor
+
+```sh
+uv run python -m traenslenzor.supervisor.supervisor
+```

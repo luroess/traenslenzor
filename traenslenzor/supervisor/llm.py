@@ -1,98 +1,116 @@
-from typing import Literal
+import logging
 
 import requests
-from langchain.messages import AIMessage, AnyMessage, SystemMessage, ToolMessage
-from langchain.tools import tool
 from langchain_ollama import ChatOllama
-from langgraph.graph import END
 
-from traenslenzor.supervisor.state import MessagesState
+logger = logging.getLogger(__name__)
+
+SEED = 69
+TEMPERATURE = 0
+
+BASE_MODEL = "llama3.1"
+MODEL_NAME = "traenslenzor_2000:0.1"
+OLLAMA_URL = "http://localhost:11434"
+TEMPLATE = """
+{{- if or .System .Tools }}<|start_header_id|>system<|end_header_id|>
+{{- if .System }}
+
+{{ .System }}
+{{- end }}
+{{- if .Tools }}
+
+You are a helpful assistant with tool calling capabilities.
+{{- end }}<|eot_id|>
+{{- end }}
+{{- range $i, $_ := .Messages }}
+{{- $last := eq (len (slice $.Messages $i)) 1 }}
+{{- if eq .Role "user" }}<|start_header_id|>user<|end_header_id|>
+{{- if and $.Tools $last }}
+
+Given the following functions, please respond with a JSON for a function call with its proper arguments that best answers the given prompt.
+
+Respond in the format {"name": function name, "parameters": dictionary of argument name and its value}. Do not use variables.
+
+{{ range $.Tools }}
+{{- . }}
+{{ end }}
+Question: {{ .Content }}<|eot_id|>
+{{- else }}
+
+{{ .Content }}<|eot_id|>
+{{- end }}{{ if $last }}<|start_header_id|>assistant<|end_header_id|>
+
+{{ end }}
+{{- else if eq .Role "assistant" }}<|start_header_id|>assistant<|end_header_id|>
+{{- if .ToolCalls }}
+{{ range .ToolCalls }}
+{"name": "{{ .Function.Name }}", "parameters": {{ .Function.Arguments }}}{{ end }}
+{{- else }}
+
+{{ .Content }}
+{{- end }}{{ if not $last }}<|eot_id|>{{ end }}
+{{- else if eq .Role "tool" }}<|start_header_id|>ipython<|end_header_id|>
+
+{{ .Content }}<|eot_id|>{{ if $last }}<|start_header_id|>assistant<|end_header_id|>
+
+{{ end }}
+{{- end }}
+{{- end }}
+"""
+
 
 try:
     # check ollama server
-    requests.get("http://localhost:11434", timeout=2)
+    requests.get(OLLAMA_URL, timeout=2)
 except Exception:
     print("Error: Ollama server not running")
     exit(-1)
 
+
+def pull_base_model():
+    response = requests.post(f"{OLLAMA_URL}/api/pull", json={"model": BASE_MODEL})
+    if response.status_code != 200:
+        logger.error(f"failed to pull the base model '{BASE_MODEL}': \n{response.json()}")
+        exit(-1)
+
+
+def exists_model():
+    response = requests.get(f"{OLLAMA_URL}/api/tags")
+    if response.status_code != 200:
+        logger.error(f"failed to request model information: \n{response.json()}")
+        exit(-1)
+    present_models = response.json()["models"]
+    model_names = [m["name"] for m in present_models]
+    return MODEL_NAME in model_names
+
+
+def delete():
+    logger.info("Deleting model")
+    response = requests.delete(f"{OLLAMA_URL}/api/delete", json={"model": MODEL_NAME})
+    if response.status_code != 200:
+        logger.error(f"failed to delete the model '{MODEL_NAME}': \n{response.json()}")
+        exit(-1)
+
+
+def create():
+    logger.debug("Creating model")
+    response = requests.post(
+        f"{OLLAMA_URL}/api/create",
+        json={"model": MODEL_NAME, "from": BASE_MODEL, "template": TEMPLATE},
+    )
+    if response.status_code != 200:
+        logger.error(f"failed to create the model '{MODEL_NAME}': \n{response.json()}")
+        exit(-1)
+
+
+def initialize_model():
+    if not exists_model():
+        create()
+
+
+initialize_model()
 llm = ChatOllama(
-    model="llama3.1",
-    temperature=0,
+    model=MODEL_NAME,
+    temperature=TEMPERATURE,
+    seed=SEED,
 )
-
-
-@tool
-def multiply(a: int, b: int) -> int:
-    """Multiply a and b.
-
-    Args:
-        a: first int
-        b: second int
-    """
-    return a * b
-
-
-@tool
-def add(a: int, b: int) -> int:
-    """Adds a and b.
-
-    Args:
-        a: first int
-        b: second int
-    """
-    return a + b
-
-
-@tool
-def divide(a: int, b: int) -> float:
-    """Divide a and b.
-
-    Args:
-        a: first int
-        b: second int
-    """
-    return a / b
-
-
-tools = [add, multiply, divide]
-tools_by_name = {tool.name: tool for tool in tools}
-llm_with_tools = llm.bind_tools(tools)
-
-
-def llm_call(state: MessagesState):
-    """LLM decides whether to call a tool or not"""
-    previous_messages: list[AnyMessage] = [
-        SystemMessage(
-            content="You are a helpful assistant tasked with performing arithmetic on a set of inputs."
-        )
-    ] + state["messages"]
-    return {
-        "messages": [llm_with_tools.invoke(previous_messages)],
-        "llm_calls": state.get("llm_calls", 0) + 1,
-    }
-
-
-def tool_node(state: MessagesState):
-    """Performs the tool call"""
-
-    result = []
-    last_message = state["messages"][-1]
-    assert isinstance(last_message, AIMessage)
-    for tool_call in last_message.tool_calls:
-        tool = tools_by_name[tool_call["name"]]
-        observation = tool.invoke(tool_call["args"])
-        result.append(ToolMessage(content=observation, tool_call_id=tool_call["id"]))
-    return {"messages": result}
-
-
-def should_continue(state: MessagesState) -> Literal["tool_node", END]:  # type: ignore
-    """Decide if we should continue the loop or stop based upon whether the LLM made a tool call"""
-
-    messages = state["messages"]
-    last_message = messages[-1]
-    assert isinstance(last_message, AIMessage)
-    # If the LLM makes a tool call, then perform an action
-    if last_message.tool_calls:
-        return "tool_node"
-    # Otherwise, we stop (reply to the user)
-    return END
