@@ -1,4 +1,4 @@
-sfrom typing import Optional
+from typing import Optional
 
 from langchain.agents.middleware.types import AgentState
 

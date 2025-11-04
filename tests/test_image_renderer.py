@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from traenslenzor.image_provider.image_provider import ImageProvider
+from traenslenzor.file_server.client import FileClient
 from traenslenzor.image_renderer.image_renderer import ImageRenderer, Text
 
 
@@ -17,13 +17,8 @@ def temp_dir() -> Generator[str, None, None]:
 
 
 @pytest.fixture
-def provider(temp_dir: str) -> ImageProvider:
-    return ImageProvider(temp_dir)
-
-
-@pytest.fixture
-def renderer(provider: ImageProvider) -> ImageRenderer:
-    return ImageRenderer(provider, device="cpu")
+def renderer() -> ImageRenderer:
+    return ImageRenderer(device="mps")
 
 
 @pytest.fixture
@@ -41,10 +36,22 @@ def sample_text() -> Text:
     }
 
 
+@pytest.fixture
+async def sample_img_id(file_server: type[FileClient]) -> str:
+    img = Image.new("RGB", (100, 100), color=(255, 255, 255))
+
+    id = await file_server.put_img("test.png", img)
+    if id is None:
+        raise RuntimeError("Failed to upload sample image to file server")
+
+    return id
+
+
 def test_create_mask_single_text_region(renderer: ImageRenderer, sample_text: Text) -> None:
     mask = renderer.create_mask([sample_text], (100, 100))
     assert mask.shape == (1, 100, 100)
     assert mask.dtype == np.uint8
+    assert mask[0, 10:30, 10:60].sum() > 0
 
 
 def test_create_mask_multiple_text_regions(renderer: ImageRenderer, sample_text: Text) -> None:
@@ -149,14 +156,11 @@ def test_draw_texts_preserves_image_dimensions(renderer: ImageRenderer, sample_t
     assert not np.allclose(text_region.mean(), background_region.mean())
 
 
-def test_replace_text_returns_pil_image(
-    renderer: ImageRenderer, provider: ImageProvider, temp_dir: str, sample_text: Text
+@pytest.mark.anyio
+async def test_replace_text_returns_pil_image(
+    renderer: ImageRenderer, sample_text: Text, sample_img_id: str
 ) -> None:
-    img = Image.new("RGB", (100, 100), color=(255, 255, 255))
-    path = Path(temp_dir) / "test.png"
-    img.save(path)
-
-    result = renderer.replace_text("test.png", [sample_text], np.identity(4))
+    result = await renderer.replace_text(sample_img_id, [sample_text], np.identity(4))
     assert isinstance(result, Image.Image)
     # Count black pixels (text pixels) - original white image has 0 black pixels
     result_array = np.array(result)
@@ -165,40 +169,42 @@ def test_replace_text_returns_pil_image(
     assert black_pixels > 0
 
 
-def test_replace_text_with_debug_saves_mask(
-    renderer: ImageRenderer, provider: ImageProvider, temp_dir: str, sample_text: Text
+@pytest.mark.anyio
+async def test_replace_text_with_debug_saves_mask(
+    renderer: ImageRenderer, temp_dir: str, sample_text: Text, sample_img_id: str
 ) -> None:
-    img = Image.new("RGB", (100, 100), color=(255, 255, 255))
-    path = Path(temp_dir) / "test.png"
-    img.save(path)
+    await renderer.replace_text(
+        sample_img_id, [sample_text], np.identity(4), save_debug=True, debug_dir=temp_dir
+    )
 
-    renderer.replace_text("test.png", [sample_text], np.identity(4), save_debug=True)
-    assert (Path(temp_dir) / "debug-mask.png").exists()
+    assert (Path(temp_dir) / "debug" / "debug-mask.png").exists()
 
 
-def test_replace_text_with_debug_saves_overlay(
-    renderer: ImageRenderer, provider: ImageProvider, temp_dir: str, sample_text: Text
+@pytest.mark.anyio
+async def test_replace_text_with_debug_saves_overlay(
+    renderer: ImageRenderer, temp_dir: str, sample_text: Text, sample_img_id: str
 ) -> None:
-    img = Image.new("RGB", (100, 100), color=(255, 255, 255))
-    path = Path(temp_dir) / "test.png"
-    img.save(path)
+    await renderer.replace_text(
+        sample_img_id, [sample_text], np.identity(4), save_debug=True, debug_dir=temp_dir
+    )
 
-    renderer.replace_text("test.png", [sample_text], np.identity(4), save_debug=True)
     assert (Path(temp_dir) / "debug-overlay.png").exists()
 
 
-def test_replace_text_integration_workflow(
-    renderer: ImageRenderer, provider: ImageProvider, temp_dir: str, sample_text: Text
+@pytest.mark.anyio
+async def test_replace_text_integration_workflow(
+    renderer: ImageRenderer,
+    sample_text: Text,
+    sample_img_id: str,
 ) -> None:
-    img = Image.new("RGB", (100, 100), color=(200, 200, 200))
-    path = Path(temp_dir) / "test.png"
-    img.save(path)
+    original_array = await FileClient.get_image_as_numpy(sample_img_id)
+    if original_array is None:
+        raise RuntimeError("Failed to download sample image as numpy array")
 
     # Count black pixels in original (should be 0 on uniform gray background)
-    original_array = np.array(img)
     original_black_pixels = np.sum(np.all(original_array < 50, axis=2))
 
-    result = renderer.replace_text("test.png", [sample_text], np.identity(4))
+    result = await renderer.replace_text(sample_img_id, [sample_text], np.identity(4))
     assert result.size == (100, 100)
 
     # Count black pixels after replacement

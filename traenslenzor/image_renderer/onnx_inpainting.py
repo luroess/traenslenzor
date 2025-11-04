@@ -9,6 +9,8 @@ from numpy.typing import NDArray
 from PIL import Image
 from PIL.Image import Image as PILImage, Resampling
 
+import traenslenzor.image_utils.image_utils as ImageUtils
+
 logger = logging.getLogger(__name__)
 
 MODEL_URL = "https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx"
@@ -129,15 +131,15 @@ class Inpainter:
         inpainted_image = inpainted_image[0][0]  # Remove batch dimension
         inpainted_image = inpainted_image.transpose(1, 2, 0)  # (H, W, C)
 
-        # Model outputs values in [0, 255] range, convert to uint8 for PIL
+        # Model outputs values in [0, 255] range, convert to PIL
         inpainted_uint8 = inpainted_image.clip(0, 255).astype(np.uint8)
         inpainted_pil = Image.fromarray(inpainted_uint8)
         inpainted_resized = inpainted_pil.resize(
             (original_width, original_height), Resampling.LANCZOS
         )
 
-        # Convert back to normalized float32 numpy array [0, 1]
-        result = np.array(inpainted_resized).astype(np.float32) / 255.0
+        # Convert back to normalized float32 numpy array [0, 1] using ImageUtils
+        result = ImageUtils.pil_to_numpy(inpainted_resized)
 
         return result
 
@@ -195,7 +197,6 @@ if __name__ == "__main__":
 
         result = inpainter.inpaint(img, mask)
 
-        # Convert result back to PIL Image for saving
-        result_uint8 = (result * 255).clip(0, 255).astype(np.uint8)
-        result_image = Image.fromarray(result_uint8)
+        # Convert result back to PIL Image for saving using ImageUtils
+        result_image = ImageUtils.np_img_to_pil(result)
         result_image.save(output_path3)

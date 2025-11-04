@@ -7,6 +7,7 @@ from numpy.typing import NDArray
 from PIL import Image
 from PIL.Image import Image as PILImage
 
+import traenslenzor.image_utils.image_utils as ImageUtils
 from traenslenzor.image_renderer.onnx_inpainting import Inpainter
 
 # Skip tests that require model downloads when running in CI
@@ -81,9 +82,8 @@ def test_inpaint_snapshot_comparison(
     """
     result = inpainter.inpaint(sample_image, partial_mask)
 
-    # Convert normalized float array back to uint8 PIL Image
-    result_uint8 = (result * 255).clip(0, 255).astype(np.uint8)
-    result_image = Image.fromarray(result_uint8)
+    # Convert normalized float array back to PIL Image using ImageUtils
+    result_image = ImageUtils.np_img_to_pil(result)
 
     # Allow some tolerance due to floating-point precision and model variations
     image_regression(result_image, threshold=0.02)
@@ -102,8 +102,8 @@ def test_inpaint_preserves_unmasked_regions_snapshot(
     """
     result = inpainter.inpaint(sample_image, empty_mask)
 
-    result_uint8 = (result * 255).clip(0, 255).astype(np.uint8)
-    result_image = Image.fromarray(result_uint8)
+    # Convert normalized float array back to PIL Image using ImageUtils
+    result_image = ImageUtils.np_img_to_pil(result)
 
     # Stricter tolerance since nothing should be inpainted
     image_regression(result_image, threshold=0.01)

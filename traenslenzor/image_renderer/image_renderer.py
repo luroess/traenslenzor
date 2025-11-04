@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import TypedDict
 
 import numpy as np
@@ -7,10 +8,13 @@ from PIL import Image, ImageDraw, ImageFont
 from PIL.Image import Image as PILImage
 from PIL.ImageFont import FreeTypeFont, ImageFont as ImageFontType
 
-from traenslenzor.image_provider.image_provider import ImageProvider
+import traenslenzor.image_utils.image_utils as ImageUtils
+from traenslenzor.file_server.client import FileClient
 from traenslenzor.image_renderer.inpainting import Inpainter
 
 logger = logging.getLogger(__name__)
+
+logger.setLevel(logging.DEBUG)
 
 
 class Text(TypedDict):
@@ -26,7 +30,7 @@ class Text(TypedDict):
 
 
 class ImageRenderer:
-    def __init__(self, img_provider: ImageProvider, device="mps") -> None:
+    def __init__(self, device: str = "mps") -> None:
         """
         Initialize the ImageRenderer with lazy model loading.
 
@@ -35,8 +39,7 @@ class ImageRenderer:
             device: Device to run the model on (e.g., 'mps', 'cuda', 'cpu')
         """
         self._inpainter: Inpainter | None = None
-        self._device = device
-        self.img_provider = img_provider
+        self._device: str = device
 
     @property
     def inpainter(self) -> Inpainter:
@@ -58,7 +61,7 @@ class ImageRenderer:
             y_end = min(y + h, mask_shape[0])
             x_end = min(x + w, mask_shape[1])
 
-            mask[y:y_end, x:x_end] = 1
+            mask[y:y_end, x:x_end] = 255
 
         return mask.reshape((1, mask_shape[0], mask_shape[1]))
 
@@ -83,90 +86,59 @@ class ImageRenderer:
             pil_draw.text((float(x), float(y)), text_str, fill=color, font=font)
         return (np.array(pil_image) / 255).astype(np.float32)
 
-    def replace_text(
+    async def replace_text(
         self,
-        image_path: str,
+        image_id: str,
         texts: list[Text],
         inverse_transformation: NDArray[np.float64],
         save_debug: bool = False,
+        debug_dir: str = "./debug",
     ) -> PILImage:
         """
         Replace text in an image using inpainting.
 
         Args:
-            image_path: Path to the image file (relative to ImageProvider's image_dir)
+            image_id: Id of the image file (from our FileClient)
             texts: List of text regions to replace
             inverse_transformation: Transformation matrix (currently unused)
             save_debug: If True, save debug images (mask and overlay)
+            debug_dir: Directory to save debug images (default: "./debug")
 
         Returns:
             PIL Image with replaced text
         """
         # Load image using ImageProvider
-        rectified_image = self.img_provider.get_image(image_path)
+        rectified_image = await FileClient.get_image(image_id)
+
+        if rectified_image is None:
+            raise FileNotFoundError(f"Image with ID '{image_id}' not found.")
 
         # Create mask from text regions
         mask = self.create_mask(texts, (rectified_image.height, rectified_image.width))
 
         # Save debug mask if requested
         if save_debug:
-            overlay = Image.fromarray((mask[0] * 255).astype(np.uint8))
-            self.img_provider.save_image(overlay, "debug-mask.png")
+            debug_path = Path(debug_dir)
+            mask_dir = debug_path / "debug"
+            mask_dir.mkdir(parents=True, exist_ok=True)
+            overlay = Image.fromarray(mask[0])
+            overlay.save(mask_dir / "debug-mask.png")
 
         # Inpaint the masked regions
         result = self.inpainter.inpaint(rectified_image, mask)
 
         # Save debug overlay if requested
         if save_debug:
+            debug_path = Path(debug_dir)
+            debug_path.mkdir(parents=True, exist_ok=True)
             base = Image.fromarray((result * 255).astype(np.uint8))
-            overlay = Image.fromarray((mask[0] * 255).astype(np.uint8))
-            debug = ImageProvider.highlight_mask(base, overlay)
-            self.img_provider.save_image(debug, "debug-overlay.png")
+            overlay = Image.fromarray(mask[0])
+            debug = ImageUtils.highlight_mask(base, overlay)
+            debug.save(debug_path / "debug-overlay.png")
 
         # Draw new text on inpainted image
         result = self.draw_texts(result, texts)
 
         # result = result * inverse_transformation
 
-        return Image.fromarray(np.clip(result * 255, 0, 255).astype(np.uint8))
-
-
-if __name__ == "__main__":
-    # Configure logging for the script
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-
-    logger.info("Starting image inpainting script")
-
-    # Initialize ImageProvider with data directory
-    img_provider = ImageProvider("./data")
-    renderer = ImageRenderer(img_provider=img_provider)
-
-    # Define text regions to replace
-    texts: list[Text] = [
-        {
-            "text": "Betriebsstörung",
-            "left": 571,
-            "top": 238,
-            "width": 460,
-            "height": 80,
-            "rotation_in_degrees": 0,
-            "font_family": "Arial",
-            "color": (0, 0, 0),
-            "font_size": 50,
-        }
-    ]
-
-    # Process image (path is relative to img_provider's image_dir)
-    logger.info("Starting inpainting process")
-    result = renderer.replace_text(
-        "sbahn-betriebsstoerung.png", texts, np.identity(4), save_debug=True
-    )
-
-    # Save result
-    logger.info("Saving result")
-    img_provider.save_image(result, "sbahn-betriebsstoerung-replaced.png")
-    logger.info("Done!")
+        return ImageUtils.np_img_to_pil(result)
