@@ -34,18 +34,23 @@ dev = [
 ]
 classifier = [
     "albumentations>=2.0.8",
+    "datasets>=4.4.1",                              # https://huggingface.co/datasets
     "devtools>=0.12.2",
     "numpy>=2.0.0",
     "opencv-python>=4.12.0.88",
     "optuna>=4.2.0",
+    "optuna-integration[pytorch-lightning]>=4.5.0",
     "pydantic>=2.12.4",
-    "pytorch-lightning>=2.5.6",
+    # "pytorch-lightning>=2.5.6",
+    "lightning>=2.5.6",
     "rich>=13.9.4",
     "torch>=2.5.0",
     "torchvision>=0.24.0",
     "torchmetrics>=1.6.0",
     "torchsummary>=1.5.1",
     "wandb>=0.22.3",
+    "jaxtyping>=0.3.3",
+    "typing-extensions>=4.15.0",
 ]
 notebook = [
     "ipympl>=0.9.0",      # %matplotlib widget
@@ -54,6 +59,11 @@ notebook = [
     "notebook>=7.0.0",
     "jupyterlab>=4.4.10",
 ]
+
+[tool.setuptools.packages.find]
+where   = ["."]
+include = ["traenslenzor*"]
+exclude = ["notebooks*"]
 
 [tool.pytest.ini_options]
 testpaths  = ["tests"]
@@ -79,7 +89,12 @@ mypy_path            = ["traenslenzor"]
 files                = ["traenslenzor", "tests"]
 
     [[tool.mypy.overrides]]
-    module                 = "langchain_mcp_adapters.*"
+    module = [
+        "langchain_mcp_adapters.*",
+        "torchvision.*",
+        "datasets.*",
+        "albumentations.*",
+    ]
     ignore_missing_imports = true
 
         [tool.ruff.lint.per-file-ignores]
