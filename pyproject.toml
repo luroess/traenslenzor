@@ -13,6 +13,7 @@ dependencies = [
     "langchain-mcp-adapters>=0.1.12",
     "langchain-ollama>=1.0.0",
     "langgraph>=1.0.0",
+    "tomlkit>=0.13.3",
     "types-aiofiles>=25.1.0.20251011",
     "uvicorn>=0.37.0",
 ]
@@ -94,6 +95,7 @@ files                = ["traenslenzor", "tests"]
         "torchvision.*",
         "datasets.*",
         "albumentations.*",
+        "torchsummary.*",
     ]
     ignore_missing_imports = true
 
