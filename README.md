@@ -29,3 +29,5 @@ uv run pre-commit install
 ```sh
 uv run python -m traenslenzor.supervisor.supervisor
 ```
+
+

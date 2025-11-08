@@ -218,6 +218,10 @@ __marimo__/
 # translenzor
 .supervisor_graph.png
 
+# doc_classifier artifacts and cache
+.data/
+.configs/
+
 # docs
 main.pdf
 *update.pdf
