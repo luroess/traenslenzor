@@ -5,7 +5,7 @@ following the Config-as-Factory pattern established in UniTraj.
 """
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Literal
 
 import pytorch_lightning as pl
 import torch
@@ -17,6 +17,25 @@ from ..configs.wandb_config import WandbConfig
 from ..utils import BaseConfig, Console
 from .lit_trainer_callbacks import TrainerCallbacksConfig
 
+# PyTorch Lightning precision options
+PrecisionType = Literal[
+    "32-true",  # FP32 (default)
+    "16-mixed",  # FP16 mixed precision
+    "bf16-mixed",  # BF16 mixed precision
+    "16-true",  # FP16 true half precision
+    "bf16-true",  # BF16 true half precision
+    "64-true",  # FP64 double precision
+    "transformer-engine",  # FP8 via TransformerEngine (Hopper GPUs)
+    "transformer-engine-float16",  # FP8 with FP16 weights
+    # Legacy formats
+    "32",
+    "16",
+    "64",
+    32,
+    16,
+    64,
+]
+
 
 class TrainerFactoryConfig(BaseConfig[pl.Trainer]):
     """Configuration for constructing a PyTorch Lightning trainer."""
@@ -27,7 +46,8 @@ class TrainerFactoryConfig(BaseConfig[pl.Trainer]):
     devices: int | str | Sequence[int] = "auto"
     strategy: str | None = "auto"
     max_epochs: int | None = 10
-    precision: str | int = "32-true"
+    precision: PrecisionType = "32-true"
+    """Floating-point precision for training. See PrecisionType for available options."""
     gradient_clip_val: float | None = None
     accumulate_grad_batches: int = 1
     log_every_n_steps: int = 50
@@ -43,8 +63,8 @@ class TrainerFactoryConfig(BaseConfig[pl.Trainer]):
 
     @field_validator("precision")
     @classmethod
-    def _set_matmul_precision(cls, value: str | int) -> str | int:
-        if value in {"32-true", 32}:
+    def _set_matmul_precision(cls, value: PrecisionType) -> PrecisionType:
+        if value in {"32-true", 32, "32"}:
             torch.set_float32_matmul_precision("medium")
         return value
 
