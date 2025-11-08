@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import json
+import tomllib
 from enum import Enum
 from pathlib import Path
 from threading import Lock
@@ -17,6 +21,8 @@ from typing import (
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from rich.text import Text
 from rich.tree import Tree
+from tomlkit import TOMLDocument, aot, array, comment, document, dumps, string, table
+from tomlkit.items import Table
 
 from .console import Console
 
@@ -63,6 +69,124 @@ class BaseConfig(BaseModel, Generic[TargetType]):
 
         return factory(self, **kwargs)
 
+    # --------------------------------------------------------------------- TOML IO
+    def to_toml(
+        self,
+        path: Path | None = None,
+        *,
+        include_comments: bool = True,
+        include_type_hints: bool = True,
+    ) -> str:
+        """Serialise the config (and nested configs) to TOML.
+
+        Args:
+            path: Optional path to write the TOML to.
+            include_comments: When true, injects docstrings/descriptions as comments.
+            include_type_hints: When true, append type information to the comments.
+
+        Returns:
+            The rendered TOML string.
+        """
+        doc = document()
+        if include_comments and self.__class__.__doc__:
+            for line in self.__class__.__doc__.strip().splitlines():
+                if line.strip():
+                    doc.add(comment(line.strip()))
+        self._write_toml_fields(
+            container=doc,
+            include_comments=include_comments,
+            include_type_hints=include_type_hints,
+        )
+        rendered = dumps(doc)
+        if path is not None:
+            Path(path).write_text(rendered, encoding="utf-8")
+        return rendered
+
+    @classmethod
+    def from_toml(cls: Type["BaseConfig"], source: str | Path | bytes) -> "BaseConfig":
+        """Load a config from a TOML string or file path."""
+        if isinstance(source, Path):
+            text = source.read_text(encoding="utf-8")
+        elif isinstance(source, bytes):
+            text = source.decode("utf-8")
+        else:
+            potential_path = Path(source)
+            if potential_path.exists():
+                text = potential_path.read_text(encoding="utf-8")
+            else:
+                text = source
+
+        data = tomllib.loads(text)
+        return cls.model_validate(data)
+
+    def to_puml(
+        self,
+        path: Path | None = None,
+        *,
+        include_values: bool = True,
+    ) -> str:
+        """Render the config tree as a simple PlantUML class diagram.
+
+        The generated PUML also embeds the JSON payload required for round-tripping
+        via :meth:`from_puml`.
+        """
+        lines: list[str] = [
+            "@startuml",
+            "skinparam classAttributeIconSize 0",
+            "hide methods",
+        ]
+        nodes, edges = self._build_puml_graph(include_values=include_values)
+        for node in nodes:
+            node_name, label, attributes = node
+            lines.append(f'class {node_name} as "{label}" {{')
+            if attributes:
+                for attr in attributes:
+                    lines.append(f"  {attr}")
+            lines.append("}")
+        for src, dst, field_label in edges:
+            lines.append(f"{src} --> {dst} : {field_label}")
+
+        json_blob = json.dumps(
+            self.model_dump(
+                mode="json",
+                exclude={"target", "propagated_fields"},
+                by_alias=True,
+            ),
+            indent=2,
+        )
+        lines.append("/'CONFIG_JSON_START")
+        lines.extend(json_blob.splitlines())
+        lines.append("CONFIG_JSON_END'/")
+        lines.append("@enduml")
+        rendered = "\n".join(lines)
+        if path is not None:
+            Path(path).write_text(rendered, encoding="utf-8")
+        return rendered
+
+    @classmethod
+    def from_puml(cls: Type["BaseConfig"], source: str | Path | bytes) -> "BaseConfig":
+        """Parse a PlantUML export produced by :meth:`to_puml`."""
+        if isinstance(source, Path):
+            text = source.read_text(encoding="utf-8")
+        elif isinstance(source, bytes):
+            text = source.decode("utf-8")
+        else:
+            potential_path = Path(source)
+            if potential_path.exists():
+                text = potential_path.read_text(encoding="utf-8")
+            else:
+                text = source
+
+        start_token = "/'CONFIG_JSON_START"
+        end_token = "CONFIG_JSON_END'/"
+        start_idx = text.find(start_token)
+        end_idx = text.find(end_token)
+        if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
+            raise ValueError("PUML document does not contain embedded CONFIG_JSON data.")
+        json_payload = text[start_idx + len(start_token) : end_idx].strip()
+        data = json.loads(json_payload)
+        return cls.model_validate(data)
+
     def inspect(self, show_docs: bool = False) -> None:
         tree = self._build_tree(show_docs=show_docs, _seen_singletons=set())
         Console().print(tree, soft_wrap=False, highlight=True, markup=True, emoji=False)
@@ -84,7 +208,7 @@ class BaseConfig(BaseModel, Generic[TargetType]):
         if show_docs and self.__class__.__doc__:
             tree.add(Text(self.__class__.__doc__, style="config.doc"))
 
-        for field_name, field in self.model_fields.items():
+        for field_name, field in self.__class__.model_fields.items():
             value = getattr(self, field_name)
             field_style = (
                 "config.propagated" if field_name in self.propagated_fields else "config.field"
@@ -308,6 +432,144 @@ class BaseConfig(BaseModel, Generic[TargetType]):
                 Console().log(
                     f"Propagated {name}={value} from {self.__class__.__name__} to {child_config.__class__.__name__}"
                 )
+
+    # ------------------------------------------------------------------ TOML utils
+    def _write_toml_fields(
+        self,
+        *,
+        container: TOMLDocument | Table,
+        include_comments: bool,
+        include_type_hints: bool,
+    ) -> None:
+        for field_name, field in self.__class__.model_fields.items():
+            if getattr(field, "exclude", False) or field_name in {"propagated_fields", "target"}:
+                continue
+
+            value = getattr(self, field_name)
+            if value is None:
+                continue
+            if include_comments:
+                comment_lines: list[str] = []
+                if include_type_hints:
+                    comment_lines.append(f"type: {self._get_type_name(field.annotation)}")
+                if field.description:
+                    comment_lines.append(field.description.strip())
+                for line in comment_lines:
+                    if line:
+                        container.add(comment(line))
+
+            toml_value = self._to_toml_item(
+                value,
+                include_comments=include_comments,
+                include_type_hints=include_type_hints,
+            )
+            container.add(field_name, toml_value)
+
+    def _to_toml_item(
+        self,
+        value: Any,
+        *,
+        include_comments: bool,
+        include_type_hints: bool,
+    ) -> Any:
+        if isinstance(value, BaseConfig):
+            nested = table()
+            value._write_toml_fields(
+                container=nested,
+                include_comments=include_comments,
+                include_type_hints=include_type_hints,
+            )
+            return nested
+
+        if isinstance(value, dict):
+            tbl = table()
+            for key, sub_value in value.items():
+                tbl.add(key, self._normalise_scalar(sub_value))
+            return tbl
+
+        if isinstance(value, (list, tuple, set)):
+            sequence = list(value)
+            if all(isinstance(item_value, BaseConfig) for item_value in sequence):
+                tables = aot()
+                for item_config in sequence:
+                    nested = table()
+                    item_config._write_toml_fields(
+                        container=nested,
+                        include_comments=include_comments,
+                        include_type_hints=include_type_hints,
+                    )
+                    tables.append(nested)
+                return tables
+
+            arr = array()
+            arr.multiline(True)
+            for item_value in sequence:
+                if isinstance(item_value, BaseConfig):
+                    nested = table()
+                    item_value._write_toml_fields(
+                        container=nested,
+                        include_comments=include_comments,
+                        include_type_hints=include_type_hints,
+                    )
+                    arr.append(nested)
+                else:
+                    arr.append(self._normalise_scalar(item_value))
+            return arr
+
+        return self._normalise_scalar(value)
+
+    def _normalise_scalar(self, value: Any) -> Any:
+        if isinstance(value, Path):
+            return string(str(value))
+        if isinstance(value, Enum):
+            enum_value = value.value if hasattr(value, "value") else str(value)
+            return string(str(enum_value))
+        return value
+
+    # ----------------------------------------------------------------- PUML utils
+    def _build_puml_graph(
+        self,
+        *,
+        include_values: bool,
+    ) -> tuple[list[tuple[str, str, list[str]]], list[tuple[str, str, str]]]:
+        nodes: list[tuple[str, str, list[str]]] = []
+        edges: list[tuple[str, str, str]] = []
+
+        def visit(config: "BaseConfig", path: str) -> str:
+            node_name = self._sanitize_puml_name(path)
+            attributes: list[str] = []
+
+            for field_name, field in config.__class__.model_fields.items():
+                value = getattr(config, field_name)
+                if isinstance(value, BaseConfig):
+                    child_path = f"{path}.{field_name}"
+                    child_node = visit(value, child_path)
+                    edges.append((node_name, child_node, field_name))
+                elif isinstance(value, (list, tuple)):
+                    for idx, item in enumerate(value):
+                        if isinstance(item, BaseConfig):
+                            child_path = f"{path}.{field_name}[{idx}]"
+                            child_node = visit(item, child_path)
+                            edges.append((node_name, child_node, f"{field_name}[{idx}]"))
+                elif include_values:
+                    formatted = self._format_value(value)
+                    attributes.append(f"{field_name}: {formatted}")
+
+            nodes.append((node_name, config.__class__.__name__, attributes))
+            return node_name
+
+        visit(self, self.__class__.__name__)
+        return nodes, edges
+
+    @staticmethod
+    def _sanitize_puml_name(path: str) -> str:
+        safe = []
+        for ch in path:
+            if ch.isalnum() or ch == "_":
+                safe.append(ch)
+            else:
+                safe.append("_")
+        return "".join(safe)
 
 
 class SingletonConfig(BaseConfig):

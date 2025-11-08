@@ -88,10 +88,11 @@ class Console(RichConsole):
 
     def log(self, message: str) -> None:
         """Emit an informational message when verbosity is enabled."""
-        if self.verbose:
-            self.print(self._format_message(message))
-            if self._pl_logger is not None:
-                self._log_to_lightning("info", message)
+        if not self.verbose:
+            return
+        self.print(self._format_message(message))
+        if self._pl_logger is not None:
+            self._log_to_lightning("info", message)
 
     def warn(self, message: str) -> None:
         """Emit a warning message and include a short caller stack."""
@@ -100,8 +101,8 @@ class Console(RichConsole):
                 f"[bright_yellow]Warning:[/bright_yellow] {self._format_message(message)}\n"
                 f"[dim]{self._get_caller_stack()}[/dim]",
             )
-            if self._pl_logger is not None:
-                self._log_to_lightning("warning", message)
+        if self._pl_logger is not None:
+            self._log_to_lightning("warning", message)
 
     def error(self, message: str) -> None:
         """Emit an error message and show the relevant caller stack."""
