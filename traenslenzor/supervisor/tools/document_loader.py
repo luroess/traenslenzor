@@ -15,7 +15,10 @@ async def document_loader(filepath: str, runtime: ToolRuntime) -> Command:
             update={
                 "messages": [
                     ToolMessage(
-                        content=f"Document loaded successfully from {filepath}",
+                        content=(
+                            "Document loaded successfully. "
+                            f"Use document id {file_id} for all subsequent operations."
+                        ),
                         tool_call_id=runtime.tool_call_id,
                     )
                 ],

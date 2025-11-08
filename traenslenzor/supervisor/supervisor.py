@@ -50,6 +50,9 @@ def context_aware_prompt(request: ModelRequest) -> str:
 
         Always keep the workflow clear and keep the user informed on what they need to do next.
         Decide what needs to be done next and call the appropriate tool.
+        When calling any tool that operates on the uploaded document, always supply the
+        stored document id from state (state["original_document"]). Do not reuse filesystem
+        paths once the document has been uploaded.
         
         Currently:
             - {
