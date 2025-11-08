@@ -1,4 +1,6 @@
-from typing import Type
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import torch
 from pydantic import Field
@@ -6,13 +8,26 @@ from torch import nn
 
 from ..utils import BaseConfig
 
+if TYPE_CHECKING:
+    from jaxtyping import Float
+
 
 class AlexNetParams(BaseConfig):
     """Parameter configuration for AlexNet."""
 
-    target: Type["AlexNet"] = Field(default_factory=lambda: AlexNet)
+    target: type["AlexNet"] = Field(default_factory=lambda: AlexNet, exclude=True)
     num_classes: int = 10
     dropout: float = 0.5
+
+
+# Type alias for jaxtyping tensor shapes
+# B = batch, C = channels, H = height, W = width, N = num_classes
+if TYPE_CHECKING:
+    ImageBatch = Float[torch.Tensor, "B 3 H W"]
+    Logits = Float[torch.Tensor, "B N"]
+else:
+    ImageBatch = torch.Tensor
+    Logits = torch.Tensor
 
 
 class AlexNet(nn.Module):
@@ -87,7 +102,16 @@ class AlexNet(nn.Module):
             nn.Linear(4096, self.params.num_classes),
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: ImageBatch) -> Logits:
+        """Forward pass through AlexNet.
+
+        Args:
+            x: Input tensor with shape (B, 3, H, W) where:
+               B = batch size, H = height, W = width.
+
+        Returns:
+            Logits with shape (B, N) where N = num_classes.
+        """
         x = self.features(x)
         x = self.avgpool(x)
         x = torch.flatten(x, 1)

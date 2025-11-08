@@ -1,17 +1,18 @@
 """Lightning module for the document-class detector.
 
 Provides AlexNet, ResNet-50, and ViT-B/16 backbones with optional head-only
-training and OneCycle learning-rate scheduling. The implementation is adapted
-from the previous ADL ingredient classifier but updated to the UniTraj style
-guide and Config-as-Factory pattern.
+training and OneCycle learning-rate scheduling.
 """
+
+from __future__ import annotations
 
 from collections.abc import Iterable
 from enum import Enum, auto
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import pytorch_lightning as pl
 import torchmetrics
+from jaxtyping import Float, Int64
 from pydantic import Field
 from torch import Tensor, nn
 from torch.optim import AdamW, Optimizer
@@ -19,17 +20,37 @@ from torch.optim.lr_scheduler import OneCycleLR
 from torchvision import models
 
 from ..models.alexnet import AlexNetParams
-from ..utils import BaseConfig
+from ..utils import BaseConfig, Metric
+
+if TYPE_CHECKING:
+    pass
+
+# Type aliases for tensor shapes using jaxtyping
+# B = batch, C = channels, H = height, W = width, N = num_classes
+ImageBatch = Float[Tensor, "B C H W"]
+Logits = Float[Tensor, "B N"]
+Targets = Int64[Tensor, "B"]
+ScalarLoss = Float[Tensor, ""]
 
 
 class OptimizerConfig(BaseConfig[Optimizer]):
     """AdamW optimizer configuration tailored for document classification."""
 
     learning_rate: float = 5e-4
+    """Learning rate for AdamW optimizer."""
+
     weight_decay: float = 1e-4
+    """L2 regularization weight decay."""
 
     def setup_target(self, params: Iterable[Tensor]) -> Optimizer:
-        """Instantiate the AdamW optimizer."""
+        """Instantiate the AdamW optimizer.
+
+        Args:
+            params: Iterable of model parameters to optimize.
+
+        Returns:
+            Optimizer: Configured AdamW optimizer instance.
+        """
         return AdamW(params=params, lr=self.learning_rate, weight_decay=self.weight_decay)
 
 
@@ -37,12 +58,25 @@ class OneCycleSchedulerConfig(BaseConfig[OneCycleLR]):
     """OneCycle learning-rate scheduler configuration."""
 
     max_lr: float = 0.01
+    """Maximum learning rate in the cycle."""
+
     base_momentum: float = 0.85
+    """Lower momentum boundary in the cycle."""
+
     max_momentum: float = 0.95
+    """Upper momentum boundary in the cycle."""
+
     div_factor: float = 25.0
+    """Initial learning rate = max_lr / div_factor."""
+
     final_div_factor: float = 1e4
+    """Final learning rate = max_lr / (div_factor * final_div_factor)."""
+
     pct_start: float = 0.3
-    anneal_strategy: str = "cos"
+    """Percentage of cycle spent increasing learning rate."""
+
+    anneal_strategy: Literal["cos", "linear"] = "cos"
+    """Annealing strategy: 'cos' or 'linear'."""
 
     def setup_target(
         self,
@@ -50,7 +84,15 @@ class OneCycleSchedulerConfig(BaseConfig[OneCycleLR]):
         *,
         total_steps: int,
     ) -> OneCycleLR:
-        """Instantiate the OneCycle scheduler."""
+        """Instantiate the OneCycle scheduler.
+
+        Args:
+            optimizer: Optimizer instance to schedule.
+            total_steps: Total number of training steps (batches).
+
+        Returns:
+            OneCycleLR: Configured OneCycle scheduler instance.
+        """
         return OneCycleLR(
             optimizer,
             max_lr=self.max_lr,
@@ -66,61 +108,91 @@ class OneCycleSchedulerConfig(BaseConfig[OneCycleLR]):
 
 
 class BackboneType(Enum):
-    """Supported vision backbones."""
+    """Supported vision backbones for document classification."""
 
     ALEXNET = auto()
     RESNET50 = auto()
     VIT_B16 = auto()
 
     def build(self, num_classes: int, train_head_only: bool, use_pretrained: bool) -> nn.Module:
-        """Instantiate the selected backbone with the requested number of output classes."""
-        if self is BackboneType.ALEXNET:
-            return AlexNetParams(num_classes=num_classes).setup_target()
-        elif self is BackboneType.RESNET50:
-            # Instantiate ResNet50 with ImageNet weights (V1: acc@1 76.13, V2: acc@1 80.86)
-            model = models.resnet50(
-                weights=models.ResNet50_Weights.IMAGENET1K_V2 if use_pretrained else None
-            )
-            if train_head_only:
-                for param in model.parameters():
-                    param.requires_grad = False
+        """Instantiate the selected backbone with the requested number of output classes.
 
-            # self.fc = nn.Linear(512 * block.expansion, num_classes)
-            model.fc = nn.Linear(model.fc.in_features, num_classes)
-        elif self is BackboneType.VIT_B16:
-            # Instantiate Vision Transformer with ImageNet weights
-            model = models.vit_b_16(
-                weights=models.ViT_B_16_Weights.IMAGENET1K_V1 if use_pretrained else None
-            )
-            # if representation_size is None:
-            #     heads_layers["head"] = nn.Linear(hidden_dim, num_classes)
-            # ...
-            # self.heads = nn.Sequential(heads_layers)
-            # Use representation_size = None, as it is the default value
-            if train_head_only:
-                for param in model.parameters():
-                    param.requires_grad = False
-            model.heads = nn.Linear(model.hidden_dim, num_classes)
-            return model
+        Args:
+            num_classes: Number of output classes for classification head.
+            train_head_only: If True, freeze backbone weights and train only the head.
+            use_pretrained: If True, load ImageNet pretrained weights (ignored for AlexNet).
+
+        Returns:
+            nn.Module: Configured model with classification head for num_classes.
+        """
+        match self:
+            case BackboneType.ALEXNET:
+                return AlexNetParams(num_classes=num_classes).setup_target()
+
+            case BackboneType.RESNET50:
+                # Instantiate ResNet50 with ImageNet weights (V2: acc@1 80.86)
+                model = models.resnet50(
+                    weights=models.ResNet50_Weights.IMAGENET1K_V2 if use_pretrained else None
+                )
+                if train_head_only:
+                    for param in model.parameters():
+                        param.requires_grad = False
+                # Replace classification head: fc = nn.Linear(2048, num_classes)
+                model.fc = nn.Linear(model.fc.in_features, num_classes)
+                return model
+
+            case BackboneType.VIT_B16:
+                # Instantiate Vision Transformer with ImageNet weights
+                model = models.vit_b_16(
+                    weights=models.ViT_B_16_Weights.IMAGENET1K_V1 if use_pretrained else None
+                )
+                if train_head_only:
+                    for param in model.parameters():
+                        param.requires_grad = False
+                # Replace classification head: heads = nn.Linear(hidden_dim, num_classes)
+                model.heads = nn.Linear(model.hidden_dim, num_classes)
+                return model
 
 
 class DocClassifierConfig(BaseConfig["DocClassifierModule"]):
     """Lightning module configuration for document classification."""
 
-    target: type["DocClassifierModule"] = Field(default_factory=lambda: DocClassifierModule)
+    target: type["DocClassifierModule"] = Field(
+        default_factory=lambda: DocClassifierModule, exclude=True
+    )
 
     num_classes: int = 16
+    """Number of document classes (RVL-CDIP has 16)."""
+
     backbone: BackboneType = BackboneType.ALEXNET
+    """Vision backbone architecture."""
+
     train_head_only: bool = False
+    """If True, freeze backbone and train only classification head."""
+
     use_pretrained: bool = True
+    """If True, initialize backbone with ImageNet pretrained weights."""
+
     optimizer: OptimizerConfig = Field(default_factory=OptimizerConfig)
+    """Optimizer configuration."""
+
     scheduler: OneCycleSchedulerConfig = Field(default_factory=OneCycleSchedulerConfig)
+    """Learning rate scheduler configuration."""
 
 
 class DocClassifierModule(pl.LightningModule):
-    """Lightning module implementing training/validation/test loops for document classification."""
+    """Lightning module implementing training/validation/test loops for document classification.
+
+    Supports three backbones (AlexNet, ResNet-50, ViT-B/16) with optional head-only training.
+    Uses CrossEntropyLoss and torchmetrics for accuracy tracking.
+    """
 
     def __init__(self, config: DocClassifierConfig):
+        """Initialize the module with the given configuration.
+
+        Args:
+            config: Configuration specifying backbone, optimizer, scheduler, etc.
+        """
         super().__init__()
         self.config = config
         self.model = config.backbone.build(
@@ -140,19 +212,37 @@ class DocClassifierModule(pl.LightningModule):
         )
 
     # ---------------------------------------------------------------------- steps
-    def forward(self, batch: Tensor) -> Tensor:
-        """Run a forward pass through the backbone."""
+    def forward(self, batch: ImageBatch) -> Logits:
+        """Run a forward pass through the backbone.
+
+        Args:
+            batch: Batch of input images with shape (B, C, H, W) where:
+                   B = batch size, C = channels, H = height, W = width.
+
+        Returns:
+            Raw logits for each class with shape (B, N) where N = num_classes.
+        """
         return self.model(batch)
 
-    def training_step(self, batch: tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
-        """Compute the training loss and log metrics."""
+    def training_step(self, batch: tuple[ImageBatch, Targets], batch_idx: int) -> ScalarLoss:
+        """Compute the training loss and log metrics.
+
+        Args:
+            batch: Tuple of (inputs, targets) where:
+                   - inputs: ImageBatch with shape (B, C, H, W)
+                   - targets: Targets with shape (B,) containing class indices
+            batch_idx: Index of the current batch.
+
+        Returns:
+            Scalar training loss.
+        """
         inputs, targets = batch
         logits = self(inputs)
         loss = self.loss_fn(logits, targets)
         self.train_accuracy(logits, targets)
-        self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log(Metric.TRAIN_LOSS, loss, on_step=True, on_epoch=True, prog_bar=True)
         self.log(
-            "train/accuracy",
+            Metric.TRAIN_ACCURACY,
             self.train_accuracy,
             on_step=False,
             on_epoch=True,
@@ -160,30 +250,44 @@ class DocClassifierModule(pl.LightningModule):
         )
         return loss
 
-    def validation_step(self, batch: tuple[Tensor, Tensor], batch_idx: int) -> None:
-        """Log validation loss and accuracy."""
+    def validation_step(self, batch: tuple[ImageBatch, Targets], batch_idx: int) -> None:
+        """Log validation loss and accuracy.
+
+        Args:
+            batch: Tuple of (inputs, targets) where:
+                   - inputs: ImageBatch with shape (B, C, H, W)
+                   - targets: Targets with shape (B,) containing class indices
+            batch_idx: Index of the current batch.
+        """
         inputs, targets = batch
         logits = self(inputs)
         loss = self.loss_fn(logits, targets)
         self.val_accuracy(logits, targets)
-        self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log(Metric.VAL_LOSS, loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log(
-            "val/accuracy",
+            Metric.VAL_ACCURACY,
             self.val_accuracy,
             on_step=False,
             on_epoch=True,
             prog_bar=True,
         )
 
-    def test_step(self, batch: tuple[Tensor, Tensor], batch_idx: int) -> None:
-        """Log test metrics."""
+    def test_step(self, batch: tuple[ImageBatch, Targets], batch_idx: int) -> None:
+        """Log test metrics.
+
+        Args:
+            batch: Tuple of (inputs, targets) where:
+                   - inputs: ImageBatch with shape (B, C, H, W)
+                   - targets: Targets with shape (B,) containing class indices
+            batch_idx: Index of the current batch.
+        """
         inputs, targets = batch
         logits = self(inputs)
         loss = self.loss_fn(logits, targets)
         self.test_accuracy(logits, targets)
-        self.log("test/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log(Metric.TEST_LOSS, loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log(
-            "test/accuracy",
+            Metric.TEST_ACCURACY,
             self.test_accuracy,
             on_step=False,
             on_epoch=True,
@@ -192,7 +296,11 @@ class DocClassifierModule(pl.LightningModule):
 
     # ---------------------------------------------------------------- optimizers
     def configure_optimizers(self) -> dict[str, Any]:
-        """Instantiate optimizer and scheduler using their configs."""
+        """Instantiate optimizer and scheduler using their configs.
+
+        Returns:
+            dict: Lightning optimizer configuration with scheduler.
+        """
         trainable_params = (p for p in self.parameters() if p.requires_grad)
         optimizer = self.config.optimizer.setup_target(trainable_params)
         total_steps = getattr(self.trainer, "estimated_stepping_batches", None)
