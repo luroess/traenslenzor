@@ -32,33 +32,55 @@ dev = [
     "types-pyyaml>=6.0.12.20250915",
     "types-requests>=2.32.4.20250913",
 ]
+classifier = [
+    "albumentations>=2.0.8",
+    "devtools>=0.12.2",
+    "numpy>=2.0.0",
+    "opencv-python>=4.12.0.88",
+    "optuna>=4.2.0",
+    "pydantic>=2.12.4",
+    "pytorch-lightning>=2.5.6",
+    "rich>=13.9.4",
+    "torch>=2.5.0",
+    "torchvision>=0.24.0",
+    "torchmetrics>=1.6.0",
+    "torchsummary>=1.5.1",
+    "wandb>=0.22.3",
+]
+notebook = [
+    "ipympl>=0.9.0",      # %matplotlib widget
+    "jupyter>=1.0.0",
+    "ipykernel>=7.1.0",
+    "notebook>=7.0.0",
+    "jupyterlab>=4.4.10",
+]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths  = ["tests"]
 pythonpath = ["traenslenzor"]
-addopts = "-q"
+addopts    = "-q"
 
 [tool.ruff]
-line-length = 100
+line-length    = 100
 target-version = "py313"
 
-[tool.ruff.lint]
-extend-select = ["I"]  # import sorting
+    [tool.ruff.lint]
+    extend-select = ["I"] # import sorting
 
 [tool.mypy]
-python_version = "3.13"
-warn_unused_ignores = true
+python_version       = "3.13"
+warn_unused_ignores  = true
 warn_redundant_casts = true
-warn_return_any = true
-check_untyped_defs = true
+warn_return_any      = true
+check_untyped_defs   = true
 no_implicit_optional = true
-pretty = true
-mypy_path = ["traenslenzor"]
-files = ["traenslenzor", "tests"]
+pretty               = true
+mypy_path            = ["traenslenzor"]
+files                = ["traenslenzor", "tests"]
 
-[[tool.mypy.overrides]]
-module = "langchain_mcp_adapters.*"
-ignore_missing_imports = true
+    [[tool.mypy.overrides]]
+    module                 = "langchain_mcp_adapters.*"
+    ignore_missing_imports = true
 
-[tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]
+        [tool.ruff.lint.per-file-ignores]
+        "tests/*" = ["S101"]
