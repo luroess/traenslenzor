@@ -539,6 +539,9 @@ class BaseConfig(BaseModel, Generic[TargetType]):
             return string(str(value))
         if isinstance(value, Enum):
             enum_value = value.value if hasattr(value, "value") else str(value)
+            # Preserve numeric types for IntEnum/FloatEnum
+            if isinstance(enum_value, (int, float)):
+                return enum_value
             return string(str(enum_value))
         return value
 
