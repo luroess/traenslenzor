@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 import wandb
@@ -25,14 +26,24 @@ class WandbConfig(BaseConfig):
     tags: list[str] | None = Field(default=None, description="Optional list of tags.")
     group: str | None = Field(default=None, description="Group multiple related runs.")
     job_type: str | None = Field(default=None, description="Attach a W&B job_type label.")
+    prefix: str | None = Field(default=None, description="Namespace prefix for metric keys.")
+    save_dir: Path | str | None = Field(
+        default=None,
+        description="Directory for local W&B files; falls back to PathConfig().wandb.",
+    )
 
     def setup_target(self, **kwargs: Any) -> WandbLogger:
         """Instantiate a configured WandbLogger."""
+        resolved_save_dir = (
+            Path(self.save_dir).expanduser() if self.save_dir else PathConfig().wandb
+        )
+        resolved_save_dir.mkdir(parents=True, exist_ok=True)
+
         return WandbLogger(
             name=self.name,
             project=self.project,
             entity=self.entity,
-            save_dir=PathConfig().wandb.as_posix(),
+            save_dir=resolved_save_dir.as_posix(),
             offline=self.offline,
             log_model=self.log_model,
             prefix=self.prefix,

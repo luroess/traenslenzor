@@ -18,19 +18,20 @@ def _default_data_root() -> Path:
 class PathConfig(SingletonConfig):
     """Centralise all filesystem locations for the document classifier."""
 
-    root: Path = Field(default_factory=_default_root, description="Project root.")
-    data_root: Path = Field(
-        default_factory=lambda: Path(".data"),
-        description="Base directory containing RVL-CDIP mirrors (images + metadata).",
+    root: Path = Field(
+        default_factory=_default_root,
     )
-    checkpoints: Path = Field(
-        default_factory=lambda: Path(".logs") / "checkpoints",
-        description="Directory used by Lightning checkpoints.",
-    )
+    "Project root."
+    data_root: Path = Field(default_factory=lambda: Path(".data"))
+    hf_cache: Path = Field(default_factory=lambda: Path(".data") / "hf_cache")
+    """Directory used for Hugging Face dataset caching."""
+    checkpoints: Path = Field(default_factory=lambda: Path(".logs") / "checkpoints")
+    """Directory used by Lightning checkpoints."""
     wandb: Path = Field(
         default_factory=lambda: Path(".logs") / "wandb",
-        description="W&B run directory.",
     )
+    configs_dir: Path = Field(default_factory=lambda: Path(".configs"))
+    """Directory containing exported experiment/configuration files (TOML, PUML, etc.)."""
 
     @classmethod
     def _resolve_path(cls, value: str | Path, info: ValidationInfo) -> Path:
@@ -55,7 +56,7 @@ class PathConfig(SingletonConfig):
             raise ValueError(f"Configured project root '{path}' does not exist.")
         return path
 
-    @field_validator("checkpoints", "wandb", "data_root", mode="before")
+    @field_validator("checkpoints", "wandb", "data_root", "configs_dir", mode="before")
     @classmethod
     def _resolve_dirs(cls, value: str | Path, info: ValidationInfo) -> Path:
         path = cls._resolve_path(value, info)

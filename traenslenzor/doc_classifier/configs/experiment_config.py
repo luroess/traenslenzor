@@ -192,6 +192,29 @@ class ExperimentConfig(BaseConfig[Trainer]):
 
         return trainer
 
+    # ------------------------------------------------------------------- I/O
+    def export_puml(self, filename: str | None = None) -> Path:
+        """Write the current configuration to a PlantUML file inside `paths.configs_dir`."""
+        target_name = filename or f"{self.run_name}.puml"
+        base_dir = self.paths.configs_dir
+        base_dir.mkdir(parents=True, exist_ok=True)
+        target_path = (base_dir / target_name).resolve()
+        self.to_puml(path=target_path)
+        return target_path
+
+    @classmethod
+    def from_puml_file(
+        cls,
+        filename: str | Path,
+        path_config: PathConfig | None = None,
+    ) -> "ExperimentConfig":
+        """Load an ExperimentConfig from a PlantUML file (relative to configs_dir by default)."""
+        paths = path_config or PathConfig()
+        candidate = Path(filename)
+        if not candidate.is_absolute():
+            candidate = paths.configs_dir / candidate
+        return cls.from_puml(candidate.resolve())
+
     def run_optuna_study(self) -> None:
         """Integrate Optuna for hyperparameter optimisation."""
         if self.optuna_config is None:
@@ -242,7 +265,3 @@ class ExperimentConfig(BaseConfig[Trainer]):
 
         study = self.optuna_config.setup_target()
         study.optimize(objective, n_trials=self.optuna_config.n_trials)
-
-    def run(self) -> Trainer:
-        """Convenience CLI entry point."""
-        return self.setup_target_and_run(self.stage)
