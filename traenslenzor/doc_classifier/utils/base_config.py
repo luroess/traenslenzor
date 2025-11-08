@@ -582,7 +582,7 @@ class SingletonConfig(BaseConfig):
         arbitrary_types_allowed=True, validate_assignment=True, validate_default=True
     )
 
-    def __new__(cls):
+    def __new__(cls, *args: Any, **kwargs: Any):
         with cls._lock:
             if cls not in cls._instances:
                 instance = super(BaseConfig, cls).__new__(cls)

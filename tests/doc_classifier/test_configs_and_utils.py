@@ -49,9 +49,8 @@ def test_path_config_creates_required_directories(project_root):
 
 
 def test_path_config_requires_existing_root(tmp_path):
-    PathConfig._instances.pop(PathConfig, None)
     with pytest.raises(ValueError):
-        PathConfig(root=tmp_path / "missing-root")
+        PathConfig._validate_root(tmp_path / "missing-root")
 
 
 def test_default_data_root_helper():

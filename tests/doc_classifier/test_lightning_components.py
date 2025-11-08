@@ -251,9 +251,11 @@ def test_vit_backbone_replacement(monkeypatch):
     module = config.setup_target()
 
     assert module.model.heads.out_features == 5
-    frozen = [param.requires_grad for param in module.model.parameters() if param is not module.model.heads.weight]
-    assert frozen
-    assert not any(frozen)
+    for name, param in module.model.named_parameters():
+        if name.startswith("heads"):
+            assert param.requires_grad
+        else:
+            assert param.requires_grad is False
 
 
 def test_training_validation_test_steps_execute(monkeypatch):
@@ -285,6 +287,6 @@ def test_configure_optimizers_and_on_train_start(monkeypatch):
     assert optimizers["lr_scheduler"]["interval"] == "step"
 
     logger = MagicMock()
-    module.logger = logger
+    module._logger = logger  # Lightning stores logger on protected attribute
     module.on_train_start()
     logger.log_hyperparams.assert_called_once()

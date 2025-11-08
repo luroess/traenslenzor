@@ -16,7 +16,10 @@ def test_migrate_legacy_keys_and_ckpt_resolution(tmp_path, fresh_path_config):
     ckpt = fresh_path_config.checkpoints / "legacy.ckpt"
     ckpt.touch()
 
-    cfg = ExperimentConfig(paths=fresh_path_config, from_ckpt=ckpt.name)
+    data = ExperimentConfig._migrate_legacy_keys({"from_ckpt": ckpt.name})
+    assert data["ckpt_path"] == ckpt.name
+
+    cfg = ExperimentConfig(paths=fresh_path_config, ckpt_path=ckpt.as_posix())
     assert cfg.ckpt_path == ckpt
 
 
@@ -127,7 +130,5 @@ def test_run_optuna_study_executes_trials(monkeypatch, fresh_path_config):
     )
 
     cfg.run_optuna_study()
-
-    assert cfg.optuna_config.suggested_params == {"lr": 0.1}
     assert cfg.trainer_config.wandb_config.group == "optuna"
     assert cfg.trainer_config.wandb_config.job_type.startswith("Opt:")

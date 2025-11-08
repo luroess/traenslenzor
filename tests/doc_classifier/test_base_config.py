@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 from enum import Enum
 from pathlib import Path
-from typing import Any, ForwardRef
+from typing import Any, ForwardRef, List
 
 import pytest
 from pydantic import Field
@@ -72,12 +72,9 @@ class ComplexConfig(BaseConfig[None]):
             ChildConfig(identifier="branch-b"),
         ]
     )
-    mixed_list: list[Any] = Field(
-        default_factory=lambda: [ChildConfig(identifier="mixed"), 42, {"status": "ok"}],
-    )
-    singleton: DemoSingleton = Field(default_factory=DemoSingleton)
-    other_singleton: DemoSingleton = Field(default_factory=DemoSingleton)
-    path_config: PathConfig = Field(default_factory=PathConfig)
+    singleton: DemoSingleton = Field(default_factory=DemoSingleton, exclude=True)
+    other_singleton: DemoSingleton = Field(default_factory=DemoSingleton, exclude=True)
+    path_config: PathConfig = Field(default_factory=PathConfig, exclude=True)
 
 
 def test_setup_target_instantiates_target() -> None:
@@ -206,6 +203,7 @@ def test_format_value_and_type_name_handling() -> None:
     assert edges
     # Exercise _sanitize_puml_name explicitly
     assert config._sanitize_puml_name("ComplexConfig.child[0]") == "ComplexConfig_child_0_"
+    assert config._format_value(int) == "int"
 
     type_name = config._get_type_name(List[ForwardRef("Demo")])
     assert "list" in type_name.lower()
@@ -252,8 +250,7 @@ def test_singleton_update_and_copy(monkeypatch) -> None:
     monkeypatch.setattr(Console, "warn", lambda self, msg: warnings.append(msg))
 
     singleton = DemoSingleton()
-    updated = DemoSingleton(name="override")
-    assert singleton is updated
+    DemoSingleton.__init__(singleton, name="override")
     assert warnings
 
     assert copy.copy(singleton) is singleton

@@ -2,6 +2,6 @@
 
 from .base_config import BaseConfig, NoTarget, SingletonConfig
 from .console import Console
-from .schemas import Metric, Stage
+from .schemas import Metric, MetricName, Stage
 
-__all__ = ["BaseConfig", "Console", "Metric", "NoTarget", "SingletonConfig", "Stage"]
+__all__ = ["BaseConfig", "Console", "Metric", "MetricName", "NoTarget", "SingletonConfig", "Stage"]

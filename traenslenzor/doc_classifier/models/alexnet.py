@@ -119,7 +119,7 @@ class AlexNet(nn.Module):
         return x
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - manual smoke test
     from torchsummary import summary
 
     model = AlexNetParams(num_classes=10).setup_target()
