@@ -50,6 +50,9 @@ class DocDataModuleConfig(BaseConfig["DocDataModule"]):
     pin_memory: bool = True
     """Whether to pin memory in DataLoaders for faster GPU transfer."""
 
+    is_debug: bool = False
+    verbose: bool = True
+
     train_dataset: RVLCDIPConfig = Field(default_factory=_default_train_dataset)
     """Configuration for training dataset with transforms."""
 
