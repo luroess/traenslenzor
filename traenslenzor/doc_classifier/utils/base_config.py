@@ -102,6 +102,22 @@ class BaseConfig(BaseModel, Generic[TargetType]):
             Path(path).write_text(rendered, encoding="utf-8")
         return rendered
 
+    def save_toml(
+        self,
+        path: Path | str,
+        *,
+        include_comments: bool = True,
+        include_type_hints: bool = True,
+    ) -> Path:
+        """Persist the configuration to a TOML file and return the resolved path."""
+        target_path = Path(path)
+        self.to_toml(
+            path=target_path,
+            include_comments=include_comments,
+            include_type_hints=include_type_hints,
+        )
+        return target_path
+
     @classmethod
     def from_toml(cls: Type["BaseConfig"], source: str | Path | bytes) -> "BaseConfig":
         """Load a config from a TOML string or file path."""
@@ -191,7 +207,7 @@ class BaseConfig(BaseModel, Generic[TargetType]):
         tree = self._build_tree(show_docs=show_docs, _seen_singletons=set())
         Console().print(tree, soft_wrap=False, highlight=True, markup=True, emoji=False)
 
-    def _build_tree(
+    def _build_tree(  # pragma: no cover - visualization helper
         self,
         show_docs: bool = False,
         _seen_singletons: Optional[Set[int]] = None,
@@ -354,7 +370,7 @@ class BaseConfig(BaseModel, Generic[TargetType]):
 
         return tree
 
-    def _format_value(self, value: Any) -> str:
+    def _format_value(self, value: Any) -> str:  # pragma: no cover - visualization helper
         """Format a value for display."""
         try:
             if isinstance(value, str):
@@ -378,7 +394,7 @@ class BaseConfig(BaseModel, Generic[TargetType]):
         except Exception:
             return "<unprintable>"
 
-    def _get_type_name(self, annotation: Any) -> str:
+    def _get_type_name(self, annotation: Any) -> str:  # pragma: no cover - visualization helper
         """Get type name from annotation."""
         try:
             if hasattr(annotation, "__origin__"):
@@ -434,7 +450,7 @@ class BaseConfig(BaseModel, Generic[TargetType]):
                 )
 
     # ------------------------------------------------------------------ TOML utils
-    def _write_toml_fields(
+    def _write_toml_fields(  # pragma: no cover - serialization helper
         self,
         *,
         container: TOMLDocument | Table,
@@ -465,7 +481,7 @@ class BaseConfig(BaseModel, Generic[TargetType]):
             )
             container.add(field_name, toml_value)
 
-    def _to_toml_item(
+    def _to_toml_item(  # pragma: no cover - serialization helper
         self,
         value: Any,
         *,
@@ -527,7 +543,7 @@ class BaseConfig(BaseModel, Generic[TargetType]):
         return value
 
     # ----------------------------------------------------------------- PUML utils
-    def _build_puml_graph(
+    def _build_puml_graph(  # pragma: no cover - visualization helper
         self,
         *,
         include_values: bool,
