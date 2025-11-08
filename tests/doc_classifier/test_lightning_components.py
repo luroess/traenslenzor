@@ -172,6 +172,27 @@ def test_doc_data_module_invalid_stage(monkeypatch):
         datamodule.setup("invalid")
 
 
+def test_doc_data_module_lazy_initialization(monkeypatch):
+    dataset = _DummyDataset(0)
+    monkeypatch.setattr(RVLCDIPConfig, "setup_target", lambda self: dataset)
+
+    datamodule = DocDataModuleConfig(batch_size=1, num_workers=0).setup_target()
+    datamodule._train_ds = None
+    datamodule._val_ds = None
+    datamodule._test_ds = None
+
+    # Access loaders and properties without explicit setup to trigger guards
+    datamodule.train_dataloader()
+    datamodule._train_ds = None
+    assert datamodule.train_ds is not None
+    datamodule.val_dataloader()
+    datamodule._val_ds = None
+    assert datamodule.val_ds is not None
+    datamodule.test_dataloader()
+    datamodule._test_ds = None
+    assert datamodule.test_ds is not None
+
+
 @pytest.mark.parametrize(
     "config_cls",
     [TrainTransformConfig, FineTuneTransformConfig, ValTransformConfig],
@@ -276,17 +297,17 @@ def test_configure_optimizers_and_on_train_start(monkeypatch):
     module = config.setup_target()
 
     dataloader = [0, 1]
+    logger = MagicMock()
     module.trainer = SimpleNamespace(
         estimated_stepping_batches=None,
         datamodule=SimpleNamespace(train_dataloader=lambda: dataloader),
         max_epochs=2,
+        logger=logger,
     )
 
     optimizers = module.configure_optimizers()
     assert "optimizer" in optimizers
     assert optimizers["lr_scheduler"]["interval"] == "step"
 
-    logger = MagicMock()
-    module._logger = logger  # Lightning stores logger on protected attribute
     module.on_train_start()
     logger.log_hyperparams.assert_called_once()

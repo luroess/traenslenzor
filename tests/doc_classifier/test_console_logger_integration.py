@@ -259,6 +259,21 @@ class TestConsoleLoggerIntegration:
         console = Console()
         assert console.update_global_step(10) is console
 
+    def test_plog_outputs_when_verbose(self, monkeypatch):
+        console = Console.with_prefix("VerboseMode")
+        console.set_verbose(True)
+        captured: list[str] = []
+        monkeypatch.setattr(Console, "print", lambda self, msg, **_: captured.append(msg))
+        console.plog({"ok": True})
+        assert captured
+
+    def test_timestamp_formatting_uses_helper(self, monkeypatch):
+        console = Console()
+        console.set_timestamp_display(True)
+        monkeypatch.setattr(Console, "_get_timestamp", lambda self: "fixed", raising=False)
+        formatted = console._format_message("payload")
+        assert formatted.startswith("[fixed]")
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

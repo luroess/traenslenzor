@@ -21,6 +21,7 @@ def test_stage_conversion_and_split():
     assert Stage.from_str("validate") is Stage.VAL
     assert Stage.from_str(Stage.TEST) is Stage.TEST
     assert str(Stage.VAL) == "val"
+    assert Stage.TRAIN.to_split() is Split.TRAIN
     assert Stage.VAL.to_split() is Split.VALIDATION
     assert Stage.TEST.to_split() is Split.TEST
     assert str(MetricName.TRAIN_LOSS) == "train/loss"

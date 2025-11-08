@@ -124,6 +124,24 @@ def test_toml_roundtrip(tmp_path) -> None:
     assert loaded.children[0].identifier == "first"
 
 
+def test_save_toml_roundtrip(tmp_path) -> None:
+    parent = ParentConfig(
+        shared="persisted",
+        children=[ChildConfig(identifier="kiddo")],
+    )
+
+    path = tmp_path / "saved.toml"
+    saved = parent.save_toml(path, include_comments=False, include_type_hints=False)
+    assert saved == path
+    assert path.exists()
+
+    # Ensure str paths are accepted
+    parent.save_toml(path.as_posix())
+
+    loaded = ParentConfig.from_toml(path)
+    assert loaded.shared == "persisted"
+
+
 def test_puml_roundtrip(tmp_path) -> None:
     parent = ParentConfig(
         shared="diagram-shared",
@@ -141,6 +159,38 @@ def test_puml_roundtrip(tmp_path) -> None:
     loaded = ParentConfig.from_puml(path)
     assert loaded.shared == "diagram-shared"
     assert len(loaded.children) == 2
+    from_str = ParentConfig.from_puml(str(path))
+    assert from_str.shared == "diagram-shared"
+
+
+def test_from_toml_with_inline_text() -> None:
+    toml_text = 'shared = "inline"'
+    loaded = ParentConfig.from_toml(toml_text)
+    assert loaded.shared == "inline"
+
+
+def test_from_puml_with_bytes_and_string(tmp_path, monkeypatch) -> None:
+    parent = ParentConfig(shared="bytes")
+    puml = parent.to_puml()
+    as_bytes = puml.encode("utf-8")
+
+    from_bytes = ParentConfig.from_puml(as_bytes)
+    assert from_bytes.shared == "bytes"
+
+    puml_path = tmp_path / "inline.puml"
+    puml_path.write_text(puml, encoding="utf-8")
+    inline_text = puml_path.read_text()
+
+    original_exists = Path.exists
+
+    def safe_exists(self):
+        try:
+            return original_exists(self)
+        except OSError:
+            return False
+
+    monkeypatch.setattr(Path, "exists", safe_exists)
+    ParentConfig.from_puml(inline_text)  # Should not raise
 
 
 def test_notarget_setup_and_error_branch(monkeypatch) -> None:
