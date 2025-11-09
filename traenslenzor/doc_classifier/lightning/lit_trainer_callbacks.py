@@ -1,6 +1,5 @@
 from pathlib import Path
 
-from pydantic import Field
 from pytorch_lightning.callbacks import (
     Callback,
     EarlyStopping,
@@ -8,14 +7,16 @@ from pytorch_lightning.callbacks import (
     ModelCheckpoint,
 )
 
+from ..configs.path_config import PathConfig
 from ..utils import BaseConfig, Metric
 
 
+# TODO: add RichModelSummary, BatchSizeFinder, BackboneFinetuning, Timer after getting the respective library docs (#get-library-docs), probably with id /lightning-ai/pytorch-lightning
 class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
     """Configuration for standard trainer callbacks."""
 
     use_model_checkpoint: bool = True
-    checkpoint_monitor: str = Field(default=Metric.VAL_LOSS)
+    checkpoint_monitor: Metric = Metric.VAL_LOSS
     """Metric to monitor for model checkpointing."""
     checkpoint_mode: str = "min"
     """Mode for checkpoint monitor ('min' or 'max')."""
@@ -28,7 +29,7 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
 
     use_early_stopping: bool = False
     """Enable early stopping based on validation metrics."""
-    early_stopping_monitor: str = Field(default=Metric.VAL_LOSS)
+    early_stopping_monitor: Metric = Metric.VAL_LOSS
     """Metric to monitor for early stopping."""
     early_stopping_mode: str = "min"
     """Mode for early stopping monitor ('min' or 'max')."""
@@ -45,7 +46,7 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
             dirpath = (
                 self.checkpoint_dir
                 if self.checkpoint_dir is not None
-                else Path.cwd() / "checkpoints"
+                else PathConfig().checkpoints
             )
             dirpath.mkdir(parents=True, exist_ok=True)
             callbacks.append(
@@ -54,7 +55,7 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
                     mode=self.checkpoint_mode,
                     save_top_k=self.checkpoint_save_top_k,
                     filename=self.checkpoint_filename,
-                    dirpath=str(dirpath),
+                    dirpath=dirpath.as_posix(),
                 ),
             )
 
