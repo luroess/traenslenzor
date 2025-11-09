@@ -72,7 +72,7 @@ testpaths = ["tests"]
 pythonpath = ["traenslenzor"]
 addopts = "-q"
 filterwarnings = [
-    "ignore:The argument 'device' of Tensor\\.(pin_memory|is_pinned)\\(\\) is deprecated:DeprecationWarning",
+    "ignore:The argument 'device' of Tensor\\.(pin_memory|is_pinned)\\(\\) is deprecated:DeprecationWarning", # PyTorch interal warning
 ]
 
 [tool.ruff]

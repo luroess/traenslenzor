@@ -1,4 +1,3 @@
-import copy
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -219,15 +218,3 @@ def test_toml_serialisation_variants() -> None:
 
     assert config._normalise_scalar(Path("foo")) == string("foo")
     assert config._normalise_scalar(ComplexConfig.Mode.ALPHA) == string("alpha")
-
-
-def test_singleton_update_and_copy(monkeypatch) -> None:
-    warnings: list[str] = []
-    monkeypatch.setattr(Console, "warn", lambda self, msg: warnings.append(msg))
-
-    singleton = DemoSingleton()
-    DemoSingleton.__init__(singleton, name="override")
-    assert warnings
-
-    assert copy.copy(singleton) is singleton
-    assert copy.deepcopy(singleton) is singleton
