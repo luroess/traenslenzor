@@ -123,7 +123,9 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
             callbacks.append(
                 BackboneFinetuning(
                     unfreeze_backbone_at_epoch=self.backbone_unfreeze_at_epoch,
-                    lambda_func=eval(self.backbone_lambda_func) if self.backbone_lambda_func else None,
+                    lambda_func=eval(self.backbone_lambda_func)
+                    if self.backbone_lambda_func
+                    else None,
                     backbone_initial_ratio_lr=0.1,
                     should_align=True,
                     train_bn=self.backbone_train_bn,

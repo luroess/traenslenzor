@@ -1,16 +1,14 @@
 """Trainer factory with W&B integration.
 
-Provides a configurable wrapper to instantiate PyTorch Lightning trainers
-following the Config-as-Factory pattern established in UniTraj.
+Provides a configurable wrapper to instantiate PyTorch Lightning trainers.
 """
 
 from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING
 
 import pytorch_lightning as pl
 import torch
-from pydantic import Field, field_validator, model_validator
-from pytorch_lightning.loggers import Logger
+from pydantic import Field, model_validator
 from pytorch_lightning.trainer.connectors.accelerator_connector import _PRECISION_INPUT
 from typing_extensions import Self
 
@@ -18,67 +16,131 @@ from ..configs.wandb_config import WandbConfig
 from ..utils import BaseConfig, Console
 from .lit_trainer_callbacks import TrainerCallbacksConfig
 
+if TYPE_CHECKING:
+    from ..configs.experiment_config import ExperimentConfig
 
-class TrainerFactoryConfig(BaseConfig[pl.Trainer]):
+
+class TrainerFactoryConfig(BaseConfig):
     """Configuration for constructing a PyTorch Lightning trainer."""
 
     target: type[pl.Trainer] = Field(default_factory=lambda: pl.Trainer, exclude=True)
 
-    accelerator: str = "auto"
-    devices: int | str | Sequence[int] = "auto"
-    strategy: str | None = "auto"
-    max_epochs: int | None = 10
-    precision: _PRECISION_INPUT = "32-true"
-    """Floating-point precision for training. See PyTorch Lightning documentation for available options."""
-    gradient_clip_val: float | None = None
-    accumulate_grad_batches: int = 1
-    log_every_n_steps: int = 50
+    is_debug: bool = False
+    """Set fast_dev_run to True, use CPU, set num_workers to 0, don't create model_checkpoints if True"""
+
     fast_dev_run: bool = False
+    """Runs n if set to n (int) else 1 if set to True batch(es) of train, val and test to find any bugs (ie: a sort of unit test). Default: False."""
+
+    accelerator: str = "auto"
+    """Supports passing different accelerator types ("cpu", "gpu", "tpu", "hpu", "mps", "auto") as well as custom accelerator instances."""
+
+    devices: int | str | Sequence[int] = "auto"
+    """The devices to use. Can be set to a positive number (int or str), a sequence of device indices (list or str), the value -1 to indicate all available devices should be used, or "auto" for automatic selection based on the chosen accelerator. Default: "auto"."""
+
+    strategy: str | None = "auto"
+    """Supports different training strategies with aliases as well custom strategies. Default: "auto"."""
+
+    max_epochs: int | None = 10
+    """Stop training once this number of epochs is reached. Disabled by default (None). If both max_epochs and max_steps are not specified, defaults to max_epochs = 1000. To enable infinite training, set max_epochs = -1."""
+
+    precision: _PRECISION_INPUT = "32-true"
+    """Double precision (64, '64' or '64-true'), full precision (32, '32' or '32-true'), 16bit mixed precision (16, '16', '16-mixed') or bfloat16 mixed precision ('bf16', 'bf16-mixed'). Can be used on CPU, GPU, TPUs, or HPUs. Default: '32-true'."""
+
+    gradient_clip_val: float | None = None
+    """The value at which to clip gradients. Passing gradient_clip_val=None disables gradient clipping. If using Automatic Mixed Precision (AMP), the gradients will be unscaled before. Default: None."""
+
+    accumulate_grad_batches: int = 1
+    """Accumulates gradients over k batches before stepping the optimizer. Default: 1."""
+
+    log_every_n_steps: int = 50
+    """How often to log within steps. Default: 50."""
+
     deterministic: bool | str | None = None
+    """If True, sets whether PyTorch operations must use deterministic algorithms. Set to "warn" to use deterministic algorithms whenever possible, throwing warnings on operations that don't support deterministic mode. If not set, defaults to False. Default: None."""
+
     limit_train_batches: int | float | None = None
+    """How much of training dataset to check (float = fraction, int = num_batches). Value is per device. Default: 1.0."""
+
     limit_val_batches: int | float | None = None
+    """How much of validation dataset to check (float = fraction, int = num_batches). Value is per device. Default: 1.0."""
+
     check_val_every_n_epoch: int = 1
+    """Perform a validation loop after every N training epochs. If None, validation will be done solely based on the number of training batches, requiring val_check_interval to be an integer value. Default: 1."""
 
     callbacks: TrainerCallbacksConfig = Field(default_factory=TrainerCallbacksConfig)
-    use_wandb: bool = True
-    wandb_config: WandbConfig = Field(default_factory=WandbConfig)
+    """Add a callback or list of callbacks. Default: None."""
 
-    @field_validator("precision")
-    @classmethod
-    def _set_matmul_precision(cls, value: _PRECISION_INPUT) -> _PRECISION_INPUT:
-        if value in {"32-true", 32, "32"}:
-            torch.set_float32_matmul_precision("medium")
-        return value
+    use_wandb: bool = True
+    """Whether to enable W&B logging. When True, wandb_config is used to instantiate the logger. Default: True."""
+
+    wandb_config: WandbConfig = Field(default_factory=WandbConfig)
+    """W&B logger configuration. Used to instantiate the W&B logger when use_wandb is True."""
 
     @model_validator(mode="after")
     def _debug_defaults(self) -> Self:
+        console = Console.with_prefix(self.__class__.__name__, "_debug_defaults")
+
+        if self.is_debug:
+            console.log("Debug mode enabled - applying debug-friendly defaults")
+            object.__setattr__(self, "fast_dev_run", True)
+            object.__setattr__(self, "accelerator", "cpu")
+            object.__setattr__(self, "devices", 1)
+            object.__setattr__(self, "num_workers", 0)
+            object.__setattr__(self.callbacks, "use_model_checkpoint", False)
+            torch.autograd.set_detect_anomaly(True)
+            console.log(
+                "Debug settings: fast_dev_run=True, accelerator=cpu, devices=1, "
+                "num_workers=0, checkpointing disabled, anomaly detection enabled"
+            )
+
         if self.fast_dev_run:
             Console.with_prefix(self.__class__.__name__).warn(
                 "Fast dev run enabled; trainer will use a single batch per split.",
             )
         return self
 
-    def update_wandb_config(self, experiment: "BaseConfig") -> None:
+    def update_wandb_config(self, experiment: "ExperimentConfig") -> None:
         """Propagate experiment metadata into the W&B logger config."""
         if not self.use_wandb:
             return
+
+        console = Console.with_prefix(self.__class__.__name__, "update_wandb_config")
+        console.set_verbose(getattr(experiment, "verbose", True))
+
         if not self.wandb_config.name:
-            self.wandb_config.name = experiment.run_name  # type: ignore[attr-defined]
+            self.wandb_config.name = experiment.run_name
+            console.log(f"Set W&B run name: {experiment.run_name}")
+
         stage = getattr(experiment, "stage", None)
         if stage is not None:
             tags = set(self.wandb_config.tags or [])
             tags.add(str(stage))
             self.wandb_config.tags = sorted(tags)
-        if hasattr(experiment, "paths"):
-            self.wandb_config.save_dir = experiment.paths.wandb  # type: ignore[attr-defined]
+            console.log(f"Added stage tag to W&B: {stage}")
 
-    def setup_target(self, **_: Any) -> pl.Trainer:
+        if hasattr(experiment, "paths"):
+            self.wandb_config.save_dir = experiment.paths.wandb
+            console.log(f"W&B save directory: {experiment.paths.wandb}")
+
+    def setup_target(self) -> pl.Trainer:
         """Instantiate the configured trainer."""
-        logger: Logger | None = None
-        if self.use_wandb:
-            logger = self.wandb_config.setup_target()
+        console = Console.with_prefix(self.__class__.__name__, "setup_target")
+
+        console.log(f"Creating Trainer with accelerator={self.accelerator}, devices={self.devices}")
+        console.log(f"Max epochs: {self.max_epochs}, precision: {self.precision}")
 
         callbacks = self.callbacks.setup_target()
+        console.log(f"Configured {len(callbacks)} callbacks")
+
+        logger = None
+        if self.is_debug:
+            logger = True
+            console.log("Using default logger (debug mode)")
+        elif self.use_wandb:
+            logger = self.wandb_config.setup_target()
+            console.log(f"Using W&B logger: {self.wandb_config.name}")
+        else:
+            console.log("No logger configured")
 
         return pl.Trainer(
             accelerator=self.accelerator,

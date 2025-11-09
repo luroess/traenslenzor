@@ -98,13 +98,21 @@ class ExperimentConfig(BaseConfig[Trainer]):
     @model_validator(mode="after")
     def _propagate_common_flags(self) -> Self:
         """Sync debug/verbose flags with nested configs where supported."""
+        console = Console.with_prefix(self.__class__.__name__, "_propagate_common_flags")
+        console.set_verbose(self.verbose)
+
+        console.log(f"Propagating flags: is_debug={self.is_debug}, verbose={self.verbose}")
+
         for child in (self.module_config, self.datamodule_config, self.trainer_config):
             if hasattr(child, "is_debug"):
                 setattr(child, "is_debug", self.is_debug)
             if hasattr(child, "verbose"):
                 setattr(child, "verbose", self.verbose)
+
         if self.is_debug and hasattr(self.trainer_config, "fast_dev_run"):
             self.trainer_config.fast_dev_run = bool(self.trainer_config.fast_dev_run or True)
+            console.log("Debug mode: enabled fast_dev_run on trainer")
+
         return self
 
     @model_validator(mode="after")
@@ -118,7 +126,11 @@ class ExperimentConfig(BaseConfig[Trainer]):
 
     @model_validator(mode="after")
     def _sync_wandb(self) -> Self:
+        console = Console.with_prefix(self.__class__.__name__, "_sync_wandb")
+        console.set_verbose(self.verbose)
+
         if hasattr(self.trainer_config, "update_wandb_config"):
+            console.log("Syncing W&B configuration with experiment metadata")
             self.trainer_config.update_wandb_config(self)
         return self
 
@@ -130,6 +142,10 @@ class ExperimentConfig(BaseConfig[Trainer]):
         console = Console.with_prefix(self.__class__.__name__, "setup_target")
         console.set_verbose(self.verbose).set_debug(self.is_debug)
 
+        console.log(f"Setting up experiment: {self.run_name}")
+        console.log(f"Stage: {setup_stage}, Seed: {self.seed}")
+
+        console.log("Creating Trainer...")
         trainer = self.trainer_config.setup_target()
 
         resolved_stage = Stage.from_str(setup_stage)
@@ -144,11 +160,16 @@ class ExperimentConfig(BaseConfig[Trainer]):
                     checkpoint_path=self.ckpt_path.as_posix(),
                     params=self.module_config,
                 )
+                console.log(f"Successfully loaded checkpoint: {module_cls.__name__}")
             except Exception as exc:  # pragma: no cover
+                console.error(f"Failed to load checkpoint: {exc}")
                 raise RuntimeError(f"Failed to load checkpoint: {exc}") from exc
         else:
+            console.log("Creating new model from config...")
             lit_module = self.module_config.setup_target()
+            console.log(f"Model created: {lit_module.__class__.__name__}")
 
+        console.log("Creating DataModule...")
         lit_datamodule = self.datamodule_config.setup_target()
 
         lit_datamodule.setup(stage=resolved_stage)
@@ -156,6 +177,7 @@ class ExperimentConfig(BaseConfig[Trainer]):
         data_classes = getattr(dataset, "num_classes", None)
         module_classes = getattr(getattr(lit_module, "config", None), "num_classes", data_classes)
         if data_classes is not None and module_classes is not None:
+            console.log(f"Verified num_classes: {data_classes} (data) == {module_classes} (model)")
             assert data_classes == module_classes, (
                 f"Configured dataset and module disagree on num_classes: {data_classes} (data) vs "
                 f"{module_classes} (module)."
@@ -172,23 +194,31 @@ class ExperimentConfig(BaseConfig[Trainer]):
         """Instantiate components and execute the requested stage."""
         resolved_stage = stage or self.stage
 
+        console = Console.with_prefix(self.__class__.__name__, "setup_target_and_run")
+        console.set_verbose(self.verbose).set_debug(self.is_debug)
+
+        console.log(f"Running experiment: {self.run_name} (stage={resolved_stage})")
+
         trainer, lit_module, lit_datamodule = self.setup_target(
             setup_stage=resolved_stage,
         )
 
-        console = Console.with_prefix(self.__class__.__name__, str(resolved_stage))
-        console.set_verbose(self.verbose).set_debug(self.is_debug)
+        stage_console = Console.with_prefix(self.__class__.__name__, str(resolved_stage))
+        stage_console.set_verbose(self.verbose).set_debug(self.is_debug)
 
         ckpt_input = str(self.ckpt_path) if self.ckpt_path is not None else None
         if resolved_stage is Stage.TRAIN:
-            console.log("Starting training (fit)...")
+            stage_console.log("Starting training (fit)...")
             trainer.fit(lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input)
+            stage_console.log("Training completed")
         elif resolved_stage is Stage.VAL:
-            console.log("Starting validation...")
+            stage_console.log("Starting validation...")
             trainer.validate(lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input)
+            stage_console.log("Validation completed")
         elif resolved_stage is Stage.TEST:
-            console.log("Starting testing...")
+            stage_console.log("Starting testing...")
             trainer.test(lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input)
+            stage_console.log("Testing completed")
 
         return trainer
 
@@ -223,13 +253,26 @@ class ExperimentConfig(BaseConfig[Trainer]):
         console = Console.with_prefix(self.__class__.__name__, "optuna")
         console.set_verbose(self.verbose).set_debug(self.is_debug)
 
+        console.log(f"Starting Optuna study: {self.optuna_config.study_name}")
+        console.log(f"Number of trials: {self.optuna_config.n_trials}")
+        console.log(f"Monitoring metric: {self.optuna_config.monitor}")
+
         def objective(trial: optuna.Trial) -> float:
+            trial_console = Console.with_prefix(self.__class__.__name__, f"trial_{trial.number}")
+            trial_console.set_verbose(self.verbose)
+
+            trial_console.log(f"Starting trial {trial.number}")
+
             experiment_config_copy = deepcopy(self)
 
             if experiment_config_copy.trainer_config.use_wandb:
                 experiment_config_copy.trainer_config.wandb_config.name = (
                     f"{self.run_name}_T{trial.number}"
                 )
+                trial_console.log(
+                    f"W&B run name: {experiment_config_copy.trainer_config.wandb_config.name}"
+                )
+
             experiment_config_copy.optuna_config.setup_optimizables(
                 experiment_config_copy,
                 trial,
@@ -237,7 +280,6 @@ class ExperimentConfig(BaseConfig[Trainer]):
 
             trainer, lit_module, lit_datamodule = experiment_config_copy.setup_target(
                 setup_stage=self.stage,
-                trial=trial,
             )
             trainer.fit(lit_module, datamodule=lit_datamodule)
 
@@ -248,11 +290,17 @@ class ExperimentConfig(BaseConfig[Trainer]):
                 if hasattr(raw_metric, "item")
                 else float(raw_metric or float("inf"))
             )
-            console.log(
-                f"Trial {trial.number} finished with {monitor}: {metric}\nparams: {trial.params}",
+            trial_console.log(
+                f"Trial {trial.number} finished with {monitor}: {metric:.4f}",
             )
-            experiment_config_copy.optuna_config.suggested_params.update(trial.params)
+            console.dbg(f"Trial {trial.number} params: {trial.params}")
+
             experiment_config_copy.optuna_config.log_to_wandb()
+
+            if self.optuna_config is not None:
+                self.optuna_config.suggested_params = (
+                    experiment_config_copy.optuna_config.suggested_params.copy()
+                )
 
             if wandb.run is not None:
                 wandb.finish()
@@ -262,6 +310,14 @@ class ExperimentConfig(BaseConfig[Trainer]):
         if self.trainer_config.use_wandb:
             self.trainer_config.wandb_config.group = "optuna"
             self.trainer_config.wandb_config.job_type = f"Opt:{self.run_name}"
+            console.log("W&B configured for Optuna study")
 
         study = self.optuna_config.setup_target()
+        console.log(f"Running optimization with {self.optuna_config.n_trials} trials...")
         study.optimize(objective, n_trials=self.optuna_config.n_trials)
+
+        if hasattr(study, "best_value") and hasattr(study, "best_params"):
+            console.log(f"Optuna study completed. Best value: {study.best_value:.4f}")
+            console.log(f"Best params: {study.best_params}")
+        else:
+            console.log("Optuna study completed")
