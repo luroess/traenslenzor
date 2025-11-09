@@ -73,24 +73,72 @@ Key points:
 
 ## Running Experiments
 
+### Creating and Managing Configs
+
+**Saving configs to TOML:**
+
+```python
+from traenslenzor.doc_classifier.configs import ExperimentConfig
+
+# Create a config programmatically
+config = ExperimentConfig(run_name="my_experiment", verbose=True)
+config.trainer_config.max_epochs = 20
+config.module_config.learning_rate = 1e-3
+
+# Save to default location: .configs/{run_name}.toml
+config.save_config()
+
+# Or save to a custom path
+config.save_config(".configs/custom_name.toml")
+```
+
+The generated TOML file includes:
+- Type hints for all fields (e.g., `# type: <class 'int'>`)
+- Doc-strings as comments for documentation
+- Proper nested structure for complex configs
+- Human-readable format with clear section headers
+
+**Loading configs from TOML:**
+
+```python
+from pathlib import Path
+from traenslenzor.doc_classifier.configs import ExperimentConfig
+
+# Load a saved config
+config = ExperimentConfig.from_toml(Path(".configs/my_experiment.toml"))
+
+# Modify and re-save
+config.trainer_config.max_epochs = 50
+config.save_config()  # Updates the file
+```
+
 ### CLI Usage
 
 The `run.py` script provides a simple CLI interface powered by Pydantic's automatic CLI parsing. You can run experiments by:
 
-1. **Using a YAML config file:**
+1. **Using a TOML config file:**
 
 ```bash
-# Create or export a config file first
-uv run traenslenzor/doc_classifier/export_demo_config.py
+# Create a config file (Python)
+uv run python -c "
+from traenslenzor.doc_classifier.configs import ExperimentConfig
+config = ExperimentConfig(run_name='my_run', verbose=True)
+config.trainer_config.max_epochs = 20
+config.save_config()
+"
 
-# Run training
-uv run traenslenzor/doc_classifier/run.py --config_path=demo_experiment_config.yaml
+# Run training with the saved config
+uv run traenslenzor/doc_classifier/run.py --config_path=.configs/my_run.toml
 
 # Run validation only
-uv run traenslenzor/doc_classifier/run.py --config_path=demo_experiment_config.yaml --stage=VAL
+uv run traenslenzor/doc_classifier/run.py \
+  --config_path=.configs/my_run.toml \
+  --stage=VAL
 
 # Run test only
-uv run traenslenzor/doc_classifier/run.py --config_path=demo_experiment_config.yaml --stage=TEST
+uv run traenslenzor/doc_classifier/run.py \
+  --config_path=.configs/my_run.toml \
+  --stage=TEST
 ```
 
 2. **Using command-line arguments (override defaults):**
@@ -111,13 +159,19 @@ uv run traenslenzor/doc_classifier/run.py \
   --optuna_config.monitor="val/loss"
 ```
 
-3. **Combining both (CLI args override config file):**
+3. **Combining both (CLI args override TOML config):**
 
 ```bash
+# Load base config from TOML, then override specific values
 uv run traenslenzor/doc_classifier/run.py \
-  --config_path=demo_experiment_config.yaml \
-  --trainer_config.max_epochs=10 \
+  --config_path=.configs/my_run.toml \
+  --trainer_config.max_epochs=50 \
   --module_config.learning_rate=0.0005
+
+# This is useful for:
+# - Running variations of a base config
+# - Quick experimentation without editing TOML files
+# - Grid searches with different hyperparameters
 ```
 
 **Key CLI Features:**
