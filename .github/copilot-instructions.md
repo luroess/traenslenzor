@@ -52,14 +52,19 @@ Further guidelines:
 - ✓ All functional classes (targets) and models instantiated via `setup_target()`
 - ✓ Prefer dependency injection via config objects over hardcoded dependencies.
 - ✓ Model selection via nested config union (`model_config: configA | configB`)
-- ✓ Provide docstrings for all relvant fields in configs, rather than using `Field(..., description="...")`.
+- ✓ Provide doc-strings for all relvant fields in pydantic classes or dataclasses, rather than using `Field(..., description="...")`. Don't use `Field(..., )` for primitive fields unless necessary (i.e, when `defaul_factory` is required). Example:
+    ```py
+    class MyConfig(BaseConfig):
+        my_bool: bool = True
+        """Whether to enable the awesome feature."""
+    ```
 - ✓ Separate setup and execution logic
 - ✓ Prefer functional approaches over loops/comprehensions when appropriate
 - ✓ Use `pathlib.Path` for all filesystem paths
 - ✓ Work test-driven; every new feature must have corresponding tests in `tests/doc_classifier` using `pytest`
 - ✓ Prefer `match-case` over `if-elif-else` for multi-branch logic when applicable
 - ✓ Prefer `Enum` for categorical variables over string literals
-- ✓  Use `Console` from `traenslenzor.doc_classifier.utils` for structured logging
+- ✓ Use `Console` from `traenslenzor.doc_classifier.utils` for structured logging
 
 
 ## Architecture & Design Patterns

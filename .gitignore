@@ -219,11 +219,9 @@ __marimo__/
 .supervisor_graph.png
 
 # doc_classifier artifacts and cache
-# trÄnslenzor specific
 .data/
 .logs/
-.configs/*.toml
-.configs/*.puml
+.configs/
 
 # docs
 main.pdf

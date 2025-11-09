@@ -1,6 +1,7 @@
 from datetime import timedelta
 from pathlib import Path
 
+from pydantic import model_validator
 from pytorch_lightning.callbacks import (
     BackboneFinetuning,
     BatchSizeFinder,
@@ -9,8 +10,11 @@ from pytorch_lightning.callbacks import (
     LearningRateMonitor,
     ModelCheckpoint,
     RichModelSummary,
+    RichProgressBar,
     Timer,
+    TQDMProgressBar,
 )
+from typing_extensions import Self
 
 from ..configs.path_config import PathConfig
 from ..utils import BaseConfig, Metric
@@ -43,6 +47,18 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
     use_lr_monitor: bool = True
     lr_logging_interval: str = "epoch"
 
+    use_rich_progress_bar: bool = True
+    """Enable Rich progress bar for enhanced terminal output. Mutually exclusive with use_tqdm_progress_bar."""
+    rich_progress_leave: bool = False
+    """Whether to leave the progress bar after each epoch."""
+
+    use_tqdm_progress_bar: bool = False
+    """Enable TQDM progress bar. Mutually exclusive with use_rich_progress_bar."""
+    tqdm_refresh_rate: int = 1
+    """How often to refresh the TQDM progress bar (in batches)."""
+    tqdm_leave: bool = False
+    """Whether to leave the TQDM progress bar after each epoch."""
+
     use_rich_model_summary: bool = True
     """Enable rich model summary using the Rich library for better visualization."""
     rich_summary_max_depth: int = 1
@@ -72,6 +88,16 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
     """Maximum training duration as dict (e.g., {'hours': 2, 'minutes': 30})."""
     timer_interval: str = "step"
     """Timer interval ('step' or 'epoch')."""
+
+    @model_validator(mode="after")
+    def _validate_progress_bars_mutually_exclusive(self) -> Self:
+        """Ensure only one progress bar type is enabled."""
+        if self.use_rich_progress_bar and self.use_tqdm_progress_bar:
+            raise ValueError(
+                "use_rich_progress_bar and use_tqdm_progress_bar are mutually exclusive. "
+                "Enable only one progress bar type."
+            )
+        return self
 
     def setup_target(self) -> list[Callback]:
         callbacks: list[Callback] = []
@@ -103,6 +129,16 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
         if self.use_lr_monitor:
             callbacks.append(
                 LearningRateMonitor(logging_interval=self.lr_logging_interval),
+            )
+
+        if self.use_rich_progress_bar:
+            callbacks.append(
+                RichProgressBar(leave=self.rich_progress_leave),
+            )
+
+        if self.use_tqdm_progress_bar:
+            callbacks.append(
+                TQDMProgressBar(refresh_rate=self.tqdm_refresh_rate, leave=self.tqdm_leave),
             )
 
         if self.use_rich_model_summary:

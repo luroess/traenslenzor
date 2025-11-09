@@ -68,9 +68,9 @@ include = ["traenslenzor*"]
 exclude = ["notebooks*"]
 
 [tool.pytest.ini_options]
-testpaths  = ["tests"]
+testpaths = ["tests"]
 pythonpath = ["traenslenzor"]
-addopts    = "-q"
+addopts = "-q"
 filterwarnings = [
     "ignore:The argument 'device' of Tensor\\.(pin_memory|is_pinned)\\(\\) is deprecated:DeprecationWarning",
 ]

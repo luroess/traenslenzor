@@ -19,7 +19,6 @@ if not hasattr(schemas, "MetricName") and hasattr(schemas, "Metric"):
     schemas.MetricName = schemas.Metric
 
 
-
 @pytest.fixture
 def project_root(tmp_path):
     """Provide an isolated project root and reset the PathConfig singleton."""
