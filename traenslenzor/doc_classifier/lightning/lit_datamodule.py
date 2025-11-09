@@ -7,12 +7,13 @@ from typing import Any
 import pytorch_lightning as pl
 import torch
 from datasets import Dataset as HFDataset
-from pydantic import Field
+from pydantic import Field, model_validator
 from torch.utils.data import DataLoader
+from typing_extensions import Self
 
 from ..data_handling.huggingface_rvl_cdip_ds import RVLCDIPConfig
 from ..data_handling.transforms import TrainTransformConfig, ValTransformConfig
-from ..utils import BaseConfig, Stage
+from ..utils import BaseConfig, Console, Stage
 
 # Suppress PyTorch's internal pin_memory deprecation warning (PyTorch 2.9+)
 # This warning comes from DataLoader's internal implementation, not our code
@@ -95,6 +96,16 @@ class DocDataModuleConfig(BaseConfig["DocDataModule"]):
         default_factory=lambda: _default_ds(Stage.TEST),
     )
     """Configuration for test dataset with transforms."""
+
+    @model_validator(mode="after")
+    def _debug_defaults(self) -> Self:
+        console = Console.with_prefix(self.__class__.__name__, "_debug_defaults")
+
+        if self.is_debug:
+            object.__setattr__(self, "num_workers", 0)
+            console.log("Debug settings: num_workers=0 applied for DataModule")
+
+        return self
 
 
 class DocDataModule(pl.LightningDataModule):

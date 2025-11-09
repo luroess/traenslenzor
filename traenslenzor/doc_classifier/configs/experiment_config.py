@@ -56,9 +56,40 @@ class ExperimentConfig(BaseConfig[Trainer]):
     """Optional Optuna configuration enabling hyperparameter searches and trial
     orchestration when set."""
 
+    @property
+    def default_config_path(self) -> Path:
+        """Return the default path for saving/loading TOML config files."""
+        return self.paths.configs_dir / f"{self.run_name}.toml"
+
+    def save_config(
+        self,
+        path: Path | str | None = None,
+        *,
+        include_comments: bool = True,
+        include_type_hints: bool = True,
+    ) -> Path:
+        """Save the experiment configuration to a TOML file.
+
+        Args:
+            path: Path to save the config. If None, uses default_config_path.
+            include_comments: Include docstring comments in TOML output.
+            include_type_hints: Include type hints in TOML comments.
+
+        Returns:
+            Path to the saved config file.
+        """
+        target_path = Path(path) if path is not None else self.default_config_path
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        return self.save_toml(
+            path=target_path,
+            include_comments=include_comments,
+            include_type_hints=include_type_hints,
+        )
+
     @model_validator(mode="before")
     @classmethod
     def _migrate_legacy_keys(cls, data: dict[str, Any]) -> dict[str, Any]:
+        # TODO: remove this!
         """Accept legacy keys such as `from_ckpt` from older configs."""
         if not isinstance(data, dict):
             return data
@@ -84,6 +115,7 @@ class ExperimentConfig(BaseConfig[Trainer]):
         value: str | Path | None,
         info: ValidationInfo,
     ) -> Path | None:
+        # TODO: All path handling should be done in PathConfig. Any field of PathConfig is validated and resolved!
         if value in (None, ""):
             return None
         path = Path(value)
@@ -97,6 +129,7 @@ class ExperimentConfig(BaseConfig[Trainer]):
 
     @model_validator(mode="after")
     def _propagate_common_flags(self) -> Self:
+        # TODO: This shoud not be necessary as BaseConfig has methods _propagate_shared_fields and _propagate_to_child
         """Sync debug/verbose flags with nested configs where supported."""
         console = Console.with_prefix(self.__class__.__name__, "_propagate_common_flags")
         console.set_verbose(self.verbose)
@@ -222,7 +255,6 @@ class ExperimentConfig(BaseConfig[Trainer]):
 
         return trainer
 
-    # ------------------------------------------------------------------- I/O
     def run_optuna_study(self) -> None:
         """Integrate Optuna for hyperparameter optimisation."""
         if self.optuna_config is None:

@@ -81,16 +81,14 @@ class TrainerFactoryConfig(BaseConfig):
         console = Console.with_prefix(self.__class__.__name__, "_debug_defaults")
 
         if self.is_debug:
-            console.log("Debug mode enabled - applying debug-friendly defaults")
             object.__setattr__(self, "fast_dev_run", True)
             object.__setattr__(self, "accelerator", "cpu")
             object.__setattr__(self, "devices", 1)
-            object.__setattr__(self, "num_workers", 0)
             object.__setattr__(self.callbacks, "use_model_checkpoint", False)
             torch.autograd.set_detect_anomaly(True)
             console.log(
                 "Debug settings: fast_dev_run=True, accelerator=cpu, devices=1, "
-                "num_workers=0, checkpointing disabled, anomaly detection enabled"
+                "checkpointing disabled, anomaly detection enabled"
             )
 
         if self.fast_dev_run:

@@ -31,7 +31,7 @@ class PathConfig(SingletonConfig):
         default_factory=lambda: Path(".logs") / "wandb",
     )
     configs_dir: Path = Field(default_factory=lambda: Path(".configs"))
-    """Directory containing exported experiment/configuration files (TOML, PUML, etc.)."""
+    """Directory containing exported experiment/configuration files (TOML, etc.)."""
 
     @classmethod
     def _resolve_path(cls, value: str | Path, info: ValidationInfo) -> Path:

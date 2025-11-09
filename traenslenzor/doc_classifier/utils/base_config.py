@@ -372,7 +372,7 @@ class BaseConfig(BaseModel, Generic[TargetType]):
         for name, value in shared_fields.items():
             current_value = getattr(child_config, name, None)
             if current_value != value:
-                setattr(child_config, name, value)
+                object.__setattr__(child_config, name, value)
                 child_config.propagated_fields[name] = value
 
                 Console().log(
@@ -404,8 +404,7 @@ class BaseConfig(BaseModel, Generic[TargetType]):
                 include_type_hints=include_type_hints,
             )
 
-            if type_hint is not None and not isinstance(toml_value, Table):
-                container.add(comment(f"type: {type_hint}"))
+            # Add type hint comment BEFORE the field (or section header for nested configs)
             if type_hint is not None:
                 container.add(comment(f"type: {type_hint}"))
 
