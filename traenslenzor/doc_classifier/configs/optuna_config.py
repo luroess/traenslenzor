@@ -9,7 +9,8 @@ from optuna.integration.pytorch_lightning import PyTorchLightningPruningCallback
 from pydantic import Field
 from pytorch_lightning import Callback
 
-from ..utils import BaseConfig, Optimizable
+from ..utils import BaseConfig, Metric, Optimizable
+from .path_config import PathConfig
 
 Setter = Callable[[Any], None]
 
@@ -20,8 +21,7 @@ class OptunaConfig(BaseConfig):
     study_name: str = "doc-classifier"
     direction: Literal["minimize", "maximize"] = "minimize"
     n_trials: int = 20
-    monitor: str = "val/loss"
-    storage: str | None = None
+    monitor: str = Metric.VAL_LOSS
     load_if_exists: bool = True
 
     sampler: Literal["tpe", "random"] = "tpe"
@@ -37,7 +37,7 @@ class OptunaConfig(BaseConfig):
         )
         return optuna.create_study(
             study_name=self.study_name,
-            storage=self.storage,
+            storage=PathConfig().optuna_study_uri.format(study_name=self.study_name),
             load_if_exists=self.load_if_exists,
             direction=self.direction,
             sampler=sampler,

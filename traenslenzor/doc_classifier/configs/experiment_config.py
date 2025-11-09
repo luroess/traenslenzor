@@ -115,38 +115,21 @@ class ExperimentConfig(BaseConfig[Trainer]):
         value: str | Path | None,
         info: ValidationInfo,
     ) -> Path | None:
-        # TODO: All path handling should be done in PathConfig. Any field of PathConfig is validated and resolved!
+        """Resolve checkpoint path using PathConfig for consistent path handling."""
         if value in (None, ""):
             return None
-        path = Path(value)
+
         paths_cfg = info.data.get("paths")
-        if not path.is_absolute() and isinstance(paths_cfg, PathConfig):
-            path = paths_cfg.checkpoints / path
-        path = path.expanduser().resolve()
-        if not path.exists():
-            raise FileNotFoundError(f"Checkpoint path '{path}' does not exist.")
-        return path
+        if isinstance(paths_cfg, PathConfig):
+            # Use PathConfig's method for consistent path resolution
+            return paths_cfg.resolve_checkpoint_path(value)
 
-    @model_validator(mode="after")
-    def _propagate_common_flags(self) -> Self:
-        # TODO: This shoud not be necessary as BaseConfig has methods _propagate_shared_fields and _propagate_to_child
-        """Sync debug/verbose flags with nested configs where supported."""
-        console = Console.with_prefix(self.__class__.__name__, "_propagate_common_flags")
-        console.set_verbose(self.verbose)
-
-        console.log(f"Propagating flags: is_debug={self.is_debug}, verbose={self.verbose}")
-
-        for child in (self.module_config, self.datamodule_config, self.trainer_config):
-            if hasattr(child, "is_debug"):
-                setattr(child, "is_debug", self.is_debug)
-            if hasattr(child, "verbose"):
-                setattr(child, "verbose", self.verbose)
-
-        if self.is_debug and hasattr(self.trainer_config, "fast_dev_run"):
-            self.trainer_config.fast_dev_run = bool(self.trainer_config.fast_dev_run or True)
-            console.log("Debug mode: enabled fast_dev_run on trainer")
-
-        return self
+        # Fallback if paths not yet initialized (e.g., during field-by-field validation)
+        # Still need to validate that the file exists
+        checkpoint_path = Path(value).expanduser().resolve()
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(f"Checkpoint path '{checkpoint_path}' does not exist.")
+        return checkpoint_path
 
     @model_validator(mode="after")
     def _apply_seed(self) -> Self:
@@ -194,7 +177,7 @@ class ExperimentConfig(BaseConfig[Trainer]):
                     params=self.module_config,
                 )
                 console.log(f"Successfully loaded checkpoint: {module_cls.__name__}")
-            except Exception as exc:  # pragma: no cover
+            except Exception as exc:
                 console.error(f"Failed to load checkpoint: {exc}")
                 raise RuntimeError(f"Failed to load checkpoint: {exc}") from exc
         else:
