@@ -91,8 +91,13 @@ class TrainTransformConfig(TransformConfig):
                     sigma=5,
                     p=0.2,
                 ),
-                # Normalization and tensor conversion
-                A.Normalize(mean=[self.grayscale_mean], std=[self.grayscale_std]),
+                # Convert grayscale to RGB (repeat channel 3 times for pretrained models)
+                A.ToRGB(p=1.0),
+                # Normalization and tensor conversion (ImageNet stats for RGB)
+                A.Normalize(
+                    mean=[self.grayscale_mean, self.grayscale_mean, self.grayscale_mean],
+                    std=[self.grayscale_std, self.grayscale_std, self.grayscale_std],
+                ),
                 ToTensorV2(),
             ]
         )
@@ -128,8 +133,13 @@ class FineTuneTransformConfig(TransformConfig):
                     contrast_limit=0.1,
                     p=0.3,
                 ),
+                # Convert grayscale to RGB
+                A.ToRGB(p=1.0),
                 # Normalization and tensor conversion
-                A.Normalize(mean=[self.grayscale_mean], std=[self.grayscale_std]),
+                A.Normalize(
+                    mean=[self.grayscale_mean, self.grayscale_mean, self.grayscale_mean],
+                    std=[self.grayscale_std, self.grayscale_std, self.grayscale_std],
+                ),
                 ToTensorV2(),
             ]
         )
@@ -151,7 +161,12 @@ class ValTransformConfig(TransformConfig):
             [
                 A.SmallestMaxSize(max_size=self.img_size),
                 A.CenterCrop(height=self.img_size, width=self.img_size),
-                A.Normalize(mean=[self.grayscale_mean], std=[self.grayscale_std]),
+                # Convert grayscale to RGB
+                A.ToRGB(p=1.0),
+                A.Normalize(
+                    mean=[self.grayscale_mean, self.grayscale_mean, self.grayscale_mean],
+                    std=[self.grayscale_std, self.grayscale_std, self.grayscale_std],
+                ),
                 ToTensorV2(),
             ]
         )

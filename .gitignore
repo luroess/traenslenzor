@@ -221,6 +221,7 @@ __marimo__/
 # doc_classifier artifacts and cache
 # trÄnslenzor specific
 .data/
+.logs/
 .configs/*.toml
 .configs/*.puml
 

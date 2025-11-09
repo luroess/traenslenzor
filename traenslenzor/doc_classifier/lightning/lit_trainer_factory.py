@@ -104,8 +104,11 @@ class TrainerFactoryConfig(BaseConfig):
         if not self.use_wandb:
             return
 
-        console = Console.with_prefix(self.__class__.__name__, "update_wandb_config")
-        console.set_verbose(getattr(experiment, "verbose", True))
+        console = (
+            Console.with_prefix(self.__class__.__name__, "update_wandb_config")
+            .set_verbose(experiment.verbose)
+            .set_debug(experiment.is_debug)
+        )
 
         if not self.wandb_config.name:
             self.wandb_config.name = experiment.run_name
@@ -131,6 +134,7 @@ class TrainerFactoryConfig(BaseConfig):
 
         callbacks = self.callbacks.setup_target()
         console.log(f"Configured {len(callbacks)} callbacks")
+        console.log(f"Callbacks: {', '.join(type(cb).__name__ for cb in callbacks)}")
 
         logger = None
         if self.is_debug:

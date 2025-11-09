@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
@@ -8,7 +6,7 @@ import pytest
 
 import traenslenzor.doc_classifier.lightning.lit_module as lit_module
 from traenslenzor.doc_classifier.configs import ExperimentConfig, OptunaConfig
-from traenslenzor.doc_classifier.utils import Stage
+from traenslenzor.doc_classifier.utils import Optimizable, Stage
 
 EXPERIMENT_MODULE = "traenslenzor.doc_classifier.configs.experiment_config"
 
@@ -181,6 +179,17 @@ def test_run_optuna_requires_config(fresh_path_config):
 def test_run_optuna_study_executes_trials(monkeypatch, fresh_path_config):
     cfg = ExperimentConfig(paths=fresh_path_config, optuna_config=OptunaConfig(n_trials=1))
 
+    optim_field = cfg.module_config.optimizer.__class__.model_fields["learning_rate"]
+    original_extra = dict(optim_field.json_schema_extra or {})
+    optim_field.json_schema_extra = {
+        **original_extra,
+        "optimizable": Optimizable.continuous(
+            low=1e-4,
+            high=1e-2,
+            name="module_config.optimizer.learning_rate",
+        ),
+    }
+
     class DummyTrainer:
         def __init__(self):
             self.callback_metrics = {"val/loss": 1.0}
@@ -191,13 +200,21 @@ def test_run_optuna_study_executes_trials(monkeypatch, fresh_path_config):
     dummy_trainer = DummyTrainer()
 
     def fake_setup_target(self, setup_stage=None, trial=None):
+        assert pytest.approx(self.module_config.optimizer.learning_rate, rel=1e-9) == 0.002
         return dummy_trainer, MagicMock(), MagicMock()
 
     monkeypatch.setattr(ExperimentConfig, "setup_target", fake_setup_target)
 
     class DummyTrial:
-        number = 0
-        params = {"lr": 0.1}
+        def __init__(self):
+            self.number = 0
+            self.params = {"module_config.optimizer.learning_rate": 0.002}
+
+        def suggest_float(self, name, low, high, log=False):
+            return self.params[name]
+
+        def suggest_categorical(self, name, choices):
+            return choices[0]
 
     class DummyStudy:
         def optimize(self, objective, n_trials):
@@ -214,10 +231,22 @@ def test_run_optuna_study_executes_trials(monkeypatch, fresh_path_config):
         SimpleNamespace(run=True, finish=finish),
     )
 
-    cfg.run_optuna_study()
+    try:
+        cfg.run_optuna_study()
+    finally:
+        optim_field.json_schema_extra = original_extra
+
     assert finish_called.count == 1
     assert cfg.trainer_config.wandb_config.group == "optuna"
     assert cfg.trainer_config.wandb_config.job_type.startswith("Opt:")
+    assert cfg.optuna_config is not None
+    assert (
+        pytest.approx(
+            cfg.optuna_config.suggested_params["module_config.optimizer.learning_rate"],
+            rel=1e-9,
+        )
+        == 0.002
+    )
 
 
 def test_flags_propagate_to_nested_configs(fresh_path_config):

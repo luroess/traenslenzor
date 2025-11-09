@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -135,13 +133,17 @@ def test_doc_data_module_loaders_use_patched_datasets(monkeypatch):
 
     datamodule.setup(Stage.TRAIN)
     train_batch = next(iter(datamodule.train_dataloader()))
-    assert train_batch["image"].shape[0] == 2
+    # Batch is now a tuple (images, labels) from collate_hf_batch
+    images, labels = train_batch
+    assert images.shape[0] == 2
 
     val_batch = next(iter(datamodule.val_dataloader()))
-    assert val_batch["label"][0].item() >= 100
+    _, labels = val_batch
+    assert labels[0].item() >= 100
 
     test_batch = next(iter(datamodule.test_dataloader()))
-    assert test_batch["label"][0].item() >= 200
+    _, labels = test_batch
+    assert labels[0].item() >= 200
 
 
 def test_doc_data_module_setup_without_stage(monkeypatch):

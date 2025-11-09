@@ -1,14 +1,23 @@
-from __future__ import annotations
+import warnings
 
 import pytest
 
 import traenslenzor.doc_classifier.utils.schemas as schemas
+from traenslenzor.doc_classifier.configs.path_config import PathConfig
+
+# Suppress PyTorch's internal pin_memory deprecation warning (PyTorch 2.9+)
+# This warning comes from DataLoader's internal implementation, not our code
+# Must be applied before torch modules are imported
+warnings.filterwarnings(
+    "ignore",
+    message=r"The argument 'device' of Tensor\.(pin_memory|is_pinned)\(\) is deprecated",
+    category=DeprecationWarning,
+)
 
 if not hasattr(schemas, "MetricName") and hasattr(schemas, "Metric"):
     # Backwards compatibility shim for renamed Metric enum.
     schemas.MetricName = schemas.Metric
 
-from traenslenzor.doc_classifier.configs.path_config import PathConfig
 
 
 @pytest.fixture

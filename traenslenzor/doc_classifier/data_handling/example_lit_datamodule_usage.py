@@ -30,7 +30,7 @@ def main():
         batch_size=64,
         num_workers=4,
         pin_memory=True,
-        train_dataset=RVLCDIPConfig(
+        train_ds=RVLCDIPConfig(
             split=Stage.TRAIN,
             transform_config=TrainTransformConfig(
                 img_size=224,
@@ -39,7 +39,7 @@ def main():
             ),
             verbose=True,
         ),
-        val_dataset=RVLCDIPConfig(
+        val_ds=RVLCDIPConfig(
             split=Stage.VAL,
             transform_config=ValTransformConfig(
                 img_size=224,
@@ -48,7 +48,7 @@ def main():
             ),
             verbose=True,
         ),
-        test_dataset=RVLCDIPConfig(
+        test_ds=RVLCDIPConfig(
             split=Stage.TEST,
             transform_config=ValTransformConfig(
                 img_size=224,
@@ -63,13 +63,13 @@ def main():
     print(f"   Batch size: {train_from_scratch_config.batch_size}")
     print(f"   Num workers: {train_from_scratch_config.num_workers}")
     print(
-        f"   Train transforms: {train_from_scratch_config.train_dataset.transform_config.__class__.__name__}"
+        f"   Train transforms: {train_from_scratch_config.train_ds.transform_config.__class__.__name__}"
     )
     print(
-        f"   Val transforms: {train_from_scratch_config.val_dataset.transform_config.__class__.__name__}"
+        f"   Val transforms: {train_from_scratch_config.val_ds.transform_config.__class__.__name__}"
     )
     print(
-        f"   Test transforms: {train_from_scratch_config.test_dataset.transform_config.__class__.__name__}"
+        f"   Test transforms: {train_from_scratch_config.test_ds.transform_config.__class__.__name__}"
     )
 
     # ==========================================================================
@@ -83,17 +83,17 @@ def main():
         batch_size=128,  # Larger batch for fine-tuning
         num_workers=8,
         pin_memory=True,
-        train_dataset=RVLCDIPConfig(
+        train_ds=RVLCDIPConfig(
             split=Stage.TRAIN,
             transform_config=FineTuneTransformConfig(
                 img_size=256,  # ResNet-50/ViT often use 224 or 256
             ),
         ),
-        val_dataset=RVLCDIPConfig(
+        val_ds=RVLCDIPConfig(
             split=Stage.VAL,
             transform_config=ValTransformConfig(img_size=256),
         ),
-        test_dataset=RVLCDIPConfig(
+        test_ds=RVLCDIPConfig(
             split=Stage.TEST,
             transform_config=ValTransformConfig(img_size=256),
         ),
@@ -101,7 +101,7 @@ def main():
 
     print("\n✅ Fine-tuning configuration created:")
     print(f"   Batch size: {finetune_config.batch_size}")
-    print(f"   Image size: {finetune_config.train_dataset.transform_config.img_size}")
+    print(f"   Image size: {finetune_config.train_ds.transform_config.img_size}")
     print("   Train transforms: FineTuneTransformConfig (light augmentation)")
 
     # ==========================================================================
@@ -116,15 +116,15 @@ def main():
         num_workers=8,
         pin_memory=True,
         # Use val dataset as dummy for train/val (won't be used)
-        train_dataset=RVLCDIPConfig(
+        train_ds=RVLCDIPConfig(
             split=Stage.VAL,
             transform_config=ValTransformConfig(img_size=224),
         ),
-        val_dataset=RVLCDIPConfig(
+        val_ds=RVLCDIPConfig(
             split=Stage.VAL,
             transform_config=ValTransformConfig(img_size=224),
         ),
-        test_dataset=RVLCDIPConfig(
+        test_ds=RVLCDIPConfig(
             split=Stage.TEST,
             transform_config=ValTransformConfig(img_size=224),
         ),

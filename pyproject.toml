@@ -42,6 +42,7 @@ classifier = [
     "optuna>=4.2.0",
     "optuna-integration[pytorch-lightning]>=4.5.0",
     "pydantic>=2.12.4",
+    "pydantic-settings>=2.11.0",
     # "pytorch-lightning>=2.5.6",
     "lightning>=2.5.6",
     "rich>=13.9.4",
@@ -70,6 +71,11 @@ exclude = ["notebooks*"]
 testpaths  = ["tests"]
 pythonpath = ["traenslenzor"]
 addopts    = "-q"
+filterwarnings = [
+    # Suppress PyTorch's internal pin_memory deprecation warning (PyTorch 2.9+)
+    # This warning comes from DataLoader's internal implementation, not our code
+    "ignore:The argument 'device' of Tensor.(pin_memory|is_pinned).*:DeprecationWarning",
+]
 
 [tool.ruff]
 line-length    = 100

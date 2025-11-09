@@ -1,3 +1,3 @@
-from .utils.base_config import Console
+from .configs import ExperimentConfig
 
-__all__ = ["Console"]
+__all__ = ["ExperimentConfig"]

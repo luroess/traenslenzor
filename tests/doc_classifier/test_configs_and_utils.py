@@ -1,10 +1,12 @@
-from __future__ import annotations
-
+from enum import Enum
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock
 
+import optuna
 import pytest
 from datasets import Split
+from pydantic import Field
 
 import traenslenzor.doc_classifier.configs.optuna_config as optuna_config_module
 import traenslenzor.doc_classifier.configs.wandb_config as wandb_config_module
@@ -12,7 +14,13 @@ import traenslenzor.doc_classifier.lightning.lit_trainer_factory as trainer_fact
 from traenslenzor.doc_classifier.configs import ExperimentConfig, PathConfig, WandbConfig
 from traenslenzor.doc_classifier.configs.optuna_config import OptunaConfig
 from traenslenzor.doc_classifier.lightning import TrainerCallbacksConfig, TrainerFactoryConfig
-from traenslenzor.doc_classifier.utils import MetricName, Stage
+from traenslenzor.doc_classifier.utils import (
+    BaseConfig,
+    MetricName,
+    Optimizable,
+    Stage,
+    optimizable_field,
+)
 
 
 def test_stage_conversion_and_split():
@@ -109,6 +117,8 @@ def test_trainer_factory_updates_wandb_config_metadata(tmp_path):
         run_name="demo-run",
         stage=Stage.TEST,
         paths=SimpleNamespace(wandb=tmp_path / "wandb"),
+        verbose=True,
+        is_debug=False,
     )
 
     cfg.update_wandb_config(experiment)
@@ -207,5 +217,63 @@ def test_optuna_config_pruning_and_wandb_logging(monkeypatch):
 
 
 def test_optuna_config_setup_optimizables_is_noop():
+    class Dummy(BaseConfig[None]):
+        value: int = 1
+
     cfg = OptunaConfig()
-    cfg.setup_optimizables(MagicMock(), MagicMock())
+    cfg.setup_optimizables(Dummy(), optuna.trial.FixedTrial({}))
+
+
+class _DummyEnum(Enum):
+    A = "a"
+    B = "b"
+
+
+class _LeafConfig(BaseConfig[None]):
+    scalar: float = optimizable_field(
+        default=0.1,
+        optimizable=Optimizable.continuous(low=0.01, high=0.2),
+    )
+    choice: _DummyEnum = optimizable_field(
+        default=_DummyEnum.A,
+        optimizable=Optimizable(
+            target=_DummyEnum,
+            categories=[member.value for member in _DummyEnum],
+        ),
+    )
+
+
+class _ContainerConfig(BaseConfig[None]):
+    leaf: _LeafConfig = Field(default_factory=_LeafConfig)
+    values: list[Any] = Field(default_factory=lambda: [Optimizable.discrete(low=1, high=3)])
+
+
+def test_optuna_config_applies_metadata() -> None:
+    config = _LeafConfig()
+    opt_cfg = OptunaConfig()
+    trial = optuna.trial.FixedTrial({"scalar": 0.05, "choice": "b"})
+
+    opt_cfg.setup_optimizables(config, trial)
+
+    assert config.scalar == pytest.approx(0.05)
+    assert config.choice == _DummyEnum.B
+    assert opt_cfg.suggested_params["scalar"] == pytest.approx(0.05)
+    assert opt_cfg.suggested_params["choice"] == "b"
+
+
+def test_optuna_config_handles_nested_structures() -> None:
+    config = _ContainerConfig()
+    opt_cfg = OptunaConfig()
+    trial = optuna.trial.FixedTrial(
+        {
+            "leaf.scalar": 0.08,
+            "leaf.choice": "a",
+            "values[0]": 3,
+        }
+    )
+
+    opt_cfg.setup_optimizables(config, trial)
+
+    assert config.leaf.scalar == pytest.approx(0.08)
+    assert config.values[0] == 3
+    assert opt_cfg.suggested_params["values[0]"] == 3

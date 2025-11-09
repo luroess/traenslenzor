@@ -4,8 +4,6 @@ Provides AlexNet, ResNet-50, and ViT-B/16 backbones with optional head-only
 training and OneCycle learning-rate scheduling.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any, Literal

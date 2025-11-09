@@ -1,5 +1,6 @@
 """Rich-powered console tailored for training and pprinting of instances or other structured data."""
 
+import inspect
 import traceback
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -15,7 +16,6 @@ if TYPE_CHECKING:
 class Console(RichConsole):
     """Console wrapper that centralises formatting and convenience helpers."""
 
-    # TODO: get prefix automatically from caller (via caller stack?)
     is_debug: bool
     prefix: str | None = None
     _pl_logger: "Logger | None" = None
@@ -68,6 +68,14 @@ class Console(RichConsole):
         instance = cls()
         instance.set_prefix(*parts)
         return instance
+
+    @classmethod
+    def with_caller_prefix(cls, *extra_parts: str, stack_depth: int = 1) -> "Console":
+        """Create a console with prefix inferred from the caller's module and function."""
+        frame_info = inspect.stack()[stack_depth + 1]
+        module_name = Path(frame_info.filename).stem
+        parts = (module_name, frame_info.function, *extra_parts)
+        return cls().set_prefix(*parts)
 
     def set_prefix(self, *parts: str) -> "Console":
         """Set a custom prefix for all log messages.

@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-import json
 import tomllib
 from enum import Enum
 from pathlib import Path
@@ -135,74 +132,7 @@ class BaseConfig(BaseModel, Generic[TargetType]):
         data = tomllib.loads(text)
         return cls.model_validate(data)
 
-    def to_puml(
-        self,
-        path: Path | None = None,
-        *,
-        include_values: bool = True,
-    ) -> str:
-        """Render the config tree as a simple PlantUML class diagram.
-
-        The generated PUML also embeds the JSON payload required for round-tripping
-        via :meth:`from_puml`.
-        """
-        lines: list[str] = [
-            "@startuml",
-            "skinparam classAttributeIconSize 0",
-            "hide methods",
-        ]
-        nodes, edges = self._build_puml_graph(include_values=include_values)
-        for node in nodes:
-            node_name, label, attributes = node
-            lines.append(f'class {node_name} as "{label}" {{')
-            if attributes:
-                for attr in attributes:
-                    lines.append(f"  {attr}")
-            lines.append("}")
-        for src, dst, field_label in edges:
-            lines.append(f"{src} --> {dst} : {field_label}")
-
-        json_blob = json.dumps(
-            self.model_dump(
-                mode="json",
-                exclude={"target", "propagated_fields"},
-                by_alias=True,
-            ),
-            indent=2,
-        )
-        lines.append("/'CONFIG_JSON_START")
-        lines.extend(json_blob.splitlines())
-        lines.append("CONFIG_JSON_END'/")
-        lines.append("@enduml")
-        rendered = "\n".join(lines)
-        if path is not None:
-            Path(path).write_text(rendered, encoding="utf-8")
-        return rendered
-
-    @classmethod
-    def from_puml(cls: Type["BaseConfig"], source: str | Path | bytes) -> "BaseConfig":
-        """Parse a PlantUML export produced by :meth:`to_puml`."""
-        if isinstance(source, Path):
-            text = source.read_text(encoding="utf-8")
-        elif isinstance(source, bytes):
-            text = source.decode("utf-8")
-        else:
-            potential_path = Path(source)
-            if potential_path.exists():
-                text = potential_path.read_text(encoding="utf-8")
-            else:
-                text = source
-
-        start_token = "/'CONFIG_JSON_START"
-        end_token = "CONFIG_JSON_END'/"
-        start_idx = text.find(start_token)
-        end_idx = text.find(end_token)
-        if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
-            raise ValueError("PUML document does not contain embedded CONFIG_JSON data.")
-        json_payload = text[start_idx + len(start_token) : end_idx].strip()
-        data = json.loads(json_payload)
-        return cls.model_validate(data)
-
+    # ------------------------------------------------------------------ Visualization
     def inspect(self, show_docs: bool = False) -> None:
         tree = self._build_tree(show_docs=show_docs, _seen_singletons=set())
         Console().print(tree, soft_wrap=False, highlight=True, markup=True, emoji=False)
@@ -464,21 +394,21 @@ class BaseConfig(BaseModel, Generic[TargetType]):
             value = getattr(self, field_name)
             if value is None:
                 continue
-            if include_comments:
-                comment_lines: list[str] = []
-                if include_type_hints:
-                    comment_lines.append(f"type: {self._get_type_name(field.annotation)}")
-                if field.description:
-                    comment_lines.append(field.description.strip())
-                for line in comment_lines:
-                    if line:
-                        container.add(comment(line))
+            type_hint: str | None = None
+            if include_comments and include_type_hints:
+                type_hint = self._get_type_name(field.annotation)
 
             toml_value = self._to_toml_item(
                 value,
                 include_comments=include_comments,
                 include_type_hints=include_type_hints,
             )
+
+            if type_hint is not None and not isinstance(toml_value, Table):
+                container.add(comment(f"type: {type_hint}"))
+            if type_hint is not None:
+                container.add(comment(f"type: {type_hint}"))
+
             container.add(field_name, toml_value)
 
     def _to_toml_item(  # pragma: no cover - serialization helper
@@ -544,51 +474,6 @@ class BaseConfig(BaseModel, Generic[TargetType]):
                 return enum_value
             return string(str(enum_value))
         return value
-
-    # ----------------------------------------------------------------- PUML utils
-    def _build_puml_graph(  # pragma: no cover - visualization helper
-        self,
-        *,
-        include_values: bool,
-    ) -> tuple[list[tuple[str, str, list[str]]], list[tuple[str, str, str]]]:
-        nodes: list[tuple[str, str, list[str]]] = []
-        edges: list[tuple[str, str, str]] = []
-
-        def visit(config: "BaseConfig", path: str) -> str:
-            node_name = self._sanitize_puml_name(path)
-            attributes: list[str] = []
-
-            for field_name, field in config.__class__.model_fields.items():
-                value = getattr(config, field_name)
-                if isinstance(value, BaseConfig):
-                    child_path = f"{path}.{field_name}"
-                    child_node = visit(value, child_path)
-                    edges.append((node_name, child_node, field_name))
-                elif isinstance(value, (list, tuple)):
-                    for idx, item in enumerate(value):
-                        if isinstance(item, BaseConfig):
-                            child_path = f"{path}.{field_name}[{idx}]"
-                            child_node = visit(item, child_path)
-                            edges.append((node_name, child_node, f"{field_name}[{idx}]"))
-                elif include_values:
-                    formatted = self._format_value(value)
-                    attributes.append(f"{field_name}: {formatted}")
-
-            nodes.append((node_name, config.__class__.__name__, attributes))
-            return node_name
-
-        visit(self, self.__class__.__name__)
-        return nodes, edges
-
-    @staticmethod
-    def _sanitize_puml_name(path: str) -> str:
-        safe = []
-        for ch in path:
-            if ch.isalnum() or ch == "_":
-                safe.append(ch)
-            else:
-                safe.append("_")
-        return "".join(safe)
 
 
 class SingletonConfig(BaseConfig):

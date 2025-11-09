@@ -1,14 +1,11 @@
-"""Lightning data module for the document-class detector.
-
-The module wires our RVL-CDIP dataset configs into PyTorch Lightning's training
-loop while adhering to the Config-as-Factory conventions.
-"""
-
-from __future__ import annotations
+"""LightningDataModule wrapper around RVL-CDIP with configurable transforms."""
 
 import os
+import warnings
+from typing import Any
 
 import pytorch_lightning as pl
+import torch
 from datasets import Dataset as HFDataset
 from pydantic import Field
 from torch.utils.data import DataLoader
@@ -17,12 +14,40 @@ from ..data_handling.huggingface_rvl_cdip_ds import RVLCDIPConfig
 from ..data_handling.transforms import TrainTransformConfig, ValTransformConfig
 from ..utils import BaseConfig, Stage
 
+# Suppress PyTorch's internal pin_memory deprecation warning (PyTorch 2.9+)
+# This warning comes from DataLoader's internal implementation, not our code
+# Will be fixed in future PyTorch releases
+warnings.filterwarnings(
+    "ignore",
+    message=r"The argument 'device' of Tensor\.pin_memory\(\) is deprecated",
+    category=DeprecationWarning,
+    module=r"torch\.utils\.data\._utils\.pin_memory",
+)
+
+
+def collate_hf_batch(batch: list[dict[str, Any]]) -> tuple[torch.Tensor, torch.Tensor]:
+    """Collate HuggingFace dataset batches into (images, labels) tuple.
+
+    Converts list of dicts from HF Dataset into tuple format expected by Lightning.
+
+    Args:
+        batch: List of dicts with 'image' (Tensor) and 'label' (int) keys.
+
+    Returns:
+        Tuple of (images, labels) where:
+            - images: Stacked image tensors with shape (B, C, H, W)
+            - labels: Label tensor with shape (B,)
+    """
+    images = torch.stack([item["image"] for item in batch])
+    labels = torch.tensor([item["label"] for item in batch], dtype=torch.long)
+    return images, labels
+
 
 def _default_num_workers() -> int:
-    return max(1, min(8, os.cpu_count() or 1))
+    return max(1, os.cpu_count() or 1)
 
 
-def _default_train_dataset() -> RVLCDIPConfig:
+def _default_train_ds() -> RVLCDIPConfig:
     return RVLCDIPConfig(
         split=Stage.TRAIN,
         transform_config=TrainTransformConfig(),
@@ -36,10 +61,15 @@ def _default_ds(split: Stage) -> RVLCDIPConfig:
     )
 
 
+def _pin_memory(pin_memory: bool = True) -> bool:
+    # Only pin memory if CUDA is available
+    return pin_memory and torch.cuda.is_available()
+
+
 class DocDataModuleConfig(BaseConfig["DocDataModule"]):
     """Configuration for :class:`DocDataModule`."""
 
-    target: type[DocDataModule] = Field(default_factory=lambda: DocDataModule, exclude=True)
+    target: type["DocDataModule"] = Field(default_factory=lambda: DocDataModule, exclude=True)
 
     batch_size: int = 32
     """Batch size for DataLoaders."""
@@ -53,15 +83,15 @@ class DocDataModuleConfig(BaseConfig["DocDataModule"]):
     is_debug: bool = False
     verbose: bool = True
 
-    train_dataset: RVLCDIPConfig = Field(default_factory=_default_train_dataset)
+    train_ds: RVLCDIPConfig = Field(default_factory=_default_train_ds)
     """Configuration for training dataset with transforms."""
 
-    val_dataset: RVLCDIPConfig = Field(
+    val_ds: RVLCDIPConfig = Field(
         default_factory=lambda: _default_ds(Stage.VAL),
     )
     """Configuration for validation dataset with transforms."""
 
-    test_dataset: RVLCDIPConfig = Field(
+    test_ds: RVLCDIPConfig = Field(
         default_factory=lambda: _default_ds(Stage.TEST),
     )
     """Configuration for test dataset with transforms."""
@@ -81,8 +111,11 @@ class DocDataModule(pl.LightningDataModule):
         self._val_ds: HFDataset | None = None
         self._test_ds: HFDataset | None = None
 
-        # All datasets for easy access
-        self._all_ds: list[HFDataset] | None = None
+        self._stage_attr_map = {
+            Stage.TRAIN: ("_train_ds", self.config.train_ds),
+            Stage.VAL: ("_val_ds", self.config.val_ds),
+            Stage.TEST: ("_test_ds", self.config.test_ds),
+        }
 
     # --------------------------------------------------------------------- setup
     def setup(self, stage: Stage | str | None = None) -> None:
@@ -93,73 +126,69 @@ class DocDataModule(pl.LightningDataModule):
             self._ensure_all_datasets()
             return
 
-        # Setup dataset based on requested stage using match-case pattern
-        match requested_stage:
-            case Stage.TRAIN:
-                self._train_ds = self.config.train_dataset.setup_target()
-            case Stage.VAL:
-                self._val_ds = self.config.val_dataset.setup_target()
-            case Stage.TEST:
-                self._test_ds = self.config.test_dataset.setup_target()
+        if requested_stage in self._stage_attr_map:
+            self._ensure_dataset(requested_stage)
+        else:
+            raise ValueError(f"Unsupported stage '{stage}'.")
 
     def _ensure_all_datasets(self) -> None:
-        if self._train_ds is None:
-            self._train_ds = self.config.train_dataset.setup_target()
-        if self._val_ds is None:
-            self._val_ds = self.config.val_dataset.setup_target()
-        if self._test_ds is None:
-            self._test_ds = self.config.test_dataset.setup_target()
+        for stage in self._stage_attr_map:
+            self._ensure_dataset(stage)
 
     # ------------------------------------------------------------------ loaders
     def train_dataloader(self) -> DataLoader:
-        if self._train_ds is None:
-            self.setup(str(Stage.TRAIN))
+        self._ensure_dataset(Stage.TRAIN)
         return DataLoader(
             self._train_ds,
             batch_size=self.config.batch_size,
             num_workers=self.config.num_workers,
             shuffle=True,
-            pin_memory=self.config.pin_memory,
+            pin_memory=_pin_memory(self.config.pin_memory),
+            collate_fn=collate_hf_batch,
         )
 
     def val_dataloader(self) -> DataLoader:
-        if self._val_ds is None:
-            self.setup(str(Stage.VAL))
+        self._ensure_dataset(Stage.VAL)
         return DataLoader(
             self._val_ds,
             batch_size=self.config.batch_size,
             num_workers=self.config.num_workers,
-            pin_memory=self.config.pin_memory,
+            pin_memory=_pin_memory(self.config.pin_memory),
+            collate_fn=collate_hf_batch,
         )
 
     def test_dataloader(self) -> DataLoader:
-        if self._test_ds is None:
-            self.setup(str(Stage.TEST))
+        self._ensure_dataset(Stage.TEST)
         return DataLoader(
             self._test_ds,
             batch_size=self.config.batch_size,
             num_workers=self.config.num_workers,
-            pin_memory=self.config.pin_memory,
+            pin_memory=_pin_memory(self.config.pin_memory),
+            collate_fn=collate_hf_batch,
         )
 
     # ---------------------------------------------------------------- properties
     @property
     def train_ds(self) -> HFDataset:
         """Training dataset."""
-        if self._train_ds is None:
-            self.setup(str(Stage.TRAIN))
+        self._ensure_dataset(Stage.TRAIN)
         return self._train_ds
 
     @property
     def val_ds(self) -> HFDataset:
         """Validation dataset."""
-        if self._val_ds is None:
-            self.setup(str(Stage.VAL))
+        self._ensure_dataset(Stage.VAL)
         return self._val_ds
 
     @property
     def test_ds(self) -> HFDataset:
         """Test dataset."""
-        if self._test_ds is None:
-            self.setup(str(Stage.TEST))
+        self._ensure_dataset(Stage.TEST)
         return self._test_ds
+
+    def _ensure_dataset(self, stage: Stage) -> None:
+        attr_name, cfg = self._stage_attr_map[stage]
+        dataset = getattr(self, attr_name)
+        if dataset is None:
+            dataset = cfg.setup_target()
+            setattr(self, attr_name, dataset)
