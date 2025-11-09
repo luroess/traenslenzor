@@ -26,27 +26,33 @@ class CLIExperimentConfig(BaseSettings, ExperimentConfig):
 
 
 if __name__ == "__main__":
-    # Parse CLI arguments first to check for config_path
-    cli_config = CLIExperimentConfig()
+    import logging
+    import sys
 
-    # If config_path was provided, load base config from TOML and merge with CLI overrides
-    if cli_config.config_path is not None:
-        config_path = Path(cli_config.config_path)
-        if not config_path.exists():
-            raise FileNotFoundError(f"Config file not found: {config_path}")
+    # Suppress PyTorch Lightning's verbose informational messages
+    logging.getLogger("pytorch_lightning").setLevel(logging.WARNING)
+    logging.getLogger("lightning.pytorch").setLevel(logging.WARNING)
 
-        # Load base config from TOML
-        base_config = ExperimentConfig.from_toml(config_path)
+    # Extract config_path from CLI args if present
+    config_path_arg = None
+    for i, arg in enumerate(sys.argv[1:], 1):  # Start from 1 to skip script name
+        if arg == "--config_path" and i + 1 < len(sys.argv):
+            config_path_arg = Path(sys.argv[i + 1])
+            break
+        elif arg.startswith("--config_path="):
+            config_path_arg = Path(arg.split("=", 1)[1])
+            break
 
-        # Merge CLI overrides by re-parsing with base config as defaults
-        # This is done by converting base config to dict and using it as defaults
-        base_dict = base_config.model_dump(mode="python")
+    if config_path_arg is not None:
+        # Load from TOML file
+        if not config_path_arg.exists():
+            raise FileNotFoundError(f"Config file not found: {config_path_arg}")
 
-        # Create new config with CLI overrides
-        config = CLIExperimentConfig(**base_dict)
+        # Load ExperimentConfig from TOML (creates ONE instance)
+        config = ExperimentConfig.from_toml(config_path_arg)
     else:
-        # No config file, use CLI arguments only
-        config = cli_config
+        # No config file - create from CLI args via pydantic-settings
+        config = CLIExperimentConfig()
 
     # Run the experiment
     config.setup_target_and_run()
