@@ -72,9 +72,7 @@ testpaths  = ["tests"]
 pythonpath = ["traenslenzor"]
 addopts    = "-q"
 filterwarnings = [
-    # Suppress PyTorch's internal pin_memory deprecation warning (PyTorch 2.9+)
-    # This warning comes from DataLoader's internal implementation, not our code
-    "ignore:The argument 'device' of Tensor.(pin_memory|is_pinned).*:DeprecationWarning",
+    "ignore:The argument 'device' of Tensor\\.(pin_memory|is_pinned)\\(\\) is deprecated:DeprecationWarning",
 ]
 
 [tool.ruff]
