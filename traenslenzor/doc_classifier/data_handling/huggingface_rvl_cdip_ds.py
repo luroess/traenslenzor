@@ -1,17 +1,31 @@
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Annotated, Any, Callable
 
 import numpy as np
 from datasets import Dataset as HFDataset
 from datasets import load_dataset
-from pydantic import Field
+from pydantic import Field, Tag
 
 from traenslenzor.doc_classifier.configs.path_config import PathConfig
 
 from ..utils import BaseConfig, Console, Stage
-from .transforms import TransformConfig
+from .transforms import (
+    FineTuneTransformConfig,
+    TrainTransformConfig,
+    TransformConfig,
+    ValTransformConfig,
+)
 
 if TYPE_CHECKING:
     from albumentations import Compose
+
+
+TransformConfigUnion = Annotated[
+    Annotated[TrainTransformConfig, Tag("train")]
+    | Annotated[FineTuneTransformConfig, Tag("finetune")]
+    | Annotated[ValTransformConfig, Tag("val")]
+    | Annotated[TransformConfig, Tag("base")],
+    Field(discriminator="transform_type"),
+]
 
 
 class RVLCDIPConfig(BaseConfig[HFDataset]):
@@ -25,7 +39,7 @@ class RVLCDIPConfig(BaseConfig[HFDataset]):
     split: Stage = Field(default=Stage.TRAIN)
     """Dataset split to load: TRAIN, VAL, or TEST."""
 
-    transform_config: TransformConfig | None = Field(default=None)
+    transform_config: TransformConfigUnion | None = Field(default=None)
     """Optional transform configuration. If provided, transforms will be applied via .set_transform()."""
 
     streaming: bool = Field(default=False)

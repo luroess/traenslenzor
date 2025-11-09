@@ -9,7 +9,7 @@ Three pipeline types are provided:
 - ValTransformConfig: Deterministic transforms for validation/testing
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
@@ -29,6 +29,9 @@ class TransformConfig(BaseConfig[A.Compose]):
 
     target: type[A.Compose] = Field(default=A.Compose, exclude=True)
 
+    transform_type: Literal["base"] = Field(default="base")
+    """Discriminator field for identifying transform type in serialized configs."""
+
     img_size: int = Field(default=224)
     """Target image size (height and width) after transformation."""
 
@@ -41,10 +44,14 @@ class TransformConfig(BaseConfig[A.Compose]):
     def setup_target(self) -> A.Compose:
         """Create and return an Albumentations Compose pipeline.
 
-        Returns:
-            A.Compose: Configured augmentation pipeline.
+        Subclasses must override this method to provide their specific transform pipeline.
+
+        Raises:
+            NotImplementedError: If called on the base class directly.
         """
-        raise NotImplementedError("Subclasses must implement setup_target()")
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement setup_target() to provide a transform pipeline."
+        )
 
 
 class TrainTransformConfig(TransformConfig):
@@ -53,6 +60,9 @@ class TrainTransformConfig(TransformConfig):
     Includes geometric transforms, noise, blur, and contrast adjustments
     suitable for learning robust features from limited data.
     """
+
+    transform_type: Literal["train"] = Field(default="train")
+    """Discriminator field identifying this as a training transform config."""
 
     def setup_target(self) -> A.Compose:
         """Create training augmentation pipeline.
@@ -110,6 +120,9 @@ class FineTuneTransformConfig(TransformConfig):
     while adapting to the document classification task.
     """
 
+    transform_type: Literal["finetune"] = Field(default="finetune")
+    """Discriminator field identifying this as a fine-tuning transform config."""
+
     def setup_target(self) -> A.Compose:
         """Create fine-tuning augmentation pipeline.
 
@@ -150,6 +163,9 @@ class ValTransformConfig(TransformConfig):
 
     No augmentation - only resize, center crop, normalize, and tensorize.
     """
+
+    transform_type: Literal["val"] = Field(default="val")
+    """Discriminator field identifying this as a validation/test transform config."""
 
     def setup_target(self) -> A.Compose:
         """Create validation/test transformation pipeline.
