@@ -118,15 +118,6 @@ def test_setup_target_and_run_respects_stage(monkeypatch, fresh_path_config, tmp
     trainer.test.assert_called_once()
 
 
-def test_from_puml_file_uses_configs_dir(tmp_path, fresh_path_config):
-    cfg = ExperimentConfig(paths=fresh_path_config)
-    path = cfg.export_puml("relative.puml")
-
-    loaded = ExperimentConfig.from_puml_file("relative.puml", path_config=fresh_path_config)
-    assert loaded.run_name == cfg.run_name
-    assert path.exists()
-
-
 def test_setup_target_loads_checkpoint(monkeypatch, fresh_path_config, tmp_path):
     ckpt = fresh_path_config.checkpoints / "load_me.ckpt"
     ckpt.touch()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 from enum import Enum
 from pathlib import Path
-from typing import Any, ForwardRef, List
+from typing import Any
 
 import pytest
 from pydantic import Field
@@ -142,55 +142,10 @@ def test_save_toml_roundtrip(tmp_path) -> None:
     assert loaded.shared == "persisted"
 
 
-def test_puml_roundtrip(tmp_path) -> None:
-    parent = ParentConfig(
-        shared="diagram-shared",
-        children=[
-            ChildConfig(identifier="first"),
-            ChildConfig(identifier="second"),
-        ],
-    )
-
-    puml = parent.to_puml()
-    assert "@startuml" in puml
-    path = tmp_path / "config.puml"
-    parent.to_puml(path=path)
-
-    loaded = ParentConfig.from_puml(path)
-    assert loaded.shared == "diagram-shared"
-    assert len(loaded.children) == 2
-    from_str = ParentConfig.from_puml(str(path))
-    assert from_str.shared == "diagram-shared"
-
-
 def test_from_toml_with_inline_text() -> None:
     toml_text = 'shared = "inline"'
     loaded = ParentConfig.from_toml(toml_text)
     assert loaded.shared == "inline"
-
-
-def test_from_puml_with_bytes_and_string(tmp_path, monkeypatch) -> None:
-    parent = ParentConfig(shared="bytes")
-    puml = parent.to_puml()
-    as_bytes = puml.encode("utf-8")
-
-    from_bytes = ParentConfig.from_puml(as_bytes)
-    assert from_bytes.shared == "bytes"
-
-    puml_path = tmp_path / "inline.puml"
-    puml_path.write_text(puml, encoding="utf-8")
-    inline_text = puml_path.read_text()
-
-    original_exists = Path.exists
-
-    def safe_exists(self):
-        try:
-            return original_exists(self)
-        except OSError:
-            return False
-
-    monkeypatch.setattr(Path, "exists", safe_exists)
-    ParentConfig.from_puml(inline_text)  # Should not raise
 
 
 def test_notarget_setup_and_error_branch(monkeypatch) -> None:
@@ -221,20 +176,6 @@ def test_to_toml_includes_doc_comments(tmp_path) -> None:
     assert from_bytes.message == "hello"
 
 
-def test_puml_variants_and_missing_payload(tmp_path) -> None:
-    config = ComplexConfig()
-    text = config.to_puml(include_values=False)
-    assert "title:" not in text  # No attribute values emitted
-
-    path = tmp_path / "graph.puml"
-    config.to_puml(path=path)
-    reloaded = ComplexConfig.from_puml(path)
-    assert reloaded.title == "root"
-
-    with pytest.raises(ValueError):
-        ComplexConfig.from_puml("@startuml\n@enduml")
-
-
 def test_build_tree_and_inspect(monkeypatch) -> None:
     config = ComplexConfig()
     tree = config._build_tree(show_docs=True)
@@ -246,20 +187,7 @@ def test_build_tree_and_inspect(monkeypatch) -> None:
     assert captured  # ensure Console.print invoked
 
 
-def test_format_value_and_type_name_handling() -> None:
-    config = ComplexConfig()
-    nodes, edges = config._build_puml_graph(include_values=True)
-    assert nodes
-    assert edges
-    # Exercise _sanitize_puml_name explicitly
-    assert config._sanitize_puml_name("ComplexConfig.child[0]") == "ComplexConfig_child_0_"
-    assert config._format_value(int) == "int"
-
-    type_name = config._get_type_name(List[ForwardRef("Demo")])
-    assert "list" in type_name.lower()
-
-
-def test_shared_field_propagation_logs(monkeypatch) -> None:
+def test_propagate_shared_fields(monkeypatch) -> None:
     class SharedParent(BaseConfig[None]):
         shared: str = "parent"
         child: ChildConfig = Field(default_factory=lambda: ChildConfig(identifier="inner"))

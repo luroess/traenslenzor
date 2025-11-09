@@ -160,16 +160,6 @@ def test_experiment_config_propagates_flags_and_stage(fresh_path_config):
     assert config.trainer_config.fast_dev_run is True
 
 
-def test_experiment_config_export_puml_writes_diagram(fresh_path_config):
-    config = ExperimentConfig(paths=fresh_path_config)
-
-    output = config.export_puml("unit_test.puml")
-
-    assert output.exists()
-    assert output.parent == fresh_path_config.configs_dir
-    assert "@startuml" in output.read_text()
-
-
 def test_experiment_config_resolves_relative_checkpoint(fresh_path_config):
     ckpt_file = fresh_path_config.checkpoints / "model.ckpt"
     ckpt_file.touch()
