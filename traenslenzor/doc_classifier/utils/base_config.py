@@ -360,7 +360,11 @@ class BaseConfig(BaseModel, Generic[TargetType]):
         return self
 
     def _propagate_to_child(self, parent_field: str, child_config: "BaseConfig") -> None:
-        """Propagate matching fields from parent to child config"""
+        """Propagate matching fields from parent to child config.
+
+        Uses setattr() to ensure child validators run after propagation,
+        allowing debug-mode logic and other validators to execute properly.
+        """
         shared_fields = {
             name: value
             for name, value in self
@@ -372,7 +376,8 @@ class BaseConfig(BaseModel, Generic[TargetType]):
         for name, value in shared_fields.items():
             current_value = getattr(child_config, name, None)
             if current_value != value:
-                object.__setattr__(child_config, name, value)
+                # Use regular setattr to trigger validators
+                setattr(child_config, name, value)
                 child_config.propagated_fields[name] = value
 
                 Console().log(
@@ -502,7 +507,7 @@ class SingletonConfig(BaseConfig):
                 if hasattr(self, key):
                     current = getattr(self, key)
                     if current != value:
-                        Console().warn(
+                        Console().log(
                             f"Updating singleton {self.__class__.__name__} field '{key}' from {current} to {value}"
                         )
                     setattr(self, key, value)

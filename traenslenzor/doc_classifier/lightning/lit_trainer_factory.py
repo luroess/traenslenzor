@@ -78,6 +78,14 @@ class TrainerFactoryConfig(BaseConfig):
 
     @model_validator(mode="after")
     def _debug_defaults(self) -> Self:
+        """Apply debug-mode defaults when is_debug=True.
+
+        This validator runs after initialization and when is_debug is propagated
+        from parent configs via setattr(), ensuring debug settings are applied.
+
+        Uses object.__setattr__() to avoid retriggering validation (which would
+        cause infinite recursion).
+        """
         console = Console.with_prefix(self.__class__.__name__, "_debug_defaults")
 
         if self.is_debug:
@@ -92,7 +100,7 @@ class TrainerFactoryConfig(BaseConfig):
             )
 
         if self.fast_dev_run:
-            Console.with_prefix(self.__class__.__name__).warn(
+            Console.with_prefix(self.__class__.__name__).log(
                 "Fast dev run enabled; trainer will use a single batch per split.",
             )
         return self
