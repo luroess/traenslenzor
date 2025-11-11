@@ -3,13 +3,12 @@
 from .base_config import BaseConfig, NoTarget, SingletonConfig
 from .console import Console
 from .optuna_optimizable import Optimizable, optimizable_field
-from .schemas import Metric, MetricName, Stage
+from .schemas import Metric, Stage
 
 __all__ = [
     "BaseConfig",
     "Console",
     "Metric",
-    "MetricName",
     "NoTarget",
     "SingletonConfig",
     "Stage",
