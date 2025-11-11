@@ -18,7 +18,7 @@ def temp_dir() -> Generator[str, None, None]:
 
 @pytest.fixture
 def renderer() -> ImageRenderer:
-    return ImageRenderer(device="mps")
+    return ImageRenderer(device="cpu")
 
 
 @pytest.fixture
