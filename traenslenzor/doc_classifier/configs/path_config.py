@@ -95,4 +95,7 @@ class PathConfig(SingletonConfig):
         if not checkpoint_path.exists():
             raise FileNotFoundError(f"Checkpoint path '{checkpoint_path}' does not exist.")
 
+        if not checkpoint_path.suffix == ".ckpt":
+            raise FileNotFoundError(f"Checkpoint path '{checkpoint_path}' is not a .ckpt file.")
+
         return checkpoint_path

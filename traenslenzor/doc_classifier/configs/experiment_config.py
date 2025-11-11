@@ -3,7 +3,6 @@
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import optuna
 import wandb
@@ -11,7 +10,12 @@ from pydantic import Field, ValidationInfo, field_validator, model_validator
 from pytorch_lightning import LightningDataModule, LightningModule, Trainer, seed_everything
 from typing_extensions import Self
 
-from ..lightning import DocClassifierConfig, DocDataModuleConfig, TrainerFactoryConfig
+from ..lightning import (
+    DocClassifierConfig,
+    DocDataModuleConfig,
+    TrainerFactoryConfig,
+    TunerConfig,
+)
 from ..utils import BaseConfig, Console, Stage
 from .optuna_config import OptunaConfig
 from .path_config import PathConfig
@@ -39,7 +43,7 @@ class ExperimentConfig(BaseConfig[Trainer]):
         default=Stage.TRAIN,
     )
     """Primary stage to run when invoking `run()` (train/val/test)."""
-    ckpt_path: Path | None = Field(
+    from_ckpt: Path | None = Field(
         default=None,
     )
     """Checkpoint file to restore before training or evaluation. May be relative to
@@ -49,6 +53,8 @@ class ExperimentConfig(BaseConfig[Trainer]):
     trainer_config: TrainerFactoryConfig = Field(default_factory=TrainerFactoryConfig)
     module_config: DocClassifierConfig = Field(default_factory=DocClassifierConfig)
     datamodule_config: DocDataModuleConfig = Field(default_factory=DocDataModuleConfig)
+    tuner_config: TunerConfig = Field(default_factory=TunerConfig)
+    """Configuration for hyperparameter tuning (batch size and learning rate optimization)."""
 
     optuna_config: OptunaConfig | None = Field(
         default=None,
@@ -86,18 +92,6 @@ class ExperimentConfig(BaseConfig[Trainer]):
             include_type_hints=include_type_hints,
         )
 
-    @model_validator(mode="before")
-    @classmethod
-    def _migrate_legacy_keys(cls, data: dict[str, Any]) -> dict[str, Any]:
-        # TODO: remove this!
-        """Accept legacy keys such as `from_ckpt` from older configs."""
-        if not isinstance(data, dict):
-            return data
-        legacy = data.pop("from_ckpt", None)
-        if legacy is not None and "ckpt_path" not in data:
-            data["ckpt_path"] = legacy
-        return data
-
     @field_validator("stage", mode="before")
     @classmethod
     def _parse_stage(cls, value: Stage | str | None) -> Stage:
@@ -108,28 +102,15 @@ class ExperimentConfig(BaseConfig[Trainer]):
             raise ValueError(f"Unsupported stage '{value}'.")
         return stage
 
-    @field_validator("ckpt_path", mode="before")
+    @field_validator("from_ckpt", mode="before")
     @classmethod
     def _resolve_ckpt_path(
         cls,
         value: str | Path | None,
         info: ValidationInfo,
     ) -> Path | None:
-        """Resolve checkpoint path using PathConfig for consistent path handling."""
-        if value in (None, ""):
-            return None
-
-        paths_cfg = info.data.get("paths")
-        if isinstance(paths_cfg, PathConfig):
-            # Use PathConfig's method for consistent path resolution
+        if isinstance(paths_cfg := info.data.get("paths"), PathConfig):
             return paths_cfg.resolve_checkpoint_path(value)
-
-        # Fallback if paths not yet initialized (e.g., during field-by-field validation)
-        # Still need to validate that the file exists
-        checkpoint_path = Path(value).expanduser().resolve()
-        if not checkpoint_path.exists():
-            raise FileNotFoundError(f"Checkpoint path '{checkpoint_path}' does not exist.")
-        return checkpoint_path
 
     @model_validator(mode="after")
     def _apply_seed(self) -> Self:
@@ -166,17 +147,14 @@ class ExperimentConfig(BaseConfig[Trainer]):
 
         resolved_stage = Stage.from_str(setup_stage)
 
-        if self.ckpt_path is not None:
-            console.log(f"Loading model from checkpoint: {self.ckpt_path}")
+        if self.from_ckpt is not None:
+            console.log(f"Loading model from checkpoint: {self.from_ckpt}")
             try:
-                module_cls = getattr(self.module_config, "target", None)
-                if module_cls is None or not hasattr(module_cls, "load_from_checkpoint"):
-                    raise AttributeError("Configured module target cannot load from checkpoints.")
-                lit_module = module_cls.load_from_checkpoint(
-                    checkpoint_path=self.ckpt_path.as_posix(),
+                lit_module = self.module_config.target.load_from_checkpoint(
+                    checkpoint_path=self.from_ckpt.as_posix(),
                     params=self.module_config,
                 )
-                console.log(f"Successfully loaded checkpoint: {module_cls.__name__}")
+                console.log(f"Successfully loaded checkpoint: {lit_module.__class__.__name__}")
             except Exception as exc:
                 console.error(f"Failed to load checkpoint: {exc}")
                 raise RuntimeError(f"Failed to load checkpoint: {exc}") from exc
@@ -207,7 +185,11 @@ class ExperimentConfig(BaseConfig[Trainer]):
         self,
         stage: Stage | str | None = None,
     ) -> Trainer:
-        """Instantiate components and execute the requested stage."""
+        """Instantiate components and execute the requested stage.
+
+        Args:
+            stage: Training stage (train/val/test).
+        """
         resolved_stage = stage or self.stage
 
         console = Console.with_prefix(self.__class__.__name__, "setup_target_and_run")
@@ -219,10 +201,17 @@ class ExperimentConfig(BaseConfig[Trainer]):
             setup_stage=resolved_stage,
         )
 
+        # Run tuning BEFORE training if requested
+        if (
+            self.tuner_config.use_batch_size_tuning or self.tuner_config.use_learning_rate_tuning
+        ) and resolved_stage is Stage.TRAIN:
+            console.log("Running hyperparameter tuning...")
+            self.tuner_config.run_tuning(trainer, lit_module, lit_datamodule)
+
         stage_console = Console.with_prefix(self.__class__.__name__, str(resolved_stage))
         stage_console.set_verbose(self.verbose).set_debug(self.is_debug)
 
-        ckpt_input = str(self.ckpt_path) if self.ckpt_path is not None else None
+        ckpt_input = str(self.from_ckpt) if self.from_ckpt is not None else None
         if resolved_stage is Stage.TRAIN:
             stage_console.log("Starting training (fit)...")
             trainer.fit(lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input)

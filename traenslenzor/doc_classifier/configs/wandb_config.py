@@ -1,7 +1,5 @@
-from pathlib import Path
 from typing import Any
 
-import wandb
 from pydantic import Field
 from pytorch_lightning.loggers import WandbLogger
 
@@ -10,7 +8,7 @@ from .path_config import PathConfig
 
 
 class WandbConfig(BaseConfig):
-    """Thin wrapper around Lightning's WandbLogger."""
+    """Wrapper around Lightning's [WandbLogger](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.loggers.wandb.html)."""
 
     target: type[WandbLogger] = Field(default_factory=lambda: WandbLogger, exclude=True)
 
@@ -27,27 +25,37 @@ class WandbConfig(BaseConfig):
     group: str | None = Field(default=None, description="Group multiple related runs.")
     job_type: str | None = Field(default=None, description="Attach a W&B job_type label.")
     prefix: str | None = Field(default=None, description="Namespace prefix for metric keys.")
-    save_dir: Path | str | None = Field(
-        default=None,
-        description="Directory for local W&B files; falls back to PathConfig().wandb.",
-    )
 
     def setup_target(self, **kwargs: Any) -> WandbLogger:
         """Instantiate a configured WandbLogger."""
-        resolved_save_dir = (
-            Path(self.save_dir).expanduser() if self.save_dir else PathConfig().wandb
-        )
-        resolved_save_dir.mkdir(parents=True, exist_ok=True)
+        # Get wandb directory from centralized PathConfig
+        wandb_dir = PathConfig().wandb.as_posix()
+
+        # Initialize WandB with console logging disabled to prevent progress bar spam
+        # The 'experiment' parameter should NOT be passed - let WandbLogger create the run
+        # wandb.init(
+        #     project=self.project,
+        #     name=self.name,
+        #     entity=self.entity,
+        #     dir=wandb_dir,
+        #     tags=self.tags,
+        #     group=self.group,
+        #     job_type=self.job_type,
+        #     mode="offline" if self.offline else "online",
+        #     # Disable console logging to prevent Rich progress bar updates from being logged
+        #     settings=wandb.Settings(console="off"),
+        #     reinit=True,  # Allow multiple wandb.init() calls
+        # )
 
         return WandbLogger(
             name=self.name,
             project=self.project,
             entity=self.entity,
-            save_dir=resolved_save_dir.as_posix(),
+            save_dir=wandb_dir,
             offline=self.offline,
             log_model=self.log_model,
             prefix=self.prefix,
-            experiment=wandb.run,
+            # DO NOT pass experiment=wandb.run - this causes issues
             checkpoint_name=self.checkpoint_name,
             tags=self.tags,
             group=self.group,
