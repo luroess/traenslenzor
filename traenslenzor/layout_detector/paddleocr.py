@@ -12,7 +12,7 @@ import numpy as np
 # https://github.com/PaddlePaddle/PaddleOCR/issues/16711#issuecomment-3446427004
 # This must be imported prior to paddleocr
 import traenslenzor.layout_detector.shim_langchain_backcomp  # noqa: F401
-from paddleocr import PaddleOCR  # type: ignore
+from paddleocr import PaddleOCR
 from pydantic import Json
 
 

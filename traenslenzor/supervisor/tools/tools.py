@@ -17,7 +17,7 @@ def request_user_input(prompt: str) -> str:
         prompt (str): Question or answer to interact with the user.
     """
     logger.info(f"Asking user a question: {prompt}")
-    return interrupt(prompt)  # type: ignore[no-any-return]
+    return interrupt(prompt)
 
 
 # 1. Stage
