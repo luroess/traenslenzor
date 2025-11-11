@@ -44,7 +44,26 @@ class TrainerFactoryConfig(BaseConfig):
     """Stop training once this number of epochs is reached. Disabled by default (None). If both max_epochs and max_steps are not specified, defaults to max_epochs = 1000. To enable infinite training, set max_epochs = -1."""
 
     precision: _PRECISION_INPUT = "32-true"
-    """Double precision (64, '64' or '64-true'), full precision (32, '32' or '32-true'), 16bit mixed precision (16, '16', '16-mixed') or bfloat16 mixed precision ('bf16', 'bf16-mixed'). Can be used on CPU, GPU, TPUs, or HPUs. Default: '32-true'."""
+    """Controls the dtype of model weights and activations. Double precision (64, '64' or '64-true'), full precision (32, '32' or '32-true'), 16bit mixed precision (16, '16', '16-mixed') or bfloat16 mixed precision ('bf16', 'bf16-mixed'). Can be used on CPU, GPU, TPUs, or HPUs. Default: '32-true'."""
+
+    tf32_matmul_precision: str | None = "medium"
+    """TensorFloat-32 matmul precision for CUDA devices with Tensor Cores.
+
+    Options:
+        - 'highest': Full IEEE FP32 (no TF32) - Most accurate, slowest
+        - 'high': TF32 enabled - Good balance of speed and accuracy (~2-3x faster)
+        - 'medium': TF32 enabled - Maximum speed, slightly less precise than 'high'
+        - None: Use PyTorch default (typically allows TF32)
+
+    NOTE: This setting ONLY affects FP32 operations on Tensore Cores (precision='32-true' or '64-true').
+    When using mixed precision (precision='16-mixed' or 'bf16-mixed'), this setting
+    has no effect because operations use FP16/BF16 natively, not FP32.
+
+    Recommended combinations:
+        - precision='32-true' + tf32_matmul_precision='medium': Fast training (default)
+        - precision='32-true' + tf32_matmul_precision='highest': Maximum accuracy
+
+    Default: 'medium'."""
 
     gradient_clip_val: float | None = None
     """The value at which to clip gradients. Passing gradient_clip_val=None disables gradient clipping. If using Automatic Mixed Precision (AMP), the gradients will be unscaled before. Default: None."""
@@ -105,6 +124,28 @@ class TrainerFactoryConfig(BaseConfig):
             )
         return self
 
+    @model_validator(mode="after")
+    def _validate_tf32_precision_compatibility(self) -> Self:
+        """Warn about TF32 settings that have no effect with mixed precision."""
+        console = Console.with_prefix(
+            self.__class__.__name__, "_validate_tf32_precision_compatibility"
+        )
+
+        # TF32 only affects FP32 operations
+        if self.tf32_matmul_precision is not None:
+            precision_str = str(self.precision)
+
+            # Check if using mixed precision (FP16 or BF16)
+            if any(p in precision_str for p in ["16", "bf16"]):
+                console.warn(
+                    f"tf32_matmul_precision='{self.tf32_matmul_precision}' has no effect with "
+                    f"precision='{self.precision}'. TF32 only affects FP32 operations, but you're "
+                    f"using mixed precision (FP16/BF16). Consider setting tf32_matmul_precision=None "
+                    f"to avoid confusion."
+                )
+
+        return self
+
     def update_wandb_config(self, experiment: "ExperimentConfig") -> None:
         """Propagate experiment metadata into the W&B logger config."""
         if not self.use_wandb:
@@ -127,20 +168,24 @@ class TrainerFactoryConfig(BaseConfig):
             self.wandb_config.tags = sorted(tags)
             console.log(f"Added stage tag to W&B: {stage}")
 
-        if hasattr(experiment, "paths"):
-            self.wandb_config.save_dir = experiment.paths.wandb
-            console.log(f"W&B save directory: {experiment.paths.wandb}")
-
     def setup_target(self) -> pl.Trainer:
         """Instantiate the configured trainer."""
         console = Console.with_prefix(self.__class__.__name__, "setup_target")
+
+        # Configure TF32 matmul precision for Tensor Cores (Ampere+ GPUs)
+        if self.tf32_matmul_precision is not None:
+            try:
+                torch.set_float32_matmul_precision(self.tf32_matmul_precision)
+                console.log(f"Set TF32 matmul precision to '{self.tf32_matmul_precision}'")
+            except Exception as e:
+                console.warn(f"Failed to set TF32 matmul precision: {e}")
 
         console.log(f"Creating Trainer with accelerator={self.accelerator}, devices={self.devices}")
         console.log(f"Max epochs: {self.max_epochs}, precision: {self.precision}")
 
         callbacks = self.callbacks.setup_target()
-        console.log(f"Configured {len(callbacks)} callbacks")
-        console.log(f"Callbacks: {', '.join(type(cb).__name__ for cb in callbacks)}")
+        console.log(f"Configured {len(callbacks)} callbacks: ")
+        console.plog(list(map(lambda cb: type(cb).__name__, callbacks)))
 
         logger = None
         if self.is_debug:
