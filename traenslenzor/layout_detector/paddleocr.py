@@ -99,7 +99,7 @@ if __name__ == "__main__":
             return f.read()
 
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    image_path = dir_path + "/test_image.png"
+    image_path = dir_path + "/../../test_images/test_image_ocr.png"
     img_b = load_image_as_bytes(image_path)
     npimg = bytes_to_numpy_image(img_b)
     lang = normalize_language("hi")
