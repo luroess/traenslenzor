@@ -8,8 +8,6 @@ import torch
 from numpy.typing import NDArray
 from PIL.Image import Image as PILImage
 
-import traenslenzor.image_utils.image_utils as ImageUtils
-
 logger = logging.getLogger(__name__)
 
 MODEL_URL = "https://github.com/Sanster/models/releases/download/add_big_lama/big-lama.pt"
