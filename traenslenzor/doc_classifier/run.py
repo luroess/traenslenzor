@@ -26,22 +26,16 @@ class CLIExperimentConfig(BaseSettings, ExperimentConfig):
 
 
 if __name__ == "__main__":
-    import logging
     import sys
 
-    # Suppress PyTorch Lightning's verbose informational messages
-    logging.getLogger("pytorch_lightning").setLevel(logging.WARNING)
-    logging.getLogger("lightning.pytorch").setLevel(logging.WARNING)
-
-    # Extract config_path from CLI args if present
+    # Extract config_path from CLI args
     config_path_arg = None
+
     for i, arg in enumerate(sys.argv[1:], 1):  # Start from 1 to skip script name
         if arg == "--config_path" and i + 1 < len(sys.argv):
             config_path_arg = Path(sys.argv[i + 1])
-            break
         elif arg.startswith("--config_path="):
             config_path_arg = Path(arg.split("=", 1)[1])
-            break
 
     if config_path_arg is not None:
         # Load from TOML file
@@ -54,5 +48,5 @@ if __name__ == "__main__":
         # No config file - create from CLI args via pydantic-settings
         config = CLIExperimentConfig()
 
-    # Run the experiment
+    # Run the experiment (tuning controlled via config.tuner_config)
     config.setup_target_and_run()
