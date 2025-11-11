@@ -64,6 +64,7 @@ class Metric(StrEnum):
     # Validation metrics
     VAL_LOSS = "val/loss"
     VAL_ACCURACY = "val/accuracy"
+    VAL_CONFUSION_MATRIX = "val/confusion_matrix"
 
     # Test metrics
     TEST_LOSS = "test/loss"
@@ -73,8 +74,4 @@ class Metric(StrEnum):
         return self.value
 
 
-# Backwards compatibility alias for legacy imports
-MetricName = Metric
-
-
-__all__ = ["Stage", "Metric", "MetricName"]
+__all__ = ["Stage", "Metric"]
