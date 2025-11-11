@@ -1,0 +1,65 @@
+seed     = 42
+is_debug = false
+verbose  = true
+stage    = "train"
+
+[trainer_config]
+is_debug          = false
+fast_dev_run      = false
+accelerator       = "auto"
+strategy          = "auto"
+max_epochs        = 15
+precision         = "32-true"
+log_every_n_steps = 50
+use_wandb         = true
+
+    [trainer_config.callbacks]
+    use_model_checkpoint    = true
+    checkpoint_save_top_k   = 1
+    use_early_stopping      = true
+    early_stopping_patience = 3
+    use_lr_monitor          = true
+    use_rich_progress_bar   = false
+    use_tqdm_progress_bar   = true
+    use_rich_model_summary  = true
+    use_backbone_finetuning = false
+    use_timer               = false
+
+    [trainer_config.wandb_config]
+    project = "doc-class-detector"
+    entity  = "traenslenzor"
+    tags    = ["alexnet", "scratch"]
+    notes   = "Training AlexNet from scratch on RVL-CDIP document classification"
+
+[module_config]
+num_classes = 16
+backbone    = "alexnet" # BackboneType.ALEXNET
+
+    [module_config.optimizer]
+    # Higher LR for training from scratch
+    learning_rate = 0.001  # 1e-3
+    weight_decay  = 0.0005 # Standard L2 regularization
+
+    [module_config.scheduler]
+    # OneCycleLR with aggressive schedule for scratch training
+    max_lr           = 0.003   # Peak at 3x base LR
+    base_momentum    = 0.85
+    max_momentum     = 0.95
+    div_factor       = 25.0    # Start at max_lr/25 = 0.00012
+    final_div_factor = 10000.0 # End at max_lr/(25*10000) = 1.2e-8
+    pct_start        = 0.3     # 30% warmup
+    anneal_strategy  = "cos"
+
+[datamodule_config]
+batch_size = 128
+pin_memory = true
+is_debug   = false
+verbose    = true
+
+    [datamodule_config.train_ds]
+        [datamodule_config.train_ds.transform_config]
+        # Aggressive augmentation for scratch training
+        p_color_jitter    = 0.5
+        p_perspective     = 0.3
+        p_affine          = 0.3
+        p_horizontal_flip = 0.5
