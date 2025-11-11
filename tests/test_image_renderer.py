@@ -7,7 +7,8 @@ import pytest
 from PIL import Image
 
 from traenslenzor.file_server.client import FileClient
-from traenslenzor.image_renderer.image_renderer import ImageRenderer, Text
+from traenslenzor.image_renderer.image_renderer import ImageRenderer
+from traenslenzor.image_renderer.text_operations import Text, create_mask, draw_texts
 
 
 @pytest.fixture
@@ -37,10 +38,13 @@ def sample_text() -> Text:
 
 
 @pytest.fixture
-async def sample_img_id(file_server: type[FileClient]) -> str:
-    img = Image.new("RGB", (100, 100), color=(255, 255, 255))
+def sample_img() -> Image.Image:
+    return Image.new("RGB", (100, 100), color=(255, 255, 255))
 
-    id = await file_server.put_img("test.png", img)
+
+@pytest.fixture
+async def sample_img_id(file_server: type[FileClient], sample_img: Image.Image) -> str:
+    id = await file_server.put_img("test.png", sample_img)
     if id is None:
         raise RuntimeError("Failed to upload sample image to file server")
 
@@ -48,7 +52,7 @@ async def sample_img_id(file_server: type[FileClient]) -> str:
 
 
 def test_create_mask_single_text_region(renderer: ImageRenderer, sample_text: Text) -> None:
-    mask = renderer.create_mask([sample_text], (100, 100))
+    mask = create_mask([sample_text], (100, 100))
     assert mask.shape == (1, 100, 100)
     assert mask.dtype == np.uint8
     assert mask[0, 10:30, 10:60].sum() > 0
@@ -57,7 +61,7 @@ def test_create_mask_single_text_region(renderer: ImageRenderer, sample_text: Te
 def test_create_mask_multiple_text_regions(renderer: ImageRenderer, sample_text: Text) -> None:
     text2 = sample_text.copy()
     text2["left"] = 60
-    mask = renderer.create_mask([sample_text, text2], (100, 100))
+    mask = create_mask([sample_text, text2], (100, 100))
     # Verify first text region (left=10, width=50)
     assert mask[0, 10:30, 10:60].sum() > 0
     # Verify second text region (left=60, width=50)
@@ -69,7 +73,7 @@ def test_create_mask_multiple_text_regions(renderer: ImageRenderer, sample_text:
 def test_create_mask_overlapping_regions(renderer: ImageRenderer, sample_text: Text) -> None:
     text2 = sample_text.copy()
     text2["left"] = 15
-    mask = renderer.create_mask([sample_text, text2], (100, 100))
+    mask = create_mask([sample_text, text2], (100, 100))
     assert mask.shape == (1, 100, 100)
     # Verify overlapping region (left=15 to left=60 where both texts should appear)
     overlap_region = mask[0, 10:30, 15:60]
@@ -90,18 +94,18 @@ def test_create_mask_clamps_to_boundaries(renderer: ImageRenderer) -> None:
         "color": (0, 0, 0),
         "font_family": "Arial",
     }
-    mask = renderer.create_mask([text], (100, 100))
+    mask = create_mask([text], (100, 100))
     assert mask.shape == (1, 100, 100)
 
 
 def test_create_mask_correct_shape(renderer: ImageRenderer, sample_text: Text) -> None:
-    mask = renderer.create_mask([sample_text], (200, 150))
+    mask = create_mask([sample_text], (200, 150))
     assert mask.shape == (1, 200, 150)
 
 
 def test_draw_texts_single_text(renderer: ImageRenderer, sample_text: Text) -> None:
     img = np.ones((100, 100, 3), dtype=np.float32) * 0.5
-    result = renderer.draw_texts(img, [sample_text])
+    result = draw_texts(img, [sample_text])
     assert result.shape == (100, 100, 3)
     assert result.dtype == np.float32
 
@@ -110,7 +114,7 @@ def test_draw_texts_multiple_texts(renderer: ImageRenderer, sample_text: Text) -
     text2 = sample_text.copy()
     text2["left"] = 60
     img = np.ones((100, 100, 3), dtype=np.float32) * 0.5
-    result = renderer.draw_texts(img, [sample_text, text2])
+    result = draw_texts(img, [sample_text, text2])
     assert result.shape == (100, 100, 3)
     # Verify the image was modified (should differ from original uniform gray)
     assert not np.allclose(result, 0.5)
@@ -133,7 +137,7 @@ def test_draw_texts_respects_font_properties(renderer: ImageRenderer) -> None:
         "font_family": "Arial",
     }
     img = np.ones((100, 100, 3), dtype=np.float32)
-    result = renderer.draw_texts(img, [text])
+    result = draw_texts(img, [text])
     assert result is not None
     # Verify red color was applied (color specified as RGB(255, 0, 0))
     # The red channel should be significantly higher than green/blue in text region
@@ -146,7 +150,7 @@ def test_draw_texts_respects_font_properties(renderer: ImageRenderer) -> None:
 
 def test_draw_texts_preserves_image_dimensions(renderer: ImageRenderer, sample_text: Text) -> None:
     img = np.ones((200, 150, 3), dtype=np.float32)
-    result = renderer.draw_texts(img, [sample_text])
+    result = draw_texts(img, [sample_text])
     assert result.shape == (200, 150, 3)
     # Verify text was actually drawn (image should be modified)
     assert not np.array_equal(result, img)
@@ -158,9 +162,9 @@ def test_draw_texts_preserves_image_dimensions(renderer: ImageRenderer, sample_t
 
 @pytest.mark.anyio
 async def test_replace_text_returns_pil_image(
-    renderer: ImageRenderer, sample_text: Text, sample_img_id: str
+    renderer: ImageRenderer, sample_text: Text, sample_img: Image.Image
 ) -> None:
-    result = await renderer.replace_text(sample_img_id, [sample_text], np.identity(4))
+    result = await renderer.replace_text(sample_img, [sample_text])
     assert isinstance(result, Image.Image)
     # Count black pixels (text pixels) - original white image has 0 black pixels
     result_array = np.array(result)
@@ -171,22 +175,18 @@ async def test_replace_text_returns_pil_image(
 
 @pytest.mark.anyio
 async def test_replace_text_with_debug_saves_mask(
-    renderer: ImageRenderer, temp_dir: str, sample_text: Text, sample_img_id: str
+    renderer: ImageRenderer, temp_dir: str, sample_text: Text, sample_img: Image.Image
 ) -> None:
-    await renderer.replace_text(
-        sample_img_id, [sample_text], np.identity(4), save_debug=True, debug_dir=temp_dir
-    )
+    await renderer.replace_text(sample_img, [sample_text], save_debug=True, debug_dir=temp_dir)
 
     assert (Path(temp_dir) / "debug" / "debug-mask.png").exists()
 
 
 @pytest.mark.anyio
 async def test_replace_text_with_debug_saves_overlay(
-    renderer: ImageRenderer, temp_dir: str, sample_text: Text, sample_img_id: str
+    renderer: ImageRenderer, temp_dir: str, sample_text: Text, sample_img: Image.Image
 ) -> None:
-    await renderer.replace_text(
-        sample_img_id, [sample_text], np.identity(4), save_debug=True, debug_dir=temp_dir
-    )
+    await renderer.replace_text(sample_img, [sample_text], save_debug=True, debug_dir=temp_dir)
 
     assert (Path(temp_dir) / "debug-overlay.png").exists()
 
@@ -195,16 +195,13 @@ async def test_replace_text_with_debug_saves_overlay(
 async def test_replace_text_integration_workflow(
     renderer: ImageRenderer,
     sample_text: Text,
-    sample_img_id: str,
+    sample_img: Image.Image,
 ) -> None:
-    original_array = await FileClient.get_image_as_numpy(sample_img_id)
-    if original_array is None:
-        raise RuntimeError("Failed to download sample image as numpy array")
-
-    # Count black pixels in original (should be 0 on uniform gray background)
+    # Count black pixels in original (should be 0 on uniform white background)
+    original_array = np.array(sample_img)
     original_black_pixels = np.sum(np.all(original_array < 50, axis=2))
 
-    result = await renderer.replace_text(sample_img_id, [sample_text], np.identity(4))
+    result = await renderer.replace_text(sample_img, [sample_text])
     assert result.size == (100, 100)
 
     # Count black pixels after replacement
