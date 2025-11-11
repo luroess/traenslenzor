@@ -11,7 +11,7 @@ layout_detector = FastMCP("Layout detector")
 
 @layout_detector.tool
 async def detect_layout(document_reference: str):
-    file_data = await FileClient.get(document_reference)
+    file_data = await FileClient.get_raw_bytes(document_reference)
     if file_data is None:
         return f"Document not found: {document_reference}"
     h = hash(file_data)
