@@ -219,6 +219,8 @@ class DocClassifierModule(pl.LightningModule):
             task="multiclass",
         )
 
+        self._is_tuning: bool = False
+
     # ---------------------------------------------------------------------- steps
     def forward(self, batch: ImageBatch) -> Logits:
         """Run a forward pass through the backbone.
@@ -439,7 +441,7 @@ class DocClassifierModule(pl.LightningModule):
         )
 
     def on_train_start(self):
-        if self.logger is not None:
+        if self.logger is not None and Console._pl_logger is None:
             console = Console.integrate_with_logger(self.logger, self.global_step).with_prefix(
                 self.__class__.__name__, "train_start"
             )
