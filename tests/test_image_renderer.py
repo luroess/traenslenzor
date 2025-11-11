@@ -179,7 +179,7 @@ async def test_replace_text_with_debug_saves_mask(
 ) -> None:
     await renderer.replace_text(sample_img, [sample_text], save_debug=True, debug_dir=temp_dir)
 
-    assert (Path(temp_dir) / "debug" / "debug-mask.png").exists()
+    assert (Path(temp_dir) / "debug-mask.png").exists()
 
 
 @pytest.mark.anyio
