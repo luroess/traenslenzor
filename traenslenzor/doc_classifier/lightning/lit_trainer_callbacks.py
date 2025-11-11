@@ -4,7 +4,6 @@ from pathlib import Path
 from pydantic import model_validator
 from pytorch_lightning.callbacks import (
     BackboneFinetuning,
-    BatchSizeFinder,
     Callback,
     EarlyStopping,
     LearningRateMonitor,
@@ -18,6 +17,29 @@ from typing_extensions import Self
 
 from ..configs.path_config import PathConfig
 from ..utils import BaseConfig, Metric
+
+
+class CustomTQDMProgressBar(TQDMProgressBar):
+    """Custom TQDM progress bar that hides the version number (v_num)."""
+
+    def get_metrics(self, *args, **kwargs):
+        """Get metrics to display in progress bar, excluding version number.
+
+        Returns:
+            dict[str, float]: Metrics dictionary with v_num removed.
+        """
+        items = super().get_metrics(*args, **kwargs)
+        items.pop("v_num", None)
+        return items
+
+
+class CustomRichProgressBar(RichProgressBar):
+    """Custom Rich progress bar that hides the version number (v_num)."""
+
+    def get_metrics(self, trainer, pl_module):
+        items = super().get_metrics(trainer, pl_module)
+        items.pop("v_num", None)
+        return items
 
 
 class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
@@ -47,10 +69,10 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
     use_lr_monitor: bool = True
     lr_logging_interval: str = "epoch"
 
-    use_rich_progress_bar: bool = True
+    use_rich_progress_bar: bool = False
     """Enable Rich progress bar for enhanced terminal output. Mutually exclusive with use_tqdm_progress_bar."""
 
-    use_tqdm_progress_bar: bool = False
+    use_tqdm_progress_bar: bool = True
     """Enable TQDM progress bar. Mutually exclusive with use_rich_progress_bar."""
     tqdm_refresh_rate: int = 1
     """How often to refresh the TQDM progress bar (in batches)."""
@@ -59,15 +81,6 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
     """Enable rich model summary using the Rich library for better visualization."""
     rich_summary_max_depth: int = 1
     """Maximum depth for the rich model summary tree."""
-
-    use_batch_size_finder: bool = False
-    """Enable automatic batch size finder to find optimal batch size."""
-    batch_size_mode: str = "power"
-    """Mode for batch size finder ('power' or 'binsearch')."""
-    batch_size_init_val: int = 2
-    """Initial batch size value for the finder."""
-    batch_size_max_trials: int = 25
-    """Maximum number of trials for batch size finder."""
 
     use_backbone_finetuning: bool = False
     """Enable backbone finetuning callback for transfer learning."""
@@ -108,7 +121,7 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
                     monitor=self.checkpoint_monitor,
                     mode=self.checkpoint_mode,
                     save_top_k=self.checkpoint_save_top_k,
-                    filename=self.checkpoint_filename,
+                    filename=self.checkpoint_filename.replace("/", "-"),
                     dirpath=dirpath.as_posix(),
                 ),
             )
@@ -129,26 +142,17 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
 
         if self.use_rich_progress_bar:
             callbacks.append(
-                RichProgressBar(),
+                CustomRichProgressBar(),
             )
 
         if self.use_tqdm_progress_bar:
             callbacks.append(
-                TQDMProgressBar(refresh_rate=self.tqdm_refresh_rate),
+                CustomTQDMProgressBar(refresh_rate=self.tqdm_refresh_rate),
             )
 
         if self.use_rich_model_summary:
             callbacks.append(
                 RichModelSummary(max_depth=self.rich_summary_max_depth),
-            )
-
-        if self.use_batch_size_finder:
-            callbacks.append(
-                BatchSizeFinder(
-                    mode=self.batch_size_mode,
-                    init_val=self.batch_size_init_val,
-                    max_trials=self.batch_size_max_trials,
-                ),
             )
 
         if self.use_backbone_finetuning:

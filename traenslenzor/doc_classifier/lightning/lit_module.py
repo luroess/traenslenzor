@@ -451,9 +451,10 @@ class DocClassifierModule(pl.LightningModule):
         else:
             console = Console.with_prefix(self.__class__.__name__, "train_start")
 
-        hparams = self.hparams
-        hparams.update({"batch_size": self.trainer.datamodule.config.batch_size})
-        console.plog(hparams)
+        if not self._is_tuning:
+            hparams = self.hparams
+            hparams.update({"batch_size": self.trainer.datamodule.config.batch_size})
+            console.plog(hparams)
 
     # ---------------------------------------------------------------- optimizers
     def configure_optimizers(self) -> dict[str, Any]:

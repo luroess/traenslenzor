@@ -10,6 +10,7 @@ from .lit_module import (
     OptimizerConfig,
 )
 from .lit_trainer_factory import TrainerCallbacksConfig, TrainerFactoryConfig
+from .lit_tuning import TunerConfig
 
 __all__ = [
     "BackboneType",
@@ -21,5 +22,6 @@ __all__ = [
     "OptimizerConfig",
     "TrainerCallbacksConfig",
     "TrainerFactoryConfig",
+    "TunerConfig",
     "WandbConfig",
 ]
