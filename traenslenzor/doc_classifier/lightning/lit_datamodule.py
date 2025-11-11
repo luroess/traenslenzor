@@ -80,6 +80,10 @@ class DocDataModuleConfig(BaseConfig["DocDataModule"]):
     pin_memory: bool = True
     """Whether to pin memory in DataLoaders for faster GPU transfer."""
 
+    limit_num_samples: int | float | None = None
+    """Limit number of samples per dataset for debugging.
+    If int, uses that many samples. If float between 0 and 1, uses that fraction of the dataset."""
+
     is_debug: bool = False
     verbose: bool = True
 
@@ -126,6 +130,11 @@ class DocDataModule(pl.LightningDataModule):
         super().__init__()
 
         self.config = config
+
+        # Save hyperparameters for Lightning callbacks and checkpointing
+        # This makes batch_size and other params available via self.hparams
+        # Required by callbacks like BatchSizeFinder
+        self.save_hyperparameters(config.model_dump())
 
         self._train_ds: HFDataset | None = None
         self._val_ds: HFDataset | None = None
@@ -211,4 +220,48 @@ class DocDataModule(pl.LightningDataModule):
         dataset = getattr(self, attr_name)
         if dataset is None:
             dataset = cfg.setup_target()
+
+            # Apply limit_num_samples if configured
+            if self.config.limit_num_samples is not None:
+                dataset = self._apply_sample_limit(dataset, stage)
+
             setattr(self, attr_name, dataset)
+
+    def _apply_sample_limit(self, dataset: HFDataset, stage: Stage) -> HFDataset:
+        """Apply limit_num_samples to reduce dataset size for debugging.
+
+        Args:
+            dataset: Full HuggingFace dataset.
+            stage: Dataset stage (train/val/test) for logging.
+
+        Returns:
+            HFDataset: Limited dataset with specified number/fraction of samples.
+        """
+        limit = self.config.limit_num_samples
+        original_size = len(dataset)
+
+        # Calculate target size
+        if isinstance(limit, float):
+            # Fraction of dataset (e.g., 0.1 = 10%)
+            if not 0 < limit <= 1.0:
+                raise ValueError(f"limit_num_samples as float must be in (0, 1], got {limit}")
+            target_size = int(original_size * limit)
+        else:
+            # Absolute number of samples
+            target_size = min(limit, original_size)
+
+        if target_size <= 0:
+            raise ValueError(f"Invalid target_size={target_size} from limit_num_samples={limit}")
+
+        # Select subset
+        limited_dataset = dataset.select(range(target_size))
+
+        # Log the limitation
+        console = Console.with_prefix(self.__class__.__name__, "_apply_sample_limit")
+        console.set_verbose(self.config.verbose).set_debug(self.config.is_debug)
+        console.log(
+            f"Limited {stage} dataset: {original_size} → {target_size} samples "
+            f"({target_size / original_size * 100:.1f}%)"
+        )
+
+        return limited_dataset
