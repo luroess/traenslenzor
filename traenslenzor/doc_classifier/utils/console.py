@@ -3,7 +3,7 @@
 import inspect
 import traceback
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from devtools import pformat
 from rich.console import Console as RichConsole
@@ -18,8 +18,8 @@ class Console(RichConsole):
 
     is_debug: bool
     prefix: str | None = None
-    _pl_logger: "Logger | None" = None
-    _global_step: int = 0
+    _shared_pl_logger: ClassVar["Logger | None"] = None
+    _shared_global_step: ClassVar[int] = 0
 
     default_settings = {
         "theme": Theme(
@@ -48,6 +48,24 @@ class Console(RichConsole):
         self.verbose = True
         self.show_timestamps = False
         self.prefix = None
+
+    @property
+    def _pl_logger(self) -> "Logger | None":
+        """Shared logger instance across all consoles."""
+        return type(self)._shared_pl_logger
+
+    @_pl_logger.setter
+    def _pl_logger(self, logger: "Logger | None") -> None:
+        type(self)._shared_pl_logger = logger
+
+    @property
+    def _global_step(self) -> int:
+        """Shared global step across all consoles."""
+        return type(self)._shared_global_step
+
+    @_global_step.setter
+    def _global_step(self, value: int) -> None:
+        type(self)._shared_global_step = value
 
     @classmethod
     def with_prefix(cls, *parts: str) -> "Console":
@@ -124,6 +142,8 @@ class Console(RichConsole):
         """Pretty-print an object using the best available formatter."""
         if self.verbose:
             self.print(pformat(obj, **kwargs))
+        if self._pl_logger is not None:
+            self._log_to_lightning("info", pformat(obj, **kwargs))
 
     def dbg(self, message: str) -> None:
         """Emit a debug message when debug mode is enabled."""
@@ -181,46 +201,44 @@ class Console(RichConsole):
             traceback.format_list(relevant_frames[-2:]),
         )  # Show last 2 relevant frames
 
+    @classmethod
     def integrate_with_logger(
-        self,
+        cls,
         logger: "Logger",
         global_step: int = 0,
-    ) -> "Console":
-        """Integrate console with PyTorch Lightning logger for WandB/TensorBoard logging.
+    ) -> type["Console"]:
+        """Integrate all Console instances with PyTorch Lightning logger for WandB/TensorBoard logging.
+
+        This is a class method that sets the shared logger state for all Console instances.
 
         Args:
             logger: PyTorch Lightning logger instance (e.g., WandbLogger, TensorBoardLogger).
             global_step: Current training step for metric logging.
 
         Returns:
-            Self for method chaining.
+            Console class for method chaining.
 
         Example:
             ```python
-            # In your LightningModule
-            def on_train_start(self):
-                self.console.integrate_with_logger(self.logger, self.global_step)
+            # In your LightningModule.__init__
+            Console.integrate_with_logger(self.logger)
 
+            # In training_step
             def training_step(self, batch, batch_idx):
-                self.console.update_global_step(self.global_step)
-                self.console.log("Processing batch")  # → Terminal + WandB!
+                Console.update_global_step(self.global_step)
+                console = Console.with_prefix("training")
+                console.log("Processing batch")  # → Terminal + WandB!
             ```
         """
-        self._pl_logger = logger
-        self._global_step = global_step
-        return self
+        cls._shared_pl_logger = logger
+        cls.update_global_step(global_step)
+        return cls
 
-    def update_global_step(self, step: int) -> "Console":
-        """Update the global step for subsequent logs.
-
-        Args:
-            step: Current global training step.
-
-        Returns:
-            Self for method chaining.
-        """
-        self._global_step = step
-        return self
+    @classmethod
+    def update_global_step(cls, global_step: int) -> type["Console"]:
+        """Update the shared global step for all console instances."""
+        cls._shared_global_step = global_step
+        return cls
 
     def _log_to_lightning(self, level: str, message: str) -> None:
         """Log message to PyTorch Lightning logger.
@@ -230,6 +248,11 @@ class Console(RichConsole):
             message: Message content without formatting.
         """
         if self._pl_logger is None:
+            return
+
+        # Skip logging if message appears to be from Rich progress bar or internal Rich output
+        # Progress bars and other Rich widgets should not be logged to W&B
+        if not message or message.isspace():
             return
 
         # Construct metric name with prefix and level
