@@ -35,11 +35,6 @@ def paddle_ocr(lang: str, image: np.ndarray) -> Json:
     return results
 
 
-def bytes_to_numpy_image(data: bytes) -> np.ndarray:
-    arr = np.frombuffer(data, dtype=np.uint8)
-    return cv2.imdecode(arr, cv2.IMREAD_COLOR)
-
-
 def get_paddle_supported_langs() -> list[str]:
     # this is as ugly as it gets but paddle does not offer any api and the values are just hardcoded
     # we could try by exception but this sucks imho
@@ -78,11 +73,8 @@ def normalize_language(lang: str) -> str:
     return "latin"
 
 
-def ocr_from_bytes(lang: str, image: bytes) -> Optional[Any]:
+def run_ocr(lang: str, image: np.ndarray) -> Optional[Any]:
     lang = normalize_language(lang)
-
-    npimg = bytes_to_numpy_image(image)
-
     try:
         ocr_res = paddle_ocr(lang, npimg)
         return result_to_json(ocr_res)
@@ -94,14 +86,14 @@ def ocr_from_bytes(lang: str, image: bytes) -> Optional[Any]:
 if __name__ == "__main__":
     import os
 
-    def load_image_as_bytes(path: str) -> bytes:
+    def load_image_as_bytes(path: str) -> np.ndarray:
         with open(path, "rb") as f:
-            return f.read()
+            arr = np.frombuffer(f.read(), dtype=np.uint8)
+            return cv2.imdecode(arr, cv2.IMREAD_COLOR)
 
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    image_path = dir_path + "/test_image.png"
-    img_b = load_image_as_bytes(image_path)
-    npimg = bytes_to_numpy_image(img_b)
+    image_path = dir_path + "/../../test_images/test_image_ocr.png"
+    npimg = load_image_as_bytes(image_path)
     lang = normalize_language("hi")
     r = paddle_ocr(lang, npimg)
     j = result_to_json(r)
