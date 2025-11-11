@@ -208,6 +208,10 @@ uv run traenslenzor/doc_classifier/run.py \
 
 ## Resources
 
+### Guides
+
+- **[Progress Bar Customization Guide](PROGRESS_BAR_GUIDE.md)** – How to customize progress bars, add metrics using the `Metric` enum, and filter displayed metrics.
+
 ### RVL-CDIP Dataset
 
 - [Hugging Face :: chainyo/rvl-cdip](https://huggingface.co/datasets/chainyo/rvl-cdip) classification dataset (16 classes)
