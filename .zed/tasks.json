@@ -7,6 +7,14 @@
     "command": "uv run pytest -vs -o log_cli=true -o log_cli_level=\"INFO\""
   },
   {
+    "label": "Lint & Test types",
+    "command": "uv run ruff check . && uv run mypy"
+  },
+  {
+    "label": "Run App",
+    "command": "uv run python -m traenslenzor"
+  },
+  {
     "label": "Test CI",
     "command": "CI=true uv run pytest -vs -o log_cli=true -o log_cli_level=\"INFO\""
   },
