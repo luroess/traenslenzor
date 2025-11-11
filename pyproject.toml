@@ -13,6 +13,11 @@ dependencies = [
     "langchain-mcp-adapters>=0.1.12",
     "langchain-ollama>=1.0.0",
     "langgraph>=1.0.0",
+    "numpy>=1.24.0",
+    "pillow>=10.0.0",
+    "requests>=2.31.0",
+    "torch>=2.0.0",
+    "transformers>=4.30.0",
     "types-aiofiles>=25.1.0.20251011",
     "uvicorn>=0.37.0",
 ]
