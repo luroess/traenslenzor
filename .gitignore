@@ -221,7 +221,6 @@ __marimo__/
 # doc_classifier artifacts and cache
 .data/
 .logs/
-.configs/
 
 # docs
 main.pdf

@@ -160,3 +160,4 @@ class PathConfig(SingletonConfig):
 - [`/lightning-ai/torchmetrics`](https://context7.com/lightning-ai/torchmetrics)
 - [`albumentations.ai/docs`](https://context7.com/websites/albumentations_ai)
 - [`/huggingface/datasets`](https://context7.com/huggingface/datasets)
+- [`/rocm/pytorch`](https://context7.com/rocm/pytorch)
