@@ -57,8 +57,8 @@ def partial_mask(test_mask_image: PILImage) -> NDArray[np.uint8]:
 @pytest.fixture
 def empty_mask(sample_image: PILImage) -> NDArray[np.uint8]:
     """Empty mask for testing preservation of unmasked regions."""
-    h, w = sample_image.size
-    return np.zeros((1, w, h), dtype=np.uint8)
+    w, h = sample_image.size
+    return np.zeros((1, h, w), dtype=np.uint8)
 
 
 def test_init_loads_model_on_device(inpainter: Inpainter) -> None:

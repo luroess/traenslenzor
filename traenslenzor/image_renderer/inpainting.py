@@ -63,10 +63,10 @@ class Inpainter:
 
         Args:
             img: [H, W, C] RGB PIL Image
-            mask_in: [H, W] L mode PIL Image
+            mask_in: [1, H, W] uint8 numpy array with values 0 or 1
 
         Returns:
-            Inpainted RGB PIL Image
+            Inpainted image as a numpy array of shape [H, W, C], dtype float32
         """
         logger.debug("Starting inpaint_mask with img size=%s, mask size=%s", img.size, mask_in.size)
 
@@ -101,7 +101,7 @@ class Inpainter:
                 start = time.time()
                 inpainted_images: torch.Tensor = self.LaMa(image_tensor, mask_tensor)
                 end = time.time()
-            logger.info(f"JIT: Inpainting took {end - start:.3f} seconds")
+            logger.info("JIT: Inpainting took %.3f seconds", end - start)
         except Exception as e:
             logger.error("Inpainting failed: %s", e, exc_info=True)
             raise

@@ -63,7 +63,7 @@ class Inpainter:
             # Auto-detect model input size from model metadata
             input_shape = rmodel.get_inputs()[0].shape
             self.size = input_shape[2]  # Assumes shape is [batch, channels, height, width]
-            logger.info(f"Model input size: {self.size}x{self.size}")
+            logger.info("Model input size: %sx%s", self.size, self.size)
 
         except Exception as e:
             logger.error("Failed to load LaMa ONNX model: %s", e, exc_info=True)
