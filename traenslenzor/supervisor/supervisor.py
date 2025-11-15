@@ -6,7 +6,6 @@ from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRequest, dynamic_prompt
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.types import Command
 
 from traenslenzor.supervisor.llm import llm
 from traenslenzor.supervisor.state import SupervisorState
@@ -27,45 +26,35 @@ def context_aware_prompt(request: ModelRequest) -> str:
     )
 
     return f"""
-        You are a translation tool for images similar to Google Lens.  
-        Your task is to guide the user through the translation process step by step:
+    Task:
+        You are an image translation assistant.
+        Your goal is to turn an image with text in one language into an image in another language.
+        Do not imitate actions or describe intended tool use.
+        Whenever an action is required, output solely the tool invocation as JSON, with no additional text.
+        Only use the tools that are available to you.
 
-        1: Document Acquisition  
-        Ask the user to provide an image or document to process.
-
-        2: Language Acquisition
-        Set the language in the state via a tool to save it.
-
-        3: Preprocessing  
-        Offer options to preprocess the document (for example cropping, enhancing, or rotating). Continue only after the user confirms they are satisfied with the input.
-
-        4: Text Extraction  
-        Extract all text from the image and detect the font used.
-
-        5: Translation  
-        Translate the extracted text into the target language specified by the user.
-
-        6: Rendering  
-        Recreate the image by rendering the translated text in the original or a matching font style.
-
-        Always keep the workflow clear and keep the user informed on what they need to do next.
-        Decide what needs to be done next and call the appropriate tool.
-        When calling any tool that operates on the uploaded document, always supply the
-        stored document id from state (state["original_document"]). Do not reuse filesystem
-        paths once the document has been uploaded.
-        
-        Currently:
-            - {
-        f"the user has a document '{state.get('original_document', False)}' loaded"
+    Steps:
+        1. Ask the user to provide an image or document. Do not assume any file exists. Confirm the file is received.
+        2. Ask the user for the target language and save it.
+        3. Extract all text from the image and detect font type, size, and color. Show the text to the user for verification.
+        4. Translate the text into the target language, preserving formatting where possible.
+        5. Render the translated text on the image, matching the original font and style. Let the user review and request adjustments.
+    
+    Context:
+        - {
+        f"the user has the document '{state.get('original_document', False)}' loaded"
         if state.get("original_document", False)
         else "the user has no document selected"
     }
-            - {
+        - {
         f"the user has selected the language {state['language']}"
         if state.get("language", False)
         else "the user has no language selected"
     }
+        - No text has been extracted.
+        - The languages available for translation are "German", "English" and "French"
     """
+    # 3. Offer preprocessing options (crop, rotate, enhance). Only continue after the user confirms the image is ready.
 
 
 class Supervisor:
@@ -76,7 +65,7 @@ class Supervisor:
             checkpointer=MemorySaver(),
             state_schema=SupervisorState,
             # debug= True, # enhanced logging
-            middleware={context_aware_prompt},
+            middleware={context_aware_prompt},  # type: ignore
         )
 
 
@@ -102,17 +91,8 @@ async def run():
             {"messages": [{"role": "user", "content": user_input}]},
             config=config,
         )
-        while interrupts := result.get("__interrupt__"):
-            interrupt_value = interrupts[0].value
-            print("Agent: ", interrupt_value)
-            user_response = await loop.run_in_executor(None, input, "User: ")
-            result = await supervisor.agent.ainvoke(Command(resume=user_response), config=config)
 
         messages = result.get("messages", [])
         if messages:
             last_message = messages[-1]
             print("Agent: ", last_message.content)
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)

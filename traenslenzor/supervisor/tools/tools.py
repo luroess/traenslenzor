@@ -2,22 +2,12 @@ import logging
 
 from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import ToolMessage
-from langgraph.types import Command, interrupt
+from langgraph.types import Command
 
 from traenslenzor.supervisor.tools.document_loader import document_loader
 from traenslenzor.supervisor.tools.mcp import get_mcp_tools
 
 logger = logging.getLogger(__name__)
-
-
-@tool
-def request_user_input(prompt: str) -> str:
-    """Requests input from the user with the given prompt.
-    Args:
-        prompt (str): Question or answer to interact with the user.
-    """
-    logger.info(f"Asking user a question: {prompt}")
-    return interrupt(prompt)
 
 
 # 1. Stage
@@ -64,7 +54,9 @@ def font_extractor(document: str) -> str:
 # 4. Stage
 @tool
 def document_translator(document: str, target_language: str) -> str:
-    """Translates the document content to the target language."""
+    """
+    Translates the document content to the target language.
+    """
     return f"Document translated to {target_language}: {document}"
 
 
@@ -78,7 +70,6 @@ def document_image_renderer(document: str, format: str) -> str:
 async def get_tools():
     mcp_tools = await get_mcp_tools()
     return [
-        request_user_input,
         language_setter,
         document_loader,
         # document_preprocessor,
