@@ -11,7 +11,7 @@ import numpy as np
 # This is an ugly fix to make paddleocr compatible with langchain 1.0.0
 # https://github.com/PaddlePaddle/PaddleOCR/issues/16711#issuecomment-3446427004
 # This must be imported prior to paddleocr
-import traenslenzor.layout_detector.shim_langchain_backcomp  # noqa: F401
+import traenslenzor.text_extractor.shim_langchain_backcomp  # noqa: F401
 from paddleocr import PaddleOCR
 from pydantic import Json
 
