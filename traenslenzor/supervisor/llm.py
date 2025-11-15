@@ -1,4 +1,5 @@
 import logging
+import os
 
 import requests
 from langchain_ollama import ChatOllama
@@ -10,7 +11,7 @@ TEMPERATURE = 0
 
 BASE_MODEL = "llama3.1"
 MODEL_NAME = "traenslenzor_2000:0.1"
-OLLAMA_URL = "http://localhost:11434"
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 TEMPLATE = """
 {{- if or .System .Tools }}<|start_header_id|>system<|end_header_id|>
 {{- if .System }}
@@ -113,4 +114,5 @@ llm = ChatOllama(
     model=MODEL_NAME,
     temperature=TEMPERATURE,
     seed=SEED,
+    base_url=OLLAMA_URL,
 )
