@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 SEED = 69
 TEMPERATURE = 0
 
-BASE_MODEL = "llama3.1"
+BASE_MODEL = "llama3.2"
 MODEL_NAME = "traenslenzor_2000:0.1"
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 with open(Path(__file__).parent / "system.tmpl", "r", encoding="utf-8") as f:
@@ -69,7 +69,7 @@ def initialize_model():
 
 initialize_model()
 llm = ChatOllama(
-    model=MODEL_NAME,
+    model=BASE_MODEL,
     temperature=TEMPERATURE,
     seed=SEED,
     base_url=OLLAMA_URL,

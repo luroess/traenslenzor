@@ -26,6 +26,20 @@ def context_aware_prompt(request: ModelRequest) -> str:
     )
 
     return f"""
+    Task:
+        You are an image translation assistant.
+        Your goal is to turn an image with text in one language into an image in another language.
+        Do not imitate actions or describe intended tool use.
+        Whenever an action is required, output solely the tool invocation as JSON, with no additional text.
+        Only use the tools that are available to you.
+
+    Steps:
+        1. Ask the user to provide an image or document. Do not assume any file exists. Confirm the file is received.
+        2. Ask the user for the target language and save it.
+        3. Extract all text from the image and detect font type, size, and color. Show the text to the user for verification.
+        4. Translate the text into the target language, preserving formatting where possible.
+        5. Render the translated text on the image, matching the original font and style. Let the user review and request adjustments.
+    
     Context:
         - {
         f"the user has the document '{state.get('original_document', False)}' loaded"
@@ -39,31 +53,8 @@ def context_aware_prompt(request: ModelRequest) -> str:
     }
         - No text has been extracted.
         - The languages available for translation are "German", "English" and "French"
-    Task:
-        You are a translation tool for images similar to Google Lens.  
-        Your task is to decide what tool to call next for to achieve the following agenda:
-
-        1: Document Acquisition  
-        Ask the user to provide an image or document to process.
-
-        2: Language Acquisition
-        Set the language in the state via a tool to save it.
-
-        3: Preprocessing  
-        Offer options to preprocess the document (for example cropping, enhancing, or rotating). Continue only after the user confirms they are satisfied with the input.
-
-        4: Text Extraction  
-        Extract all text from the image and detect the font used.
-
-        5: Translation  
-        Translate the extracted text into the target language specified by the user.
-
-        6: Rendering  
-        Recreate the image by rendering the translated text in the original or a matching font style.
-
-        Always keep the workflow clear and keep the user informed on what they need to do next.
-        Decide what needs to be done next and call the appropriate tool or ask the user an appropriate question.
     """
+    # 3. Offer preprocessing options (crop, rotate, enhance). Only continue after the user confirms the image is ready.
 
 
 class Supervisor:

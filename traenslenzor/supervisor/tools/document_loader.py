@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 @tool
 async def document_loader(filepath: str, runtime: ToolRuntime) -> Command:
-    """Loads a document from the given filepath."""
+    """Loads a document from the given filepath collected from the user."""
     logger.info(f"Trying to load file: '{filepath}'")
 
     try:
