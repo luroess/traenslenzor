@@ -27,8 +27,22 @@ def context_aware_prompt(request: ModelRequest) -> str:
     )
 
     return f"""
+    Context:
+        - {
+        f"the user has the document '{state.get('original_document', False)}' loaded"
+        if state.get("original_document", False)
+        else "the user has no document selected"
+    }
+        - {
+        f"the user has selected the language {state['language']}"
+        if state.get("language", False)
+        else "the user has no language selected"
+    }
+        - No text has been extracted.
+        - The languages available for translation are "German", "English" and "French"
+    Task:
         You are a translation tool for images similar to Google Lens.  
-        Your task is to guide the user through the translation process step by step:
+        Your task is to decide what tool to call next for to achieve the following agenda:
 
         1: Document Acquisition  
         Ask the user to provide an image or document to process.
@@ -50,21 +64,6 @@ def context_aware_prompt(request: ModelRequest) -> str:
 
         Always keep the workflow clear and keep the user informed on what they need to do next.
         Decide what needs to be done next and call the appropriate tool.
-        When calling any tool that operates on the uploaded document, always supply the
-        stored document id from state (state["original_document"]). Do not reuse filesystem
-        paths once the document has been uploaded.
-        
-        Currently:
-            - {
-        f"the user has a document '{state.get('original_document', False)}' loaded"
-        if state.get("original_document", False)
-        else "the user has no document selected"
-    }
-            - {
-        f"the user has selected the language {state['language']}"
-        if state.get("language", False)
-        else "the user has no language selected"
-    }
     """
 
 
@@ -76,7 +75,7 @@ class Supervisor:
             checkpointer=MemorySaver(),
             state_schema=SupervisorState,
             # debug= True, # enhanced logging
-            middleware={context_aware_prompt},
+            middleware={context_aware_prompt},  # type: ignore
         )
 
 
@@ -112,7 +111,3 @@ async def run():
         if messages:
             last_message = messages[-1]
             print("Agent: ", last_message.content)
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)

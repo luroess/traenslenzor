@@ -11,13 +11,27 @@ logger = logging.getLogger(__name__)
 
 
 @tool
-def request_user_input(prompt: str) -> str:
+def request_user_input(prompt: str, runtime: ToolRuntime) -> Command:
     """Requests input from the user with the given prompt.
     Args:
         prompt (str): Question or answer to interact with the user.
     """
     logger.info(f"Asking user a question: {prompt}")
-    return interrupt(prompt)
+
+    user_response = interrupt(prompt)
+
+    logger.info(f"Got awnser from user: '{user_response}'")
+
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(
+                    content=user_response,
+                    tool_call_id=runtime.tool_call_id,
+                )
+            ],
+        }
+    )
 
 
 # 1. Stage
@@ -64,7 +78,9 @@ def font_extractor(document: str) -> str:
 # 4. Stage
 @tool
 def document_translator(document: str, target_language: str) -> str:
-    """Translates the document content to the target language."""
+    """
+    Translates the document content to the target language.
+    """
     return f"Document translated to {target_language}: {document}"
 
 
