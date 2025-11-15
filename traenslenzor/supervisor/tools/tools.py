@@ -2,36 +2,12 @@ import logging
 
 from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import ToolMessage
-from langgraph.types import Command, interrupt
+from langgraph.types import Command
 
 from traenslenzor.supervisor.tools.document_loader import document_loader
 from traenslenzor.supervisor.tools.mcp import get_mcp_tools
 
 logger = logging.getLogger(__name__)
-
-
-@tool
-def request_user_input(prompt: str, runtime: ToolRuntime) -> Command:
-    """Requests input from the user with the given prompt.
-    Args:
-        prompt (str): Question or answer to interact with the user.
-    """
-    logger.info(f"Asking user a question: {prompt}")
-
-    user_response = interrupt(prompt)
-
-    logger.info(f"Got awnser from user: '{user_response}'")
-
-    return Command(
-        update={
-            "messages": [
-                ToolMessage(
-                    content=user_response,
-                    tool_call_id=runtime.tool_call_id,
-                )
-            ],
-        }
-    )
 
 
 # 1. Stage
@@ -94,7 +70,6 @@ def document_image_renderer(document: str, format: str) -> str:
 async def get_tools():
     mcp_tools = await get_mcp_tools()
     return [
-        request_user_input,
         language_setter,
         document_loader,
         # document_preprocessor,

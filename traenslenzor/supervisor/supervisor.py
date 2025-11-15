@@ -6,7 +6,6 @@ from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRequest, dynamic_prompt
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.types import Command
 
 from traenslenzor.supervisor.llm import llm
 from traenslenzor.supervisor.state import SupervisorState
@@ -63,7 +62,7 @@ def context_aware_prompt(request: ModelRequest) -> str:
         Recreate the image by rendering the translated text in the original or a matching font style.
 
         Always keep the workflow clear and keep the user informed on what they need to do next.
-        Decide what needs to be done next and call the appropriate tool.
+        Decide what needs to be done next and call the appropriate tool or ask the user an appropriate question.
     """
 
 
@@ -101,11 +100,6 @@ async def run():
             {"messages": [{"role": "user", "content": user_input}]},
             config=config,
         )
-        while interrupts := result.get("__interrupt__"):
-            interrupt_value = interrupts[0].value
-            print("Agent: ", interrupt_value)
-            user_response = await loop.run_in_executor(None, input, "User: ")
-            result = await supervisor.agent.ainvoke(Command(resume=user_response), config=config)
 
         messages = result.get("messages", [])
         if messages:
