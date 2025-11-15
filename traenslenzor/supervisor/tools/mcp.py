@@ -1,12 +1,12 @@
 from langchain_mcp_adapters.client import Connection, MultiServerMCPClient
 
 from traenslenzor.image_renderer.server import IMAGE_RENDERER_BASE_PATH
-from traenslenzor.layout_detector.layout_detector import LAYOUT_DETECTOR_BASE_PATH
+from traenslenzor.text_extractor.text_extractor import TEXT_EXTRACTOR_BASE_PATH
 
 MCP_SERVERS: dict[str, Connection] = {
-    "layout_detector": {
+    "text_extractor": {
         "transport": "streamable_http",
-        "url": LAYOUT_DETECTOR_BASE_PATH,
+        "url": TEXT_EXTRACTOR_BASE_PATH,
     },
     "image_renderer": {
         "transport": "streamable_http",

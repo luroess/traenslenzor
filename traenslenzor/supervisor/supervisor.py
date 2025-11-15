@@ -3,11 +3,14 @@ import logging
 from typing import cast
 
 from langchain.agents import create_agent
-from langchain.agents.middleware import ModelRequest, dynamic_prompt
+from langchain.agents.middleware import AgentState, ModelRequest, before_agent, dynamic_prompt
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.runtime import Runtime
 from langgraph.types import Command
 
+from traenslenzor.file_server.client import SessionClient
+from traenslenzor.file_server.session_state import SessionState
 from traenslenzor.supervisor.llm import llm
 from traenslenzor.supervisor.state import SupervisorState
 from traenslenzor.supervisor.tools.tools import get_tools
@@ -15,56 +18,48 @@ from traenslenzor.supervisor.tools.tools import get_tools
 logger = logging.getLogger(__name__)
 
 
+@before_agent
+async def initialize_session(state: AgentState, runtime: Runtime) -> Command:
+    logger.info("Creating a new session")
+    return Command(update={"session_id": await SessionClient.create(SessionState())})
+
+
 @dynamic_prompt
-def context_aware_prompt(request: ModelRequest) -> str:
+async def context_aware_prompt(request: ModelRequest) -> str:
     state = cast(SupervisorState, request.state)
-    logging.info("Currently:")
-    logging.info(
-        f"""  - {f"the user has a document '{state.get('original_document', False)}' loaded" if state.get("original_document", False) else "the user has no document selected"}"""
-    )
-    logging.info(
-        f"""  - {f"the user has selected the language {state['language']}" if state.get("language", False) else "the user has no language selected"}"""
-    )
+    session_id = state.get("session_id")
+    session = await SessionClient.get(session_id)
+
+    formatted_session = format_session(session_id, session)
+    logger.info("Current Session:")
+    logger.info(formatted_session)
 
     return f"""
-        You are a translation tool for images similar to Google Lens.  
-        Your task is to guide the user through the translation process step by step:
+    Task:
+        You are an image translation assistant.
+        Your goal is to turn an image with text in one language into an image in another language.
+        Do not imitate actions or describe intended tool use.
+        Whenever an action is required, output solely the tool invocation as JSON, with no additional text.
+        Execute the steps in order as far as possible.
 
-        1: Document Acquisition  
-        Ask the user to provide an image or document to process.
+    Steps:
+        1. Ask the user to provide an image or document. Do not assume any file exists.
+        2. Retrieve the target language to translate the document into FROM THE USER and save it. Do not assume any language.
+        3. Extract all text from the image and detect font type, size, and color. Show the text to the user for verification.
+        4. Translate the text into the target language, preserving formatting where possible.
+        5. Render the translated text on the image, matching the original font and style. Let the user review and request adjustments.
+    
+    Context:
+        {formatted_session}
+    """
+    # 3. Offer preprocessing options (crop, rotate, enhance). Only continue after the user confirms the image is ready.
 
-        2: Language Acquisition
-        Set the language in the state via a tool to save it.
 
-        3: Preprocessing  
-        Offer options to preprocess the document (for example cropping, enhancing, or rotating). Continue only after the user confirms they are satisfied with the input.
-
-        4: Text Extraction  
-        Extract all text from the image and detect the font used.
-
-        5: Translation  
-        Translate the extracted text into the target language specified by the user.
-
-        6: Rendering  
-        Recreate the image by rendering the translated text in the original or a matching font style.
-
-        Always keep the workflow clear and keep the user informed on what they need to do next.
-        Decide what needs to be done next and call the appropriate tool.
-        When calling any tool that operates on the uploaded document, always supply the
-        stored document id from state (state["original_document"]). Do not reuse filesystem
-        paths once the document has been uploaded.
-        
-        Currently:
-            - {
-        f"the user has a document '{state.get('original_document', False)}' loaded"
-        if state.get("original_document", False)
-        else "the user has no document selected"
-    }
-            - {
-        f"the user has selected the language {state['language']}"
-        if state.get("language", False)
-        else "the user has no language selected"
-    }
+def format_session(session_id: str, session: SessionState) -> str:
+    return f"""
+        - the current session_id is '{session_id}'
+        - {f"the user has selected the language {session.language}" if session.language else "the user has no language selected"}
+        - {"the user has a document loaded" if session.rawDocumentId else "the user has no document selected"}
     """
 
 
@@ -76,7 +71,7 @@ class Supervisor:
             checkpointer=MemorySaver(),
             state_schema=SupervisorState,
             # debug= True, # enhanced logging
-            middleware={context_aware_prompt},
+            middleware={initialize_session, context_aware_prompt},  # type: ignore
         )
 
 
@@ -102,17 +97,8 @@ async def run():
             {"messages": [{"role": "user", "content": user_input}]},
             config=config,
         )
-        while interrupts := result.get("__interrupt__"):
-            interrupt_value = interrupts[0].value
-            print("Agent: ", interrupt_value)
-            user_response = await loop.run_in_executor(None, input, "User: ")
-            result = await supervisor.agent.ainvoke(Command(resume=user_response), config=config)
 
         messages = result.get("messages", [])
         if messages:
             last_message = messages[-1]
             print("Agent: ", last_message.content)
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
