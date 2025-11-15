@@ -9,7 +9,7 @@ import types
 m1 = types.ModuleType("langchain.docstore.document")
 from langchain_core.documents import Document  # noqa: E402, I001
 
-m1.Document = Document  # type: ignore
+m1.Document = Document
 sys.modules["langchain.docstore.document"] = m1
 
 # langchain.text_splitter -> RecursiveCharacterTextSplitter

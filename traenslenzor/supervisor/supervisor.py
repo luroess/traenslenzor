@@ -76,7 +76,7 @@ class Supervisor:
             checkpointer=MemorySaver(),
             state_schema=SupervisorState,
             # debug= True, # enhanced logging
-            middleware={context_aware_prompt},  # type: ignore
+            middleware={context_aware_prompt},
         )
 
 
