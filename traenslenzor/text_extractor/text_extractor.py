@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 async def extract_text(document_reference: str) -> str:
     """Extracts text from a document.
     Args:
-        language (str, optional): Language of the original document.
         document_reference (str): ID of the document to process (e.g., "c12f4b1e-8f47-4a92-b8c1-6e3e9d2f91a4").
     Returns:
         str: ID of the new document containing the extracted text.

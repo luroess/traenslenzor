@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 # 1. Stage
 @tool
-def language_setter(language: str, runtime: ToolRuntime) -> Command:
-    """Sets the language so it can be recalled later.
+def set_target_language(language: str, runtime: ToolRuntime) -> Command:
+    """Sets the translation target language so it can be recalled later.
     Args:
         language (str): the language to remember
     """
@@ -32,25 +32,24 @@ def language_setter(language: str, runtime: ToolRuntime) -> Command:
 
 
 @tool
-def memory_setter(key: str, value: str, runtime: ToolRuntime) -> Command:
+def store_in_memory(key: str, value: str, runtime: ToolRuntime) -> Command:
     """Stores relevant information in memory for later usage.
     Args:
         key (str): the key by which the infromation is stored.
         value (str): the value that will be rememberd.
     """
     logger.info(f"Setting {key} to {value}")
-    mem = runtime.state["memory"]
-    mem[key] = value
+    new_mem = {**runtime.state.get("memory", {}), key: value}
 
     return Command(
         update={
             "messages": [
                 ToolMessage(
-                    content=f"Successfully remebered '{value}' with the key '{key}'",
+                    content="Remembered",
                     tool_call_id=runtime.tool_call_id,
                 )
             ],
-            "memory": mem,
+            "memory": new_mem,
         }
     )
 
@@ -94,9 +93,9 @@ def document_image_renderer(document: str, format: str) -> str:
 async def get_tools():
     mcp_tools = await get_mcp_tools()
     return [
-        language_setter,
+        set_target_language,
         document_loader,
-        memory_setter,
+        store_in_memory,
         # document_preprocessor,
         document_translator,
         document_classifier,

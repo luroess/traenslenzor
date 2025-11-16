@@ -32,11 +32,11 @@ def context_aware_prompt(request: ModelRequest) -> str:
         Your goal is to turn an image with text in one language into an image in another language.
         Do not imitate actions or describe intended tool use.
         Whenever an action is required, output solely the tool invocation as JSON, with no additional text.
-        Set important information like ids in memory so you can recall them later.
+        After a tool response, store ID's with a description (e.g., "original_image_id", "extracted_text_id"). e.g.{{"name": ..., "parameters": ...}}
 
     Steps:
         1. Ask the user to provide an image or document. Do not assume any file exists.
-        2. Ask the user for the target language and save it.
+        2. Retrieve the target language to translate the document into FROM THE USER and save it.
         3. Extract all text from the image and detect font type, size, and color. Show the text to the user for verification.
         4. Translate the text into the target language, preserving formatting where possible.
         5. Render the translated text on the image, matching the original font and style. Let the user review and request adjustments.

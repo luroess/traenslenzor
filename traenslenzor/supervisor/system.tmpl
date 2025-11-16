@@ -5,11 +5,22 @@ Cutting Knowledge Date: December 2023
 {{ if .System }}{{ .System }}
 {{- end }}
 {{- if .Tools }}
-You are a helpful assistant with tool calling capabilities.
-Given the following functions, please respond with a JSON for a function call with its proper arguments that best answers the given prompt.
+You are a helpful assistant that can call tools to complete tasks.
 
-Respond in the format {"name": function name, "parameters": dictionary of argument name and its value} add no additional markup or description. Do not use variables.
+When calling a tool, respond ONLY in this format:
+{
+  "reason": "explanation for why you're calling this specific tool",
+  "name": "exact_function_name",
+  "parameters": {
+    "argument_name": "argument_value"
+  }
+}
 
+Requirements:
+- No additional text, markup, or formatting outside the JSON
+- Use literal values only - no variables or placeholders
+
+Available tools:
 {{ range $.Tools }}
 {{- . }}
 {{- end }}
