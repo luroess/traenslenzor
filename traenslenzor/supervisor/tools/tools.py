@@ -2,7 +2,7 @@ import logging
 
 from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import ToolMessage
-from langgraph.types import Command, interrupt
+from langgraph.types import Command
 
 from traenslenzor.supervisor.tools.document_loader import document_loader
 from traenslenzor.supervisor.tools.mcp import get_mcp_tools
@@ -10,20 +10,10 @@ from traenslenzor.supervisor.tools.mcp import get_mcp_tools
 logger = logging.getLogger(__name__)
 
 
-@tool
-def request_user_input(prompt: str) -> str:
-    """Requests input from the user with the given prompt.
-    Args:
-        prompt (str): Question or answer to interact with the user.
-    """
-    logger.info(f"Asking user a question: {prompt}")
-    return interrupt(prompt)
-
-
 # 1. Stage
 @tool
-def language_setter(language: str, runtime: ToolRuntime) -> Command:
-    """Sets the language so it can be recalled later.
+def set_target_language(language: str, runtime: ToolRuntime) -> Command:
+    """Sets the translation target language so it can be recalled later.
     Args:
         language (str): the language to remember
     """
@@ -37,6 +27,29 @@ def language_setter(language: str, runtime: ToolRuntime) -> Command:
                 )
             ],
             "language": language,
+        }
+    )
+
+
+@tool
+def store_in_memory(key: str, value: str, runtime: ToolRuntime) -> Command:
+    """Stores relevant information in memory for later usage.
+    Args:
+        key (str): the key by which the infromation is stored.
+        value (str): the value that will be rememberd.
+    """
+    logger.info(f"Setting {key} to {value}")
+    new_mem = {**runtime.state.get("memory", {}), key: value}
+
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(
+                    content="Remembered",
+                    tool_call_id=runtime.tool_call_id,
+                )
+            ],
+            "memory": new_mem,
         }
     )
 
@@ -64,7 +77,9 @@ def font_extractor(document: str) -> str:
 # 4. Stage
 @tool
 def document_translator(document: str, target_language: str) -> str:
-    """Translates the document content to the target language."""
+    """
+    Translates the document content to the target language.
+    """
     return f"Document translated to {target_language}: {document}"
 
 
@@ -78,9 +93,9 @@ def document_image_renderer(document: str, format: str) -> str:
 async def get_tools():
     mcp_tools = await get_mcp_tools()
     return [
-        request_user_input,
-        language_setter,
+        set_target_language,
         document_loader,
+        store_in_memory,
         # document_preprocessor,
         document_translator,
         document_classifier,
