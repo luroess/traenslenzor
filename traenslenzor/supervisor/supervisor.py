@@ -17,13 +17,14 @@ logger = logging.getLogger(__name__)
 @dynamic_prompt
 def context_aware_prompt(request: ModelRequest) -> str:
     state = cast(SupervisorState, request.state)
-    logging.info("Currently:")
-    logging.info(
-        f"""  - {f"the user has a document '{state.get('original_document', False)}' loaded" if state.get("original_document", False) else "the user has no document selected"}"""
-    )
-    logging.info(
+    mem = format_memory(state.get("memory", {}))
+    logger.info("Currently:")
+    logger.info(
         f"""  - {f"the user has selected the language {state['language']}" if state.get("language", False) else "the user has no language selected"}"""
     )
+    logger.info("The llm has stored the following in memory")
+    logger.info(mem)
+    logger.info("last message: %s", state.get("messages", [])[-1])
 
     return f"""
     Task:
@@ -31,10 +32,10 @@ def context_aware_prompt(request: ModelRequest) -> str:
         Your goal is to turn an image with text in one language into an image in another language.
         Do not imitate actions or describe intended tool use.
         Whenever an action is required, output solely the tool invocation as JSON, with no additional text.
-        Only use the tools that are available to you.
+        Set important information like ids in memory so you can recall them later.
 
     Steps:
-        1. Ask the user to provide an image or document. Do not assume any file exists. Confirm the file is received.
+        1. Ask the user to provide an image or document. Do not assume any file exists.
         2. Ask the user for the target language and save it.
         3. Extract all text from the image and detect font type, size, and color. Show the text to the user for verification.
         4. Translate the text into the target language, preserving formatting where possible.
@@ -42,19 +43,26 @@ def context_aware_prompt(request: ModelRequest) -> str:
     
     Context:
         - {
-        f"the user has the document '{state.get('original_document', False)}' loaded"
-        if state.get("original_document", False)
-        else "the user has no document selected"
-    }
-        - {
         f"the user has selected the language {state['language']}"
         if state.get("language", False)
         else "the user has no language selected"
     }
-        - No text has been extracted.
         - The languages available for translation are "German", "English" and "French"
+    Memory:\n{mem}
     """
     # 3. Offer preprocessing options (crop, rotate, enhance). Only continue after the user confirms the image is ready.
+
+
+def format_memory(memory: dict[str, str]) -> str:
+    default = "        No memory entries yet."
+    mem = default
+    for key, value in memory.items():
+        entry = f"        - '{key}': '{value}'"
+        if mem == default:
+            mem = entry
+        else:
+            mem = "\n" + entry
+    return mem
 
 
 class Supervisor:

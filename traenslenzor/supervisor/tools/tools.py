@@ -31,6 +31,30 @@ def language_setter(language: str, runtime: ToolRuntime) -> Command:
     )
 
 
+@tool
+def memory_setter(key: str, value: str, runtime: ToolRuntime) -> Command:
+    """Stores relevant information in memory for later usage.
+    Args:
+        key (str): the key by which the infromation is stored.
+        value (str): the value that will be rememberd.
+    """
+    logger.info(f"Setting {key} to {value}")
+    mem = runtime.state["memory"]
+    mem[key] = value
+
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(
+                    content=f"Successfully remebered '{value}' with the key '{key}'",
+                    tool_call_id=runtime.tool_call_id,
+                )
+            ],
+            "memory": mem,
+        }
+    )
+
+
 # # 2. Stage
 # @tool
 # def document_preprocessor(document: str) -> str:
@@ -72,6 +96,7 @@ async def get_tools():
     return [
         language_setter,
         document_loader,
+        memory_setter,
         # document_preprocessor,
         document_translator,
         document_classifier,

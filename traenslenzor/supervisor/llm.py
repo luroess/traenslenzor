@@ -69,7 +69,7 @@ def initialize_model():
 
 initialize_model()
 llm = ChatOllama(
-    model=BASE_MODEL,
+    model=MODEL_NAME,
     temperature=TEMPERATURE,
     seed=SEED,
     base_url=OLLAMA_URL,
