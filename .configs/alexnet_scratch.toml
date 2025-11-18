@@ -59,6 +59,7 @@ verbose    = true
     [datamodule_config.train_ds]
         [datamodule_config.train_ds.transform_config]
         # Aggressive augmentation for scratch training
+        transform_type    = "train"
         p_color_jitter    = 0.5
         p_perspective     = 0.3
         p_affine          = 0.3

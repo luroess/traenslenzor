@@ -1,0 +1,97 @@
+# ResNet-50 Fine-tuning Configuration
+# Fine-tuning a pretrained model requires lower learning rates
+# ResNet-50 has strong ImageNet features, so careful fine-tuning is key
+
+seed     = 42
+is_debug = false
+verbose  = true
+run_name = "resnet50-finetune-train"
+stage    = "train"
+
+[trainer_config]
+is_debug                = false
+fast_dev_run            = false
+accelerator             = "auto"
+devices                 = 1
+strategy                = "auto"
+max_epochs              = 50        # Fine-tuning needs fewer epochs
+precision               = "32-true"
+accumulate_grad_batches = 1
+log_every_n_steps       = 50
+check_val_every_n_epoch = 1
+use_wandb               = true
+
+    [trainer_config.callbacks]
+    use_model_checkpoint    = true
+    checkpoint_monitor      = "val/loss"
+    checkpoint_mode         = "min"
+    checkpoint_filename     = "resnet50-finetune-epoch={epoch}-val_loss={val/loss:.2f}"
+    checkpoint_save_top_k   = 3
+    use_early_stopping      = true
+    early_stopping_monitor  = "val/loss"
+    early_stopping_mode     = "min"
+    early_stopping_patience = 10
+    use_lr_monitor          = true
+    lr_logging_interval     = "step"
+    use_rich_progress_bar   = true
+    use_tqdm_progress_bar   = false
+    tqdm_refresh_rate       = 1
+    use_rich_model_summary  = true
+    rich_summary_max_depth  = 1
+    use_batch_size_finder   = false
+    batch_size_mode         = "power"
+    batch_size_init_val     = 32
+    batch_size_max_trials   = 25
+    # Enable backbone fine-tuning for gradual unfreezing
+    use_backbone_finetuning    = false # TODO: need some changes to use that feature
+    backbone_unfreeze_at_epoch = 10     # Unfreeze backbone after 10 epochs
+    backbone_train_bn          = true   # Continue training batch norm layers
+    use_timer                  = false
+    timer_interval             = "step"
+
+    [trainer_config.wandb_config]
+    project = "doc-class-detector"
+    entity  = "traenslenzor"
+    tags    = ["resnet50", "finetune", "imagenet-pretrained", "rvl-cdip"]
+    notes   = "Fine-tuning ResNet-50 (ImageNet pretrained) on RVL-CDIP document classification"
+
+[module_config]
+num_classes     = 16
+backbone        = "resnet50" # BackboneType.RESNET50
+train_head_only = true       # Start with head-only, backbone unfreezes at epoch 10
+use_pretrained  = true       # Use ImageNet pretrained weights
+
+    [module_config.optimizer]
+    # Lower LR for fine-tuning pretrained model
+    learning_rate = 0.0003 # 3e-4
+    weight_decay  = 0.0001 # Light regularization
+
+    [module_config.scheduler]
+    # OneCycleLR with conservative schedule for fine-tuning
+    max_lr           = 0.001  # Peak at ~3x base LR (more conservative than scratch)
+    base_momentum    = 0.85
+    max_momentum     = 0.95
+    div_factor       = 10.0   # Start at max_lr/10 = 0.0001
+    final_div_factor = 1000.0 # End at max_lr/(10*1000) = 1e-7
+    pct_start        = 0.2    # 20% warmup (less warmup needed for pretrained)
+    anneal_strategy  = "cos"
+
+[datamodule_config]
+batch_size  = 48
+pin_memory  = true
+is_debug    = false
+verbose     = true
+
+    [datamodule_config.train_ds]
+    split       = "train"
+
+        [datamodule_config.train_ds.transform_config]
+        transform_type = "train"
+        # Moderate augmentation for fine-tuning
+        height              = 224
+        width               = 224
+        always_apply_resize = true
+        p_color_jitter      = 0.3
+        p_perspective       = 0.2
+        p_affine            = 0.2
+        p_horizontal_flip   = 0.5
