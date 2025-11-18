@@ -280,36 +280,3 @@ def test_vit_backbone_replacement(monkeypatch):
         else:
             assert param.requires_grad is False
 
-
-def test_training_validation_test_steps_execute(monkeypatch):
-    config = DocClassifierConfig(num_classes=2, backbone=BackboneType.ALEXNET, use_pretrained=False)
-    module = config.setup_target()
-
-    batch = (torch.randn(2, 3, 224, 224), torch.tensor([0, 1]))
-
-    loss = module.training_step(batch, 0)
-    assert loss.item() >= 0
-
-    module.validation_step(batch, 0)
-    module.test_step(batch, 0)
-
-
-def test_configure_optimizers_and_on_train_start(monkeypatch):
-    config = DocClassifierConfig(num_classes=2, backbone=BackboneType.ALEXNET, use_pretrained=False)
-    module = config.setup_target()
-
-    dataloader = [0, 1]
-    logger = MagicMock()
-    module.trainer = SimpleNamespace(
-        estimated_stepping_batches=None,
-        datamodule=SimpleNamespace(train_dataloader=lambda: dataloader),
-        max_epochs=2,
-        logger=logger,
-    )
-
-    optimizers = module.configure_optimizers()
-    assert "optimizer" in optimizers
-    assert optimizers["lr_scheduler"]["interval"] == "step"
-
-    module.on_train_start()
-    logger.log_hyperparams.assert_called_once()

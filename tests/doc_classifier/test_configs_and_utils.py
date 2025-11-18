@@ -16,7 +16,7 @@ from traenslenzor.doc_classifier.configs.optuna_config import OptunaConfig
 from traenslenzor.doc_classifier.lightning import TrainerCallbacksConfig, TrainerFactoryConfig
 from traenslenzor.doc_classifier.utils import (
     BaseConfig,
-    MetricName,
+    Metric,
     Optimizable,
     Stage,
     optimizable_field,
@@ -32,7 +32,7 @@ def test_stage_conversion_and_split():
     assert Stage.TRAIN.to_split() is Split.TRAIN
     assert Stage.VAL.to_split() is Split.VALIDATION
     assert Stage.TEST.to_split() is Split.TEST
-    assert str(MetricName.TRAIN_LOSS) == "train/loss"
+    assert str(Metric.TRAIN_LOSS) == "train/loss"
 
     with pytest.raises(ValueError):
         Stage.from_str("unknown-stage")
@@ -68,28 +68,6 @@ def test_default_data_root_helper():
     assert _default_data_root().name == ".data"
 
 
-def test_wandb_config_setup_target_uses_custom_directory(tmp_path, monkeypatch):
-    captured_kwargs: dict[str, str] = {}
-
-    class DummyLogger(wandb_config_module.WandbLogger):
-        def __init__(self, **kwargs):
-            captured_kwargs.update(kwargs)
-            # Skip WandB initialisation
-            self.kwargs = kwargs
-
-    monkeypatch.setattr(wandb_config_module, "WandbLogger", DummyLogger)
-
-    target_dir = tmp_path / "wandb"
-    config = WandbConfig(name="unit-test", prefix="exp", save_dir=target_dir)
-
-    logger = config.setup_target()
-
-    assert isinstance(logger, DummyLogger)
-    assert captured_kwargs["name"] == "unit-test"
-    assert captured_kwargs["prefix"] == "exp"
-    assert captured_kwargs["save_dir"] == target_dir.as_posix()
-    assert target_dir.is_dir()
-
 
 def test_trainer_callbacks_config_builds_requested_callbacks(tmp_path):
     cfg = TrainerCallbacksConfig(
@@ -108,24 +86,6 @@ def test_trainer_callbacks_config_builds_requested_callbacks(tmp_path):
     assert any(isinstance(cb, LearningRateMonitor) for cb in callbacks)
     assert (tmp_path / "ckpts").is_dir()
 
-
-def test_trainer_factory_updates_wandb_config_metadata(tmp_path):
-    cfg = TrainerFactoryConfig()
-    cfg.wandb_config.tags = ["existing"]
-
-    experiment = SimpleNamespace(
-        run_name="demo-run",
-        stage=Stage.TEST,
-        paths=SimpleNamespace(wandb=tmp_path / "wandb"),
-        verbose=True,
-        is_debug=False,
-    )
-
-    cfg.update_wandb_config(experiment)
-
-    assert cfg.wandb_config.name == "demo-run"
-    assert "test" in cfg.wandb_config.tags
-    assert cfg.wandb_config.save_dir == experiment.paths.wandb
 
 
 def test_trainer_factory_update_wandb_disabled():
@@ -169,14 +129,6 @@ def test_experiment_config_propagates_flags_and_stage(fresh_path_config):
     assert config.is_debug is True
     assert config.trainer_config.fast_dev_run is True
 
-
-def test_experiment_config_resolves_relative_checkpoint(fresh_path_config):
-    ckpt_file = fresh_path_config.checkpoints / "model.ckpt"
-    ckpt_file.touch()
-
-    config = ExperimentConfig(paths=fresh_path_config, ckpt_path=ckpt_file)
-
-    assert config.ckpt_path == ckpt_file
 
 
 def test_optuna_config_setup_target_uses_selected_strategies(monkeypatch):

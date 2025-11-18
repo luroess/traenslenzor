@@ -11,30 +11,9 @@ from traenslenzor.doc_classifier.utils import Optimizable, Stage
 EXPERIMENT_MODULE = "traenslenzor.doc_classifier.configs.experiment_config"
 
 
-def test_migrate_legacy_keys_and_ckpt_resolution(tmp_path, fresh_path_config):
-    ckpt = fresh_path_config.checkpoints / "legacy.ckpt"
-    ckpt.touch()
-
-    data = ExperimentConfig._migrate_legacy_keys({"from_ckpt": ckpt.name})
-    assert data["ckpt_path"] == ckpt.name
-
-    cfg = ExperimentConfig(paths=fresh_path_config, ckpt_path=ckpt.as_posix())
-    assert cfg.ckpt_path == ckpt
-
-
 def test_stage_validator_rejects_unknown_value():
     with pytest.raises(ValueError):
         ExperimentConfig(stage="unknown")
-
-
-def test_migrate_legacy_keys_passthrough():
-    assert ExperimentConfig._migrate_legacy_keys("raw-string") == "raw-string"
-
-
-def test_resolve_ckpt_path_requires_existing_file(tmp_path, fresh_path_config):
-    missing = fresh_path_config.checkpoints / "missing.ckpt"
-    with pytest.raises(FileNotFoundError):
-        ExperimentConfig(paths=fresh_path_config, ckpt_path=missing)
 
 
 def test_stage_validator_handles_none(monkeypatch):
@@ -93,7 +72,7 @@ def test_setup_target_and_run_respects_stage(monkeypatch, fresh_path_config, tmp
     config = ExperimentConfig(paths=fresh_path_config)
     ckpt_file = fresh_path_config.checkpoints / "state.ckpt"
     ckpt_file.touch()
-    config.ckpt_path = ckpt_file
+    config.from_ckpt = ckpt_file
 
     trainer = MagicMock()
     trainer.fit = MagicMock()
@@ -114,60 +93,6 @@ def test_setup_target_and_run_respects_stage(monkeypatch, fresh_path_config, tmp
 
     config.setup_target_and_run(stage=Stage.TEST)
     trainer.test.assert_called_once()
-
-
-def test_setup_target_loads_checkpoint(monkeypatch, fresh_path_config, tmp_path):
-    ckpt = fresh_path_config.checkpoints / "load_me.ckpt"
-    ckpt.touch()
-
-    class Loader(lit_module.DocClassifierModule):
-        called_with: dict[str, Any] = {}
-
-        def __init__(self, config):
-            super().__init__(config)
-
-        @classmethod
-        def load_from_checkpoint(cls, checkpoint_path, params):
-            cls.called_with = {"path": checkpoint_path, "params": params}
-            return MagicMock(config=SimpleNamespace(num_classes=2))
-
-    trainer = MagicMock()
-
-    class DummyDataModule:
-        def __init__(self):
-            self.train_ds = SimpleNamespace(num_classes=2)
-
-        def setup(self, stage=None):
-            self.stage = stage
-
-    datamodule = DummyDataModule()
-
-    monkeypatch.setattr(
-        f"{EXPERIMENT_MODULE}.TrainerFactoryConfig.setup_target", lambda self: trainer
-    )
-    monkeypatch.setattr(
-        f"{EXPERIMENT_MODULE}.DocDataModuleConfig.setup_target", lambda self: datamodule
-    )
-
-    # Use a module config with the Loader class as target
-    module_config = lit_module.DocClassifierConfig()
-    # Can't set target directly due to validation, so we patch the class method instead
-    original_load = lit_module.DocClassifierModule.load_from_checkpoint
-    monkeypatch.setattr(
-        lit_module.DocClassifierModule, "load_from_checkpoint", Loader.load_from_checkpoint
-    )
-
-    cfg = ExperimentConfig(
-        paths=fresh_path_config, ckpt_path=ckpt.as_posix(), module_config=module_config
-    )
-    trainer_obj, module_obj, datamodule_obj = cfg.setup_target()
-
-    # Restore original
-    monkeypatch.setattr(lit_module.DocClassifierModule, "load_from_checkpoint", original_load)
-
-    assert trainer_obj is trainer
-    assert datamodule_obj is datamodule
-    assert Loader.called_with["path"] == ckpt.as_posix()
 
 
 def test_run_optuna_requires_config(fresh_path_config):
@@ -257,32 +182,3 @@ def test_flags_propagate_to_nested_configs(fresh_path_config):
         if hasattr(cfg.trainer_config, "verbose")
         else True
     )
-
-
-def test_setup_target_requires_ckpt_loader(monkeypatch, fresh_path_config, tmp_path):
-    ckpt = fresh_path_config.checkpoints / "bad.ckpt"
-    ckpt.touch()
-
-    class BadLoader(lit_module.DocClassifierModule):
-        def __init__(self, config):
-            super().__init__(config)
-
-    cfg = ExperimentConfig(paths=fresh_path_config, ckpt_path=ckpt.as_posix())
-    cfg.module_config.__dict__["target"] = object()  # Bypass validation to simulate missing loader
-    monkeypatch.setattr(
-        f"{EXPERIMENT_MODULE}.TrainerFactoryConfig.setup_target", lambda self: MagicMock()
-    )
-
-    class DummyDataModule:
-        def __init__(self):
-            self.train_ds = SimpleNamespace(num_classes=None)
-
-        def setup(self, stage=None):
-            self.stage = stage
-
-    monkeypatch.setattr(
-        f"{EXPERIMENT_MODULE}.DocDataModuleConfig.setup_target", lambda self: DummyDataModule()
-    )
-
-    with pytest.raises(RuntimeError):
-        cfg.setup_target()

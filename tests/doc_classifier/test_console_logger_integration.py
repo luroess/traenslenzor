@@ -7,30 +7,48 @@ import pytest
 from traenslenzor.doc_classifier.utils import Console
 
 
+@pytest.fixture(autouse=True)
+def reset_console_shared_state():
+    """Ensure each test runs with a clean shared console state."""
+    Console._shared_pl_logger = None
+    Console._shared_global_step = 0
+    yield
+    Console._shared_pl_logger = None
+    Console._shared_global_step = 0
+
+
 class TestConsoleLoggerIntegration:
     """Test suite for Console integration with PyTorch Lightning loggers."""
 
     def test_integrate_with_logger_sets_attributes(self):
-        """Test that integrate_with_logger correctly sets logger and global_step."""
-        console = Console()
+        """Test that integrate_with_logger correctly sets shared logger and global_step."""
         mock_logger = MagicMock()
         global_step = 42
 
-        result = console.integrate_with_logger(mock_logger, global_step)
+        result = Console.integrate_with_logger(mock_logger, global_step)
 
+        # Check shared class variables are set
+        assert Console._shared_pl_logger is mock_logger
+        assert Console._shared_global_step == global_step
+        assert result is Console  # Check method chaining returns class
+
+        # Verify any instance can access the shared state
+        console = Console()
         assert console._pl_logger is mock_logger
         assert console._global_step == global_step
-        assert result is console  # Check method chaining
 
     def test_update_global_step(self):
-        """Test that update_global_step updates the step counter."""
+        """Test that update_global_step updates the shared step counter."""
+        Console._shared_global_step = 10
+
+        result = Console.update_global_step(100)
+
+        assert Console._shared_global_step == 100
+        assert result is Console  # Check method chaining returns class
+
+        # Verify any instance sees the updated step
         console = Console()
-        console._global_step = 10
-
-        result = console.update_global_step(100)
-
         assert console._global_step == 100
-        assert result is console  # Check method chaining
 
     def test_log_without_logger_does_not_fail(self):
         """Test that logging without a logger integration works normally."""
@@ -49,7 +67,7 @@ class TestConsoleLoggerIntegration:
         mock_logger = MagicMock()
         mock_logger.log_text = MagicMock()
 
-        console.integrate_with_logger(mock_logger, global_step=5)
+        Console.integrate_with_logger(mock_logger, global_step=5)
         console.log("Test info message")
 
         # Verify log_text was called with correct parameters
@@ -68,7 +86,7 @@ class TestConsoleLoggerIntegration:
         mock_experiment.log = MagicMock()
         mock_logger.experiment = mock_experiment
 
-        console.integrate_with_logger(mock_logger, global_step=10)
+        Console.integrate_with_logger(mock_logger, global_step=10)
         console.warn("Warning message")
 
         # Verify experiment.log was called
@@ -85,7 +103,7 @@ class TestConsoleLoggerIntegration:
         mock_experiment.add_text = MagicMock()
         mock_logger.experiment = mock_experiment
 
-        console.integrate_with_logger(mock_logger, global_step=15)
+        Console.integrate_with_logger(mock_logger, global_step=15)
         console.error("Error occurred")
 
         # Verify add_text was called
@@ -103,7 +121,7 @@ class TestConsoleLoggerIntegration:
         mock_logger = MagicMock()
         mock_logger.log_text = MagicMock()
 
-        console.integrate_with_logger(mock_logger, global_step=1)
+        Console.integrate_with_logger(mock_logger, global_step=1)
 
         console.log("Info message")
         console.warn("Warning message")
@@ -126,7 +144,7 @@ class TestConsoleLoggerIntegration:
         mock_logger = MagicMock()
         mock_logger.log_text = MagicMock()
 
-        console.integrate_with_logger(mock_logger)
+        Console.integrate_with_logger(mock_logger)
         console.log("Message")
 
         mock_logger.log_text.assert_called_once()
@@ -138,18 +156,44 @@ class TestConsoleLoggerIntegration:
         mock_logger = MagicMock()
         mock_logger.log_text = MagicMock()
 
-        console.integrate_with_logger(mock_logger, global_step=0)
+        Console.integrate_with_logger(mock_logger, global_step=0)
 
         console.log("Step 0")
         assert mock_logger.log_text.call_args[1]["step"] == 0
 
-        console.update_global_step(10)
+        Console.update_global_step(10)
         console.log("Step 10")
         assert mock_logger.log_text.call_args[1]["step"] == 10
 
-        console.update_global_step(100)
+        Console.update_global_step(100)
         console.log("Step 100")
         assert mock_logger.log_text.call_args[1]["step"] == 100
+
+    def test_logger_shared_across_instances(self, monkeypatch):
+        """Logger integration should propagate to all Console instances."""
+        monkeypatch.setattr(Console, "print", lambda self, msg, **_: None)
+
+        Console.with_prefix("First")  # Create but don't need to use
+        second = Console.with_prefix("Second")
+        mock_logger = MagicMock()
+        mock_logger.log_text = MagicMock()
+
+        assert second._pl_logger is None
+
+        Console.integrate_with_logger(mock_logger, global_step=5)
+
+        assert second._pl_logger is mock_logger
+
+        second.log("shared message")
+        assert mock_logger.log_text.call_args[1]["key"] == "Second/info"
+        assert mock_logger.log_text.call_args[1]["step"] == 5
+
+        Console.update_global_step(11)
+        third = Console.with_prefix("Third")
+        third.log("future instance uses logger")
+
+        assert mock_logger.log_text.call_args_list[-1][1]["key"] == "Third/info"
+        assert mock_logger.log_text.call_args_list[-1][1]["step"] == 11
 
     def test_exception_handling_does_not_break_training(self):
         """Test that exceptions in logging don't break the console."""
@@ -157,7 +201,7 @@ class TestConsoleLoggerIntegration:
         mock_logger = MagicMock()
         mock_logger.log_text = MagicMock(side_effect=Exception("Logger error"))
 
-        console.integrate_with_logger(mock_logger)
+        Console.integrate_with_logger(mock_logger)
 
         # Should not raise exception
         console.log("This should not crash")
@@ -171,7 +215,7 @@ class TestConsoleLoggerIntegration:
         mock_logger = MagicMock()
         mock_logger.log_text = MagicMock()
 
-        console.integrate_with_logger(mock_logger)
+        Console.integrate_with_logger(mock_logger)
         console.log("This should not be logged")
 
         # log_text should not be called because verbose=False
@@ -185,7 +229,7 @@ class TestConsoleLoggerIntegration:
         mock_logger = MagicMock()
         mock_logger.log_text = MagicMock()
 
-        console.integrate_with_logger(mock_logger)
+        Console.integrate_with_logger(mock_logger)
         console.dbg("This debug message should not be logged")
 
         # log_text should not be called for debug when is_debug=False
@@ -197,7 +241,7 @@ class TestConsoleLoggerIntegration:
         mock_logger = MagicMock()
         mock_logger.log_text = MagicMock()
 
-        console.integrate_with_logger(mock_logger)
+        Console.integrate_with_logger(mock_logger)
         console.log("Hierarchical message")
 
         # The prefix should maintain the hierarchy in the metric name
@@ -209,14 +253,11 @@ class TestConsoleLoggerIntegration:
         mock_logger = MagicMock()
         mock_logger.log_text = MagicMock()
 
-        # Chain all setup methods
-        console = (
-            Console.with_prefix("Chain", "Test")
-            .set_verbose(True)
-            .set_debug(True)
-            .integrate_with_logger(mock_logger, global_step=42)
-            .update_global_step(100)
-        )
+        # Chain all setup methods - note integrate_with_logger is now class method
+        Console.integrate_with_logger(mock_logger, global_step=42)
+        Console.update_global_step(100)
+
+        console = Console.with_prefix("Chain", "Test").set_verbose(True).set_debug(True)
 
         console.log("Chained message")
 
@@ -256,8 +297,10 @@ class TestConsoleLoggerIntegration:
         console._log_to_lightning("info", "message")  # Should silently no-op
 
     def test_update_global_step_returns_self(self):
-        console = Console()
-        assert console.update_global_step(10) is console
+        """Test that update_global_step returns Console class for chaining."""
+        result = Console.update_global_step(10)
+        assert result is Console  # Returns class, not instance
+        assert Console._shared_global_step == 10
 
     def test_plog_outputs_when_verbose(self, monkeypatch):
         console = Console.with_prefix("VerboseMode")
