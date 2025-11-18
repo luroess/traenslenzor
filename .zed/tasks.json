@@ -1,0 +1,25 @@
+// Project tasks configuration. See https://zed.dev/docs/tasks for documentation.
+//
+// Example:
+[
+  {
+    "label": "Test all (Verbose)",
+    "command": "uv run pytest -vs -o log_cli=true -o log_cli_level=\"INFO\""
+  },
+  {
+    "label": "Lint",
+    "command": "uv run ruff check ."
+  },
+  {
+    "label": "Run App",
+    "command": "uv run python -m traenslenzor"
+  },
+  {
+    "label": "Test CI",
+    "command": "CI=true uv run pytest -vs -o log_cli=true -o log_cli_level=\"INFO\""
+  },
+  {
+    "label": "Open UI",
+    "command": "uv run streamlit run traenslenzor/ui/streamlit_app.py"
+  }
+]
