@@ -6,9 +6,11 @@ training and OneCycle learning-rate scheduling.
 
 from collections.abc import Iterable
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Sequence
 
 import pytorch_lightning as pl
+import torch
+import torch.nn.functional as F
 import torchmetrics
 from jaxtyping import Float, Int64
 from pydantic import Field
@@ -233,6 +235,62 @@ class DocClassifierModule(pl.LightningModule):
             Raw logits for each class with shape (B, N) where N = num_classes.
         """
         return self.model(batch)
+
+    @torch.no_grad()
+    def predict_proba(self, batch: ImageBatch) -> Float[Tensor, "B N"]:
+        """Inference helper that returns softmax probabilities.
+
+        Keeps the module in eval mode and avoids gradient tracking so it can be
+        safely used from serving code (e.g. the MCP runtime).
+        """
+
+        was_training = self.training
+        self.eval()
+        logits = self(batch)
+        probs = F.softmax(logits, dim=-1)
+        if was_training:
+            self.train()
+        return probs
+
+    @torch.no_grad()
+    def classify_batch(
+        self,
+        batch: ImageBatch,
+        *,
+        class_names: Sequence[str] | None = None,
+        top_k: int = 3,
+    ) -> list[list[dict[str, float | int | str]]]:
+        """Convert model outputs into top-k label dictionaries.
+
+        Args:
+            batch: Normalized tensor batch with shape (B, C, H, W).
+            class_names: Optional list of label names matching the class indices.
+            top_k: Number of highest-probability classes to return per item.
+
+        Returns:
+            List (per item) of dictionaries containing label metadata suitable for
+            MCP serialization.
+        """
+
+        probs = self.predict_proba(batch)
+        top_probs, top_indices = probs.topk(k=top_k, dim=-1)
+
+        results: list[list[dict[str, float | int | str]]] = []
+        for row_indices, row_probs in zip(top_indices, top_probs):
+            item_preds: list[dict[str, float | int | str]] = []
+            for idx, prob in zip(row_indices, row_probs):
+                class_idx = int(idx)
+                label = class_names[class_idx] if class_names is not None else f"class_{class_idx}"
+                item_preds.append(
+                    {
+                        "label": label,
+                        "index": class_idx,
+                        "probability": float(prob),
+                    }
+                )
+            results.append(item_preds)
+
+        return results
 
     def training_step(self, batch: tuple[ImageBatch, Targets], batch_idx: int) -> ScalarLoss:
         """Compute the training loss and log metrics.
