@@ -1,0 +1,98 @@
+# Vision Transformer (ViT-B/16) Fine-tuning Configuration
+# ViTs are sensitive to learning rates and require careful fine-tuning
+# Pretrained ViT has excellent features, use very low LR and gradual unfreezing
+
+seed = 42
+is_debug = false
+verbose = true
+run_name = "vit-b16-finetune-train"
+stage = "train"
+
+[trainer_config]
+is_debug = false
+fast_dev_run = false
+accelerator = "auto"
+devices = 1
+strategy = "auto"
+max_epochs = 30
+precision = "32-true"
+accumulate_grad_batches = 2  # Effective batch = 32 * 2 = 64 (ViTs like larger batches)
+log_every_n_steps = 50
+check_val_every_n_epoch = 1
+use_wandb = true
+
+    [trainer_config.callbacks]
+    use_model_checkpoint = true
+    checkpoint_monitor = "val/loss"
+    checkpoint_mode = "min"
+    checkpoint_filename = "vit-b16-finetune-epoch={epoch}-val_loss={val/loss:.2f}"
+    checkpoint_save_top_k = 3
+    use_early_stopping = true
+    early_stopping_monitor = "val/loss"
+    early_stopping_mode = "min"
+    early_stopping_patience = 8
+    use_lr_monitor = true
+    lr_logging_interval = "step"
+    use_rich_progress_bar = true
+    use_tqdm_progress_bar = false
+    tqdm_refresh_rate = 1
+    use_rich_model_summary = true
+    rich_summary_max_depth = 1
+    use_batch_size_finder = false
+    batch_size_mode = "power"
+    batch_size_init_val = 16
+    batch_size_max_trials = 25
+    # Enable backbone fine-tuning with later unfreezing
+    use_backbone_finetuning = false # TODO: neeed some changes to use that feature
+    backbone_unfreeze_at_epoch = 5  # Unfreeze earlier for ViT (epoch 5)
+    backbone_train_bn = true
+    use_timer = false
+    timer_interval = "step"
+
+    [trainer_config.wandb_config]
+    project = "doc-class-detector"
+    entity = "traenslenzor"
+    tags = ["vit-b16", "finetune", "imagenet-pretrained", "rvl-cdip"]
+    notes = "Fine-tuning ViT-B/16 (ImageNet pretrained) on RVL-CDIP document classification"
+
+[module_config]
+num_classes = 16
+backbone = "vit_b_16"  # BackboneType.VIT_B16
+train_head_only = true  # Start with head-only, backbone unfreezes at epoch 5
+use_pretrained = true  # Use ImageNet pretrained weights
+
+    [module_config.optimizer]
+    # Very low LR for fine-tuning ViT (transformers are sensitive)
+    learning_rate = 0.0001  # 1e-4
+    weight_decay = 0.00005  # Very light regularization for ViT
+
+    [module_config.scheduler]
+    # OneCycleLR with very conservative schedule for ViT fine-tuning
+    max_lr = 0.0005  # Peak at 5x base LR (ViTs need lower peak)
+    base_momentum = 0.85
+    max_momentum = 0.95
+    div_factor = 5.0  # Start at max_lr/5 = 0.0001 (same as base LR)
+    final_div_factor = 500.0  # End at max_lr/(5*500) = 2e-7
+    pct_start = 0.15  # 15% warmup (critical for ViT stability)
+    anneal_strategy = "cos"
+
+[datamodule_config]
+batch_size = 32  # With grad accumulation=2, effective batch=64
+num_workers = 16
+pin_memory = true
+is_debug = false
+verbose = true
+
+    [datamodule_config.train_ds]
+    split = "train"
+
+        [datamodule_config.train_ds.transform_config]
+        transform_type = "train"
+        # Light augmentation for ViT (pretrained features are robust)
+        height = 224
+        width = 224
+        always_apply_resize = true
+        p_color_jitter = 0.2
+        p_perspective = 0.1
+        p_affine = 0.1
+        p_horizontal_flip = 0.5

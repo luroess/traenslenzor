@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires      = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -17,7 +17,6 @@ dependencies = [
     "fastapi>=0.120.4",
     "fastmcp>=2.12.4",
     "matplotlib>=3.10.7",
-    "numpy>=2.3.4",
     "onnxruntime>=1.23.2",
     "pillow>=12.0.0",
     "torch>=2.9.0",
@@ -51,18 +50,72 @@ dev = [
     "types-pyyaml>=6.0.12.20250915",
     "types-requests>=2.32.4.20250913",
 ]
+classifier = [
+    "albumentations>=2.0.8",
+    "tomlkit>=0.13.3",
+    "datasets>=4.4.1",                              # https://huggingface.co/datasets
+    "devtools>=0.12.2",
+    "numpy>=2.0.0",
+    "opencv-python>=4.12.0.88",
+    "optuna>=4.2.0",
+    "optuna-integration[pytorch-lightning]>=4.5.0",
+    "pydantic>=2.12.4",
+    "pydantic-settings>=2.11.0",
+    # "pytorch-lightning>=2.5.6",
+    "lightning>=2.5.6",
+    "rich>=13.9.4",
+    "torch>=2.5.0",
+    "torchvision>=0.24.0",
+    "torchmetrics>=1.6.0",
+    "torchsummary>=1.5.1",
+    "wandb>=0.22.3",
+    "jaxtyping>=0.3.3",
+    "typing-extensions>=4.15.0",
+]
+notebook = [
+    "ipympl>=0.9.0",      # %matplotlib widget
+    "jupyter>=1.0.0",
+    "ipykernel>=7.1.0",
+    "notebook>=7.0.0",
+    "jupyterlab>=4.4.10",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["traenslenzor"]
 addopts = "-q"
+filterwarnings = [
+    "ignore:The argument 'device' of Tensor\\.(pin_memory|is_pinned)\\(\\) is deprecated:DeprecationWarning", # PyTorch interal warning
+]
 
 [tool.ruff]
-line-length = 100
+line-length    = 100
 target-version = "py313"
+extend-exclude = ["verify_todo_resolution.py", "test_transform_integration.py"]
 
-[tool.ruff.lint]
-extend-select = ["I"]  # import sorting
+    [tool.ruff.lint]
+    extend-select = ["I"] # import sorting
 
-[tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]
+[tool.mypy]
+python_version       = "3.13"
+warn_unused_ignores  = true
+warn_redundant_casts = true
+warn_return_any      = true
+check_untyped_defs   = true
+no_implicit_optional = true
+pretty               = true
+mypy_path            = ["traenslenzor"]
+files                = ["traenslenzor", "tests"]
+
+    [[tool.mypy.overrides]]
+    module = [
+        "langchain_mcp_adapters.*",
+        "torchvision.*",
+        "datasets.*",
+        "albumentations.*",
+        "torchsummary.*",
+    ]
+    ignore_missing_imports = true
+
+        [tool.ruff.lint.per-file-ignores]
+        "tests/*" = ["S101"]
