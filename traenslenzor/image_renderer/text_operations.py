@@ -6,7 +6,8 @@ from typing import TypedDict
 import numpy as np
 from numpy.typing import NDArray
 from PIL import ImageDraw, ImageFont
-from PIL.ImageFont import FreeTypeFont, ImageFont as ImageFontType
+from PIL.ImageFont import FreeTypeFont
+from PIL.ImageFont import ImageFont as ImageFontType
 
 from traenslenzor.image_utils.image_utils import np_img_to_pil, pil_to_numpy
 

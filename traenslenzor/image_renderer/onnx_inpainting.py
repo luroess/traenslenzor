@@ -8,7 +8,8 @@ import numpy as np
 import onnxruntime
 from numpy.typing import NDArray
 from PIL import Image
-from PIL.Image import Image as PILImage, Resampling
+from PIL.Image import Image as PILImage
+from PIL.Image import Resampling
 
 import traenslenzor.image_utils.image_utils as ImageUtils
 

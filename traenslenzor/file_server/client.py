@@ -29,10 +29,16 @@ class FileClient:
         async with httpx.AsyncClient() as client:
             resp = await client.post(FILES_ENDPOINT, files={"file": (path.name, file_data)})
 
-        if not resp.is_success:
-            return None
+        return None if not resp.is_success else str(resp.json().get("id"))
 
-        return str(resp.json().get("id"))
+    @staticmethod
+    async def put_bytes(name: str, data: bytes) -> Optional[str]:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                FILES_ENDPOINT,
+                files={"file": (name, data)},
+            )
+        return None if not resp.is_success else str(resp.json().get("id"))
 
     @staticmethod
     async def put_img(img_name: str, img: PILImage) -> Optional[str]:
