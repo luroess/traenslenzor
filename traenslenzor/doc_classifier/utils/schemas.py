@@ -25,7 +25,7 @@ class Stage(StrEnum):
         """Map strings (e.g. 'fit', 'validate') back to Stage members."""
         if isinstance(value, cls):
             return value
-        alias_map: dict[str, Stage] = {
+        alias_map: dict[str, Self] = {
             "fit": cls.TRAIN,
             "validate": cls.VAL,
         }
