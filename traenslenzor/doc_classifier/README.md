@@ -23,13 +23,29 @@ uv run python -c "import torch; print(torch.__version__, torch.version.cuda, tor
 uv run python -c "import traenslenzor; print('Package installed successfully!')"
 ```
 
-**Important:** After `uv sync`, you must run `uv pip install -e .` to make the `traenslenzor` package importable. This is because `uv sync` only installs dependencies listed in `pyproject.toml`, not the project itself.
-
-
 ### WandB Setup
 
 1. Create a [Weights & Biases](https://wandb.ai/site) account and get your API key if you don't have one.
 2. Run `uv run wandb login` and paste your API key!
+
+## CLI Usage
+
+```sh
+uv run traenslenzor/doc_classifier/run.py -h
+```
+
+Train AlexNet from scratch on RVL-CDIP with default settings:
+
+```sh
+uv run traenslenzor/doc_classifier/run.py --config_path .configs/alexnet_scratch.toml
+```
+
+Or fine-tune ResNet-50 or Vit-16 pretrained on ImageNet:
+
+```sh
+uv run traenslenzor/doc_classifier/run.py --config_path .configs/resnet50_finetune.toml
+# uv run traenslenzor/doc_classifier/run.py --config_path .configs/vit_finetune.toml
+```
 
 ## Package Structure
 
