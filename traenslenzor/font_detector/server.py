@@ -1,17 +1,20 @@
 """MCP server for font detection and size estimation."""
 
+import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import List, Optional
 
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from fastmcp import FastMCP
 
 from .font_name_detector import FontNameDetector
 from .font_size_model.infer import FontSizeEstimator
 
+ADDRESS = "127.0.0.1"
+PORT = 8003
+FONT_DETECTOR_BASE_PATH = f"http://{ADDRESS}:{PORT}/mcp"
+
 # Initialize server
-app = Server("font-detector")
+font_detector = FastMCP("Font Detector")
 
 # Global instances (lazy loaded)
 font_name_detector_instance: Optional[FontNameDetector] = None
@@ -36,189 +39,65 @@ def get_font_size_estimator() -> FontSizeEstimator:
     return font_size_estimator_instance
 
 
-@app.list_tools()
-async def list_tools() -> list[Tool]:
-    """List available tools."""
-    return [
-        Tool(
-            name="detect_font_name",
-            description="Detect font name from an image containing text",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "image_path": {
-                        "type": "string",
-                        "description": "Path to image file containing text",
-                    },
-                },
-                "required": ["image_path"],
-            },
-        ),
-        Tool(
-            name="estimate_font_size",
-            description="Estimate font size in points from text box dimensions and content",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "text_box_size": {
-                        "type": "array",
-                        "items": {"type": "number"},
-                        "minItems": 2,
-                        "maxItems": 2,
-                        "description": "Text box dimensions as [width_px, height_px]",
-                    },
-                    "text": {
-                        "type": "string",
-                        "description": "Text content in the box",
-                    },
-                    "font_name": {
-                        "type": "string",
-                        "description": "Optional font name hint (if known)",
-                    },
-                },
-                "required": ["text_box_size", "text"],
-            },
-        ),
-    ]
+@font_detector.tool
+def detect_font_name(image_path: str) -> str:
+    """Detect font name from an image containing text.
+
+    Args:
+        image_path: Path to image file containing text
+    """
+    try:
+        # Detect font name
+        detector = get_font_name_detector()
+        font_name = detector.detect(image_path)
+        return json.dumps({"font_name": font_name})
+    except Exception as e:
+        return json.dumps({"error": str(e)})
 
 
-@app.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-    """Handle tool calls."""
+@font_detector.tool
+def estimate_font_size(text_box_size: List[float], text: str, font_name: str = "") -> str:
+    """Estimate font size in points from text box dimensions and content.
 
-    if name == "detect_font_name":
-        # Validate input
-        image_path = arguments.get("image_path")
-        if not image_path:
-            return [
-                TextContent(
-                    type="text",
-                    text='{"error": "image_path is required"}',
-                )
-            ]
+    Args:
+        text_box_size: Text box dimensions as [width_px, height_px]
+        text: Text content in the box
+        font_name: Optional font name hint (if known)
+    """
+    if not text_box_size or len(text_box_size) != 2:
+        return json.dumps({"error": "text_box_size must be a 2-element array"})
 
-        try:
-            # Detect font name
-            detector = get_font_name_detector()
-            font_name = detector.detect(image_path)
+    if not text:
+        return json.dumps({"error": "text is required"})
 
-            # Return result
-            import json
-
-            result = {"font_name": font_name}
-            return [
-                TextContent(
-                    type="text",
-                    text=json.dumps(result),
-                )
-            ]
-
-        except Exception as e:
-            import json
-
-            return [
-                TextContent(
-                    type="text",
-                    text=json.dumps({"error": str(e)}),
-                )
-            ]
-
-    elif name == "estimate_font_size":
-        # Validate input
-        text_box_size = arguments.get("text_box_size")
-        text = arguments.get("text")
-        font_name_raw: Any | None = arguments.get("font_name")
-        font_param: str = str(font_name_raw) if font_name_raw else ""
-
-        if not text_box_size or not isinstance(text_box_size, list) or len(text_box_size) != 2:
-            import json
-
-            return [
-                TextContent(
-                    type="text",
-                    text=json.dumps({"error": "text_box_size must be a 2-element array"}),
-                )
-            ]
-
-        if not text:
-            import json
-
-            return [
-                TextContent(
-                    type="text",
-                    text=json.dumps({"error": "text is required"}),
-                )
-            ]
-
-        try:
-            # If no font name provided, detect it
-            if not font_param:
-                # For now, we require font_name to be provided
-                # In a full implementation, we would render the text and detect
-                import json
-
-                return [
-                    TextContent(
-                        type="text",
-                        text=json.dumps(
-                            {
-                                "error": "font_name is required (automatic detection from text not yet implemented)"
-                            }
-                        ),
-                    )
-                ]
-
-            # Estimate font size
-            estimator = get_font_size_estimator()
-            font_size_pt = estimator.estimate(
-                text_box_size=tuple(text_box_size),
-                text=text,
-                font_name=font_param,
+    try:
+        # If no font name provided, detect it
+        if not font_name:
+            return json.dumps(
+                {
+                    "error": "font_name is required (automatic detection from text not yet implemented)"
+                }
             )
 
-            # Return result
-            import json
-
-            size_result: dict[str, Any] = {"font_size_pt": font_size_pt}
-            return [
-                TextContent(
-                    type="text",
-                    text=json.dumps(size_result),
-                )
-            ]
-
-        except Exception as e:
-            import json
-
-            return [
-                TextContent(
-                    type="text",
-                    text=json.dumps({"error": str(e)}),
-                )
-            ]
-
-    else:
-        import json
-
-        return [
-            TextContent(
-                type="text",
-                text=json.dumps({"error": f"Unknown tool: {name}"}),
-            )
-        ]
-
-
-async def main():
-    """Run the MCP server."""
-    async with stdio_server() as (read_stream, write_stream):
-        await app.run(
-            read_stream,
-            write_stream,
-            app.create_initialization_options(),
+        # Estimate font size
+        estimator = get_font_size_estimator()
+        font_size_pt = estimator.estimate(
+            text_box_size=tuple(text_box_size),
+            text=text,
+            font_name=font_name,
         )
+
+        return json.dumps({"font_size_pt": font_size_pt})
+
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+async def run():
+    await font_detector.run_async(transport="streamable-http", port=PORT, host=ADDRESS)
 
 
 if __name__ == "__main__":
     import asyncio
 
-    asyncio.run(main())
+    asyncio.run(run())
