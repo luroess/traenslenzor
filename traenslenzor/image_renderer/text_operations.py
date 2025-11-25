@@ -14,13 +14,14 @@ from traenslenzor.image_utils.image_utils import np_img_to_pil, pil_to_numpy
 logger = logging.getLogger(__name__)
 
 
+# TODO: @Bene maybe look if you could straight up utilize file_server/session_state.py: TextItem instead :)
 class Text(TypedDict):
     text: str
     left: int
     top: int
-    width: int
-    height: int
-    rotation_in_degrees: int
+    width: int  # This should be deductible from the 4 Points of the BBox
+    height: int  # This should be deductible from the 4 Points of the BBox
+    rotation_in_degrees: int  # This should be deductible from the 4 Points of the BBox
     font_size: int
     color: tuple[int, int, int]
     font_family: str

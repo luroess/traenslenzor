@@ -12,7 +12,7 @@ from traenslenzor.file_server.session_state import SessionState
 app = FastAPI(title="File Server")
 
 ADDRESS = "127.0.0.1"
-PORT = 8005
+PORT = 8001
 STORE: Dict[str, Tuple[bytes, str, str]] = {}
 STATE: Dict[str, SessionState] = {}
 

@@ -11,7 +11,7 @@ from traenslenzor.text_extractor.flatten_image import deskew_document
 from traenslenzor.text_extractor.paddleocr import run_ocr
 
 ADDRESS = "127.0.0.1"
-PORT = 8001
+PORT = 8002
 TEXT_EXTRACTOR_BASE_PATH = f"http://{ADDRESS}:{PORT}/mcp"
 
 text_extractor = FastMCP("Layout detector")
@@ -76,7 +76,9 @@ async def extract_text(session_id: str) -> str:
 
 
 async def run():
-    await text_extractor.run_async(transport="streamable-http", port=PORT, host=ADDRESS)
+    await text_extractor.run_async(
+        transport="streamable-http", port=PORT, host=ADDRESS, show_banner=False
+    )
 
 
 if __name__ == "__main__":
