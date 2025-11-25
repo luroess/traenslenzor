@@ -1,9 +1,12 @@
+import logging
 import os
 from typing import Optional, cast
 
 import cv2
 import numpy as np
 from numpy.typing import NDArray
+
+logger = logging.getLogger(__name__)
 
 
 def _order_points(pts: NDArray[np.float32]) -> NDArray[np.float32]:
@@ -47,7 +50,7 @@ def find_document_corners(image: NDArray[np.uint8]) -> Optional[NDArray[np.float
     h, w = image.shape[:2]
     img_area = w * h
 
-    for c in cnts[:10]:  #  10 largest contors
+    for c in cnts[:10]:  #  10 largest contours
         peri = cv2.arcLength(c, True)
         approx = cv2.approxPolyDP(c, 0.02 * peri, True)  # contour simplification
         if len(approx) == 4 and cv2.isContourConvex(approx):
@@ -61,6 +64,7 @@ def find_document_corners(image: NDArray[np.uint8]) -> Optional[NDArray[np.float
 def deskew_document(image: NDArray[np.uint8]) -> Optional[NDArray[np.uint8]]:
     pts = find_document_corners(image)
     if pts is None:
+        logger.error("No document corners identified in image")
         return None
     return _warp_to_rectangle(image, pts)
 
