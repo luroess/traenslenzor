@@ -1,21 +1,51 @@
 import asyncio
 import logging
-from typing import cast
+from typing import Callable, cast
 
-from langchain.agents import create_agent
-from langchain.agents.middleware import AgentState, ModelRequest, before_agent, dynamic_prompt
+from langchain.agents import AgentState, create_agent
+from langchain.agents.middleware import (
+    ModelRequest,
+    before_agent,
+    dynamic_prompt,
+    wrap_tool_call,
+)
+from langchain_core.messages import ToolMessage
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
 from traenslenzor.file_server.client import SessionClient
 from traenslenzor.file_server.session_state import SessionState
 from traenslenzor.supervisor.llm import llm
-from traenslenzor.supervisor.state import SupervisorState
+from traenslenzor.supervisor.state import SupervisorState, ToolCall
 from traenslenzor.supervisor.tools.tools import get_tools
 
 logger = logging.getLogger(__name__)
+
+
+@wrap_tool_call  # type: ignore
+async def wrap_tools(
+    request: ToolCallRequest, handler: Callable[[ToolCallRequest], ToolMessage | Command]
+) -> Command:
+    result = await handler(request)  # type: ignore
+    if isinstance(result, ToolMessage):
+        result = Command(
+            update={
+                "messages": [result],
+            }
+        )
+    state = cast(SupervisorState, request.state)
+    history = state.get("tool_history", []) + [
+        ToolCall(request.tool_call["name"], request.tool_call["args"])
+    ]
+    result.update["tool_history"] = history  # type: ignore
+
+    logger.info("Tool history")
+    logger.info(history)
+
+    return result
 
 
 @before_agent
@@ -28,6 +58,7 @@ async def initialize_session(state: AgentState, runtime: Runtime) -> Command:
 async def context_aware_prompt(request: ModelRequest) -> str:
     state = cast(SupervisorState, request.state)
     session_id = state.get("session_id")
+    assert session_id is not None
     session = await SessionClient.get(session_id)
 
     formatted_session = format_session(session_id, session)
@@ -71,7 +102,7 @@ class Supervisor:
             checkpointer=MemorySaver(),
             state_schema=SupervisorState,
             # debug= True, # enhanced logging
-            middleware={initialize_session, context_aware_prompt},  # type: ignore
+            middleware={initialize_session, context_aware_prompt, wrap_tools},  # type: ignore
         )
 
 
