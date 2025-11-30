@@ -11,6 +11,7 @@ import numpy as np
 # https://github.com/PaddlePaddle/PaddleOCR/issues/16711#issuecomment-3446427004
 # This must be imported prior to paddleocr
 from traenslenzor.file_server.session_state import BBoxPoint, TextItem
+from traenslenzor.__main__ import setup_logger
 import traenslenzor.text_extractor.shim_langchain_backcomp  # noqa: F401
 from paddleocr import PaddleOCR
 from pydantic import Json
@@ -34,6 +35,10 @@ def parse_result(results) -> Any:
 def paddle_ocr(lang: str, image: np.ndarray) -> Json:
     ocr = PaddleOCR(lang=lang, use_angle_cls=False)
     results = ocr.predict(image)
+
+    # paddle messes with log setup...
+    # https://github.com/PaddlePaddle/Paddle/pull/76699
+    setup_logger()
     return results
 
 
