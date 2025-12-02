@@ -48,7 +48,7 @@ async def context_aware_prompt(request: ModelRequest) -> str:
         3. Extract all text from the image and detect font type, size, and color. Show the text to the user for verification.
         4. Translate the text into the target language, preserving formatting where possible.
         5. Render the translated text on the image, matching the original font and style. Let the user review and request adjustments.
-    
+
     Context:
         {formatted_session}
     """

@@ -1,0 +1,264 @@
+"""LightningDataModule wrapper around RVL-CDIP with configurable transforms."""
+
+import warnings
+from typing import Any
+
+import pytorch_lightning as pl
+import torch
+from datasets import Dataset as HFDataset
+from pydantic import Field, model_validator
+from torch.utils.data import DataLoader
+from typing_extensions import Self
+
+from ..data_handling.huggingface_rvl_cdip_ds import RVLCDIPConfig
+from ..data_handling.transforms import TrainTransformConfig, ValTransformConfig
+from ..utils import BaseConfig, Console, Stage
+
+# Suppress PyTorch's internal pin_memory deprecation warning (PyTorch 2.9+)
+# This warning comes from DataLoader's internal implementation
+warnings.filterwarnings(
+    "ignore",
+    message=r"The argument 'device' of Tensor\.pin_memory\(\) is deprecated",
+    category=DeprecationWarning,
+    module=r"torch\.utils\.data\._utils\.pin_memory",
+)
+
+
+def collate_hf_batch(batch: list[dict[str, Any]]) -> tuple[torch.Tensor, torch.Tensor]:
+    """Collate HuggingFace dataset batches into (images, labels) tuple.
+
+    Converts list of dicts from HF Dataset into tuple format expected by Lightning.
+
+    Args:
+        batch: List of dicts with 'image' (Tensor) and 'label' (int) keys.
+
+    Returns:
+        Tuple of (images, labels) where:
+            - images: Stacked image tensors with shape (B, C, H, W)
+            - labels: Label tensor with shape (B,)
+    """
+    images = torch.stack([item["image"] for item in batch])
+    labels = torch.tensor([item["label"] for item in batch], dtype=torch.long)
+    return images, labels
+
+
+def _default_num_workers() -> int:
+    return torch.get_num_threads()
+
+
+def _default_train_ds() -> RVLCDIPConfig:
+    return RVLCDIPConfig(
+        split=Stage.TRAIN,
+        transform_config=TrainTransformConfig(),
+    )
+
+
+def _default_ds(split: Stage) -> RVLCDIPConfig:
+    return RVLCDIPConfig(
+        split=split,
+        transform_config=ValTransformConfig(),
+    )
+
+
+class DocDataModuleConfig(BaseConfig["DocDataModule"]):
+    """Configuration for :class:`DocDataModule`."""
+
+    target: type["DocDataModule"] = Field(default_factory=lambda: DocDataModule, exclude=True)
+
+    batch_size: int = 32
+    """Batch size for DataLoaders."""
+
+    num_workers: int = Field(default_factory=_default_num_workers)
+    """Number of worker processes for data loading."""
+
+    persistent_workers: bool = True
+    """Whether to keep DataLoader worker processes alive between epochs."""
+
+    limit_num_samples: int | float | None = None
+    """Limit number of samples per dataset for debugging.
+    If int, uses that many samples. If float between 0 and 1, uses that fraction of the dataset."""
+
+    is_debug: bool = False
+    verbose: bool = True
+
+    train_ds: RVLCDIPConfig = Field(default_factory=_default_train_ds)
+    """Configuration for training dataset with transforms."""
+
+    val_ds: RVLCDIPConfig = Field(
+        default_factory=lambda: _default_ds(Stage.VAL),
+    )
+    """Configuration for validation dataset with transforms."""
+
+    test_ds: RVLCDIPConfig = Field(
+        default_factory=lambda: _default_ds(Stage.TEST),
+    )
+    """Configuration for test dataset with transforms."""
+
+    @model_validator(mode="after")
+    def _debug_defaults(self) -> Self:
+        """Apply debug-mode defaults when is_debug=True.
+
+        Uses object.__setattr__() to avoid retriggering validation (which would
+        cause infinite recursion).
+        """
+        console = Console.with_prefix(self.__class__.__name__, "_debug_defaults")
+
+        if self.is_debug:
+            object.__setattr__(self, "num_workers", 0)
+            console.log("Debug settings: num_workers=0 applied for DataModule")
+
+        return self
+
+
+class DocDataModule(pl.LightningDataModule):
+    """LightningDataModule that exposes RVL-CDIP datasets to the trainer.
+
+    This module integrates HuggingFace datasets with PyTorch Lightning,
+    supporting the new transform system via RVLCDIPConfig.
+    """
+
+    def __init__(self, config: DocDataModuleConfig):
+        super().__init__()
+
+        self.config = config
+
+        # Save hyperparameters for Lightning callbacks and checkpointing
+        # This makes batch_size and other params available via self.hparams
+        # Required by callbacks like BatchSizeFinder
+        self.save_hyperparameters(config.model_dump())
+
+        self._train_ds: HFDataset | None = None
+        self._val_ds: HFDataset | None = None
+        self._test_ds: HFDataset | None = None
+
+        self._stage_attr_map = {
+            Stage.TRAIN: ("_train_ds", self.config.train_ds),
+            Stage.VAL: ("_val_ds", self.config.val_ds),
+            Stage.TEST: ("_test_ds", self.config.test_ds),
+        }
+
+    # --------------------------------------------------------------------- setup
+    def setup(self, stage: Stage | str | None = None) -> None:
+        requested_stage = (
+            stage if isinstance(stage, Stage) else Stage.from_str(stage) if stage else None
+        )
+        if requested_stage is None:
+            self._ensure_all_datasets()
+            return
+
+        if requested_stage in self._stage_attr_map:
+            self._ensure_dataset(requested_stage)
+        else:
+            raise ValueError(f"Unsupported stage '{stage}'.")
+
+    def _ensure_all_datasets(self) -> None:
+        for stage in self._stage_attr_map:
+            self._ensure_dataset(stage)
+
+    # ------------------------------------------------------------------ loaders
+    def train_dataloader(self) -> DataLoader:
+        self._ensure_dataset(Stage.TRAIN)
+        loader_kwargs: dict[str, Any] = {
+            "batch_size": self.config.batch_size,
+            "num_workers": self.config.num_workers,
+            "persistent_workers": self.config.persistent_workers,
+            "shuffle": True,
+            "collate_fn": collate_hf_batch,
+        }
+        if self.config.num_workers > 0:
+            loader_kwargs["multiprocessing_context"] = "spawn"
+        return DataLoader(self._train_ds, **loader_kwargs)
+
+    def val_dataloader(self) -> DataLoader:
+        self._ensure_dataset(Stage.VAL)
+        loader_kwargs: dict[str, Any] = {
+            "batch_size": self.config.batch_size,
+            "num_workers": self.config.num_workers,
+            "persistent_workers": self.config.persistent_workers,
+            "collate_fn": collate_hf_batch,
+        }
+        if self.config.num_workers > 0:
+            loader_kwargs["multiprocessing_context"] = "spawn"
+        return DataLoader(self._val_ds, **loader_kwargs)
+
+    def test_dataloader(self) -> DataLoader:
+        self._ensure_dataset(Stage.TEST)
+        loader_kwargs: dict[str, Any] = {
+            "batch_size": self.config.batch_size,
+            "num_workers": self.config.num_workers,
+            "persistent_workers": self.config.persistent_workers,
+            "collate_fn": collate_hf_batch,
+        }
+        if self.config.num_workers > 0:
+            loader_kwargs["multiprocessing_context"] = "spawn"
+        return DataLoader(self._test_ds, **loader_kwargs)
+
+    # ---------------------------------------------------------------- properties
+    @property
+    def train_ds(self) -> HFDataset:
+        """Training dataset."""
+        self._ensure_dataset(Stage.TRAIN)
+        return self._train_ds
+
+    @property
+    def val_ds(self) -> HFDataset:
+        """Validation dataset."""
+        self._ensure_dataset(Stage.VAL)
+        return self._val_ds
+
+    @property
+    def test_ds(self) -> HFDataset:
+        """Test dataset."""
+        self._ensure_dataset(Stage.TEST)
+        return self._test_ds
+
+    def _ensure_dataset(self, stage: Stage) -> None:
+        attr_name, cfg = self._stage_attr_map[stage]
+        dataset = getattr(self, attr_name)
+        if dataset is None:
+            dataset = cfg.setup_target()
+
+            # Apply limit_num_samples if configured
+            if self.config.limit_num_samples is not None:
+                dataset = self._apply_sample_limit(dataset, stage)
+
+            setattr(self, attr_name, dataset)
+
+    def _apply_sample_limit(self, dataset: HFDataset, stage: Stage) -> HFDataset:
+        """Apply limit_num_samples to reduce dataset size for debugging.
+
+        Args:
+            dataset: Full HuggingFace dataset.
+            stage: Dataset stage (train/val/test) for logging.
+
+        Returns:
+            HFDataset: Limited dataset with specified number/fraction of samples.
+        """
+        limit = self.config.limit_num_samples
+        original_size = len(dataset)
+
+        # Calculate target size
+        if isinstance(limit, float):
+            # Fraction of dataset (e.g., 0.1 = 10%)
+            if not 0 < limit <= 1.0:
+                raise ValueError(f"limit_num_samples as float must be in (0, 1], got {limit}")
+            target_size = int(original_size * limit)
+        else:
+            # Absolute number of samples
+            target_size = min(limit, original_size)
+
+        if target_size <= 0:
+            raise ValueError(f"Invalid target_size={target_size} from limit_num_samples={limit}")
+
+        # Select subset
+        limited_dataset = dataset.select(range(target_size))
+
+        # Log the limitation
+        console = Console.with_prefix(self.__class__.__name__, "_apply_sample_limit")
+        console.set_verbose(self.config.verbose).set_debug(self.config.is_debug)
+        console.log(
+            f"Limited {stage} dataset: {original_size} → {target_size} samples "
+            f"({target_size / original_size * 100:.1f}%)"
+        )
+
+        return limited_dataset

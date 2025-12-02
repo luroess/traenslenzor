@@ -39,18 +39,18 @@ sequenceDiagram
     Supervisor ->> FileServer: initializeSession
     FileServer ->> Supervisor: sessionId
 
-    Note over Supervisor, DocumentLoader: (1) Load Document 
+    Note over Supervisor, DocumentLoader: (1) Load Document
     Supervisor ->> DocumentLoader: loadDocument(sessionId)
     DocumentLoader ->> FileServer: uploadDocument
     DocumentLoader ->> FileServer: setState(sessionId, state)
 
-    Note over Supervisor, TextExtractor: (2) Extract Text 
+    Note over Supervisor, TextExtractor: (2) Extract Text
     Supervisor ->> TextExtractor: extractText(sessionId)
-    TextExtractor ->> FileServer: getState(sessionId) 
-    TextExtractor ->> FileServer: getDocument(rawDocumentId) 
+    TextExtractor ->> FileServer: getState(sessionId)
+    TextExtractor ->> FileServer: getDocument(rawDocumentId)
     TextExtractor ->> FileServer: setState(sessionId, State)
-    
-    Note over Supervisor, FontDetector: (3) Detect Font 
+
+    Note over Supervisor, FontDetector: (3) Detect Font
     Supervisor ->> FontDetector: detectFont(sessionId)
     FontDetector ->> FileServer: getState(sessionId)
     FontDetector ->> FileServer: getDocument(extractedDocumentId)
