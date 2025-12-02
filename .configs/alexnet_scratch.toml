@@ -32,29 +32,29 @@ use_wandb         = true
     notes   = "Training AlexNet from scratch on RVL-CDIP document classification"
 
 [module_config]
-num_classes = 16
-backbone    = "alexnet" # BackboneType.ALEXNET
+backbone = "alexnet" # BackboneType.ALEXNET
 
     [module_config.optimizer]
     # Higher LR for training from scratch
-    learning_rate = 0.001  # 1e-3
-    weight_decay  = 0.0005 # Standard L2 regularization
+    learning_rate = 0.000327 # tuned from LR finder (suggested ≈3.27e-4)
+    weight_decay  = 0.0005   # Standard L2 regularization
 
     [module_config.scheduler]
     # OneCycleLR with aggressive schedule for scratch training
-    max_lr           = 0.003   # Peak at 3x base LR
+    max_lr           = 0.000327 # Match tuner suggestion for max LR
     base_momentum    = 0.85
     max_momentum     = 0.95
-    div_factor       = 25.0    # Start at max_lr/25 = 0.00012
-    final_div_factor = 10000.0 # End at max_lr/(25*10000) = 1.2e-8
-    pct_start        = 0.3     # 30% warmup
+    div_factor       = 25.0     # Start at max_lr/25 ≈ 1.3e-5
+    final_div_factor = 10000.0  # End at max_lr/(25*10000) ≈ 1.3e-9
+    pct_start        = 0.3      # 30% warmup
     anneal_strategy  = "cos"
 
 [datamodule_config]
-batch_size = 128
-pin_memory = true
-is_debug   = false
-verbose    = true
+batch_size         = 48
+persistent_workers = true
+is_debug           = false
+verbose            = true
+# limit_num_samples  = 1024
 
     [datamodule_config.train_ds]
         [datamodule_config.train_ds.transform_config]
