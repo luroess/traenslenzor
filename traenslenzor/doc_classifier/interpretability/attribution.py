@@ -11,7 +11,7 @@ from enum import StrEnum
 from typing import Callable, Sequence
 
 import torch
-from captum.attr import (
+from captum.attr import (  # type: ignore[import-untyped]
     DeepLift,
     FeatureAblation,
     InputXGradient,
@@ -33,13 +33,31 @@ class AttributionMethod(StrEnum):
     """Supported Captum algorithms for vision backbones."""
 
     GRAD_CAM = "grad_cam"
+    """Gradient-weighted Class Activation Mapping. Gives a heat map over the input image showing which receptive fields
+    contributed most to the activations int the final conv layers."""
     INTEGRATED_GRADIENTS = "integrated_gradients"
+    """Attribute a model's prediction back to its input features. I.e. which parts of the input contributed the most to
+    the model's prediction. It integrates gradients gradients along a path that describes a morphing from a baseline
+    input (i.e. blank image) into the actual input. """
     DEEP_LIFT = "deep_lift"
+    """DeepLift back-propagates differences between the prediction given a baseline and actual input to attribute
+    changes in the output to differences in the input."""
     INPUT_X_GRADIENT = "input_x_gradient"
+    """Multiplies the input features by the gradients of the output with respect to the input. Gives a simple measure of
+    which input features have the most influence on the output at a particular point in the feature space."""
     LAYER_GRAD_X_ACT = "layer_grad_x_activation"
+    """Layer Gradient x Activation computes the gradients of the output w.r.t. to the activations of a specific layer
+    and multiplies them with these activation maps to get a layer-wise view of how indiviual neurons in that layer
+    contribute to the final output. Gives insights into which parts of the feature maps in a layer are most influential."""
     OCCLUSION = "occlusion"
+    """Occlusion is a perturbation-based method that systematically occludes parts of the input (i.e. by sliding an
+    occlusion window over the image) and captures the change in the model's output. Regions that cause significant
+    changes in the output when occluded are deemed important for the model's prediction."""
     FEATURE_ABLATION = "feature_ablation"
+    """Systematically removes parts of the input to see how the model's predictions change."""
     NOISE_TUNNEL_IG = "noise_tunnel_ig"
+    """Noise Tunnel is an extension to Integrated Gradients that adds noise to the input multiple times, runs IG
+    and subsequently averages the attributions. This has a smoothing effect and can help reduce noise in the attributions."""
 
 
 class BaselineStrategy(StrEnum):
