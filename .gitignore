@@ -234,3 +234,5 @@ main.pdf
 .DS_Store
 trash.txt
 debug/
+.data
+.logs

@@ -1,6 +1,5 @@
 import ast  # noqa: I001 // Do not sort imports or this wont work
 import inspect
-import json
 import logging
 import re
 from typing import Any, Optional, Sequence
@@ -11,7 +10,8 @@ import numpy as np
 # This is an ugly fix to make paddleocr compatible with langchain 1.0.0
 # https://github.com/PaddlePaddle/PaddleOCR/issues/16711#issuecomment-3446427004
 # This must be imported prior to paddleocr
-import traenslenzor.layout_detector.shim_langchain_backcomp  # noqa: F401
+from traenslenzor.file_server.session_state import BBoxPoint, TextItem
+import traenslenzor.text_extractor.shim_langchain_backcomp  # noqa: F401
 from paddleocr import PaddleOCR
 from pydantic import Json
 
@@ -19,25 +19,22 @@ from pydantic import Json
 logger = logging.getLogger(__name__)
 
 
-def result_to_json(results) -> Any:
-    return json.dumps(
-        [
-            {"text": text, "confidence": score, "bbox": [list(map(int, pt)) for pt in poly]}
-            for r in results
-            for text, score, poly in zip(r["rec_texts"], r["rec_scores"], r["rec_polys"])
-        ]
-    )
+def parse_result(results) -> Any:
+    return [
+        TextItem(
+            extractedText=text,
+            confidence=score,
+            bbox=[BBoxPoint(x=int(pt[0]), y=int(pt[1])) for pt in poly],
+        )
+        for r in results
+        for text, score, poly in zip(r["rec_texts"], r["rec_scores"], r["rec_polys"])
+    ]
 
 
 def paddle_ocr(lang: str, image: np.ndarray) -> Json:
     ocr = PaddleOCR(lang=lang, use_angle_cls=False)
     results = ocr.predict(image)
     return results
-
-
-def bytes_to_numpy_image(data: bytes) -> np.ndarray:
-    arr = np.frombuffer(data, dtype=np.uint8)
-    return cv2.imdecode(arr, cv2.IMREAD_COLOR)
 
 
 def get_paddle_supported_langs() -> list[str]:
@@ -78,14 +75,11 @@ def normalize_language(lang: str) -> str:
     return "latin"
 
 
-def ocr_from_bytes(lang: str, image: bytes) -> Optional[Any]:
+def run_ocr(lang: str, image: np.ndarray) -> Optional[Any]:
     lang = normalize_language(lang)
-
-    npimg = bytes_to_numpy_image(image)
-
     try:
-        ocr_res = paddle_ocr(lang, npimg)
-        return result_to_json(ocr_res)
+        ocr_res = paddle_ocr(lang, image)
+        return parse_result(ocr_res)
     except Exception as e:
         print(f"PaddleOCR failed with: {e}, returning None")
         return None
@@ -94,15 +88,15 @@ def ocr_from_bytes(lang: str, image: bytes) -> Optional[Any]:
 if __name__ == "__main__":
     import os
 
-    def load_image_as_bytes(path: str) -> bytes:
+    def load_image_as_bytes(path: str) -> np.ndarray:
         with open(path, "rb") as f:
-            return f.read()
+            arr = np.frombuffer(f.read(), dtype=np.uint8)
+            return cv2.imdecode(arr, cv2.IMREAD_COLOR)
 
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    image_path = dir_path + "/test_image.png"
-    img_b = load_image_as_bytes(image_path)
-    npimg = bytes_to_numpy_image(img_b)
+    image_path = dir_path + "/../../test_images/test_image_ocr.png"
+    npimg = load_image_as_bytes(image_path)
     lang = normalize_language("hi")
     r = paddle_ocr(lang, npimg)
-    j = result_to_json(r)
+    j = parse_result(r)
     print(j)

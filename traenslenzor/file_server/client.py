@@ -1,6 +1,6 @@
 from io import BytesIO
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import aiofiles
 import httpx
@@ -10,9 +10,11 @@ from PIL import Image
 from PIL.Image import Image as PILImage
 
 from traenslenzor.file_server.server import ADDRESS, PORT
+from traenslenzor.file_server.session_state import SessionState
 from traenslenzor.image_utils.image_utils import pil_to_numpy
 
 FILES_ENDPOINT = f"http://{ADDRESS}:{PORT}/files"
+SESSION_ENDPOINT = f"http://{ADDRESS}:{PORT}/sessions"
 
 
 class FileClient:
@@ -98,3 +100,47 @@ class FileClient:
             return False
         resp.raise_for_status()
         return True
+
+
+class SessionClient:
+    @staticmethod
+    async def create(session: SessionState) -> str:
+        """Create a session and return its UUID string, or None on failure."""
+        print("Creating new session")
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(SESSION_ENDPOINT, json=session.model_dump())
+        if not resp.is_success:
+            raise Exception("Failed to create a new session.")
+        return str(resp.json().get("id"))
+
+    @staticmethod
+    async def get(session_id: str) -> SessionState:
+        """Retrieve a session by ID."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{SESSION_ENDPOINT}/{session_id}")
+        if not resp.is_success:
+            raise Exception(f"Failed to get session with id '{session_id}'.")
+        return SessionState(**resp.json())
+
+    @staticmethod
+    async def put(session_id: str, session: SessionState) -> SessionState:
+        """Replace an existing session."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(f"{SESSION_ENDPOINT}/{session_id}", json=session.model_dump())
+        if not resp.is_success:
+            raise Exception(f"Failed to update session with id '{session_id}'.")
+        return SessionState(**resp.json())
+
+    @staticmethod
+    async def delete(session_id: str) -> None:
+        """Delete a session. Returns True if successful."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.delete(f"{SESSION_ENDPOINT}/{session_id}")
+        if not resp.is_success:
+            raise Exception(f"Failed to delete session with id '{session_id}'.")
+
+    @staticmethod
+    async def update(session_id: str, updater: Callable[[SessionState], None]):
+        session = await SessionClient.get(session_id)
+        updater(session)
+        await SessionClient.put(session_id, session)
