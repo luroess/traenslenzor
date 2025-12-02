@@ -9,7 +9,15 @@ async def run_tool():
     for tool in tools.values():
         inp = tool.parameters
         out = tool.output_schema
-        console.plog(dict(input=inp, output=out))
+        console.plog(
+            {
+                "name": tool.name,
+                "description": tool.description,
+                "annotations": tool.annotations,
+                "input": inp,
+                "output": out,
+            }
+        )
 
 
 if __name__ == "__main__":

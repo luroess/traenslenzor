@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
+from traenslenzor.doc_classifier.configs.path_config import PathConfig
 from traenslenzor.doc_classifier.lightning import DocClassifierConfig
 from traenslenzor.doc_classifier.mcp.runtime import DocClassifierRuntime
 from traenslenzor.doc_classifier.utils import BaseConfig
@@ -25,11 +26,11 @@ class DocClassifierMCPConfig(BaseConfig[DocClassifierRuntime]):
         description="Configuration for the Lightning module.",
     )
     is_mock: bool = Field(
-        default=True, description="If True, uses a mock model that returns random predictions. "
+        default=False, description="If True, uses a mock model that returns random predictions. "
     )
     checkpoint_path: Path | None = Field(
-        default=None,
-        description="Optional path to a Lightning checkpoint (.ckpt). If omitted, a mock model is used.",
+        default="alexnet-scratch-epoch=epoch=1-val_loss=val/loss=0.84.ckpt",
+        description="Optional path to a Lightning checkpoint (.ckpt). Should be relative to .logs/checkpoints/",
     )
     device: str = Field(
         default="cpu",
@@ -45,10 +46,13 @@ class DocClassifierMCPConfig(BaseConfig[DocClassifierRuntime]):
         description="Random seed for reproducibility when using a real model.",
     )
     is_debug: bool = Field(default=False, description="Enable verbose debug logging.")
-    verbose: bool = Field(default=False, description="Enable verbose runtime logging.")
+    verbose: bool = Field(default=True, description="Enable verbose runtime logging.")
 
-    def setup_target(self) -> DocClassifierRuntime:
-        return self.target(self)
+    @field_validator("checkpoint_path", mode="before")
+    @classmethod
+    def validate_checkpoint_path(cls, v: Path | str | None) -> Path | None:
+        """Convert string paths to Path objects."""
+        return PathConfig().resolve_checkpoint_path(v)
 
 
 __all__ = ["DocClassifierMCPConfig"]

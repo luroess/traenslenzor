@@ -4,8 +4,6 @@ Exposes `classify_document` over MCP and can be run via streamable HTTP,
 mirroring the layout detector server.
 """
 
-from pathlib import Path
-
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 
@@ -15,12 +13,12 @@ from traenslenzor.doc_classifier.mcp.schemas import DocClassifierResponse
 from traenslenzor.doc_classifier.utils import Console
 
 ADDRESS = "127.0.0.1"
-PORT = 8002
+PORT = 8003
 DOC_CLASSIFIER_BASE_PATH = f"http://{ADDRESS}:{PORT}/mcp"
 
 doc_classifier_mcp = FastMCP(
     name="doc-classifier",
-    strict_input_validation=True,  # enforce Pydantic validation on inputs
+    strict_input_validation=True,
 )
 console = Console.with_prefix("doc-classifier-mcp", "init")
 
@@ -34,43 +32,42 @@ def get_runtime() -> DocClassifierRuntime:
     return _runtime
 
 
-# TODO: direclty use Tool instead of decorator!
-@doc_classifier_mcp.tool(
-    name="classify_document",
-    description=(
-        "Classify a document image into one of the supported document classes. "
-        "Returns a probability map over the top-k labels."
-    ),
-    annotations={
-        "title": "Classify document",
-        "readOnlyHint": True,
-        "idempotentHint": True,
-        "openWorldHint": False,
-    },
-)
-def classify_document(
-    # ctx: Context,
-    path: Path,
-    top_k: int = 3,
+async def classify_document(
+    document_id: str,
+    top_k: int | str = 3,
 ) -> DocClassifierResponse:
+    """Async helper used by both FastMCP registration and tests."""
     runtime = get_runtime()
-    path = runtime.resolve_path(path)
 
-    if not path.exists():
-        raise ToolError(f"File not found: {path}")
+    try:
+        top_k_int = int(top_k)
+    except (TypeError, ValueError) as exc:
+        raise ToolError("top_k must be an integer or digit string") from exc
 
-    # ctx.info(f"Running doc-classifier on {path}")
-    raw = runtime.classify_path(path, top_k=top_k)
+    if not 1 <= top_k_int <= 16:
+        raise ToolError("top_k must be between 1 and 16")
+
+    try:
+        raw = await runtime.classify_file_id(document_id, top_k=top_k_int)
+    except FileNotFoundError as exc:
+        raise ToolError(str(exc)) from exc
 
     probabilities = {
-        pred["label"]: float(pred["probability"]) for pred in raw["predictions"][:top_k]
+        pred["label"]: float(pred["probability"]) for pred in raw["predictions"][:top_k_int]
     }
 
     return DocClassifierResponse(
-        top_k=top_k,
         probabilities=probabilities,
-        model_version=runtime.model_version,
     )
+
+
+doc_classifier_mcp.tool(
+    name="classify_document",
+    description=(
+        "Classify a document image into one of the supported document classes. "
+        "Provide the file id returned by FileClient.put_img."
+    ),
+)(classify_document)
 
 
 async def run():
