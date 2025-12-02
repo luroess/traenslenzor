@@ -67,7 +67,6 @@ def test_default_data_root_helper():
     assert _default_data_root().name == ".data"
 
 
-
 def test_trainer_callbacks_config_builds_requested_callbacks(tmp_path):
     cfg = TrainerCallbacksConfig(
         use_model_checkpoint=True,
@@ -84,7 +83,6 @@ def test_trainer_callbacks_config_builds_requested_callbacks(tmp_path):
     assert any(isinstance(cb, EarlyStopping) for cb in callbacks)
     assert any(isinstance(cb, LearningRateMonitor) for cb in callbacks)
     assert (tmp_path / "ckpts").is_dir()
-
 
 
 def test_trainer_factory_update_wandb_disabled():
@@ -127,7 +125,6 @@ def test_experiment_config_propagates_flags_and_stage(fresh_path_config):
     assert config.stage is Stage.VAL
     assert config.is_debug is True
     assert config.trainer_config.fast_dev_run is True
-
 
 
 def test_optuna_config_setup_target_uses_selected_strategies(monkeypatch):

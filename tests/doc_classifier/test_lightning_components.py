@@ -161,7 +161,9 @@ def test_doc_data_module_setup_without_stage(monkeypatch):
 
     monkeypatch.setattr(RVLCDIPConfig, "setup_target", fake_setup_target)
 
-    datamodule = DocDataModuleConfig(batch_size=1, num_workers=0, persistent_workers=False).setup_target()
+    datamodule = DocDataModuleConfig(
+        batch_size=1, num_workers=0, persistent_workers=False
+    ).setup_target()
     datamodule.setup(None)
 
     assert datamodule.train_ds is datasets[Stage.TRAIN]
@@ -171,7 +173,9 @@ def test_doc_data_module_setup_without_stage(monkeypatch):
 
 def test_doc_data_module_invalid_stage(monkeypatch):
     monkeypatch.setattr(RVLCDIPConfig, "setup_target", lambda self: _DummyDataset(0))
-    datamodule = DocDataModuleConfig(batch_size=1, num_workers=0, persistent_workers=False).setup_target()
+    datamodule = DocDataModuleConfig(
+        batch_size=1, num_workers=0, persistent_workers=False
+    ).setup_target()
 
     with pytest.raises(ValueError):
         datamodule.setup("invalid")
