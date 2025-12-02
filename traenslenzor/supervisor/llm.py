@@ -34,8 +34,11 @@ def _check_ollama_server():
 def pull_base_model():
     """Pull the base model from Ollama. Returns True if successful."""
     logger.info(f"Pulling base model '{BASE_MODEL}'...")
+    logger.info("This may take several minutes depending on your internet connection...")
     try:
-        response = requests.post(f"{OLLAMA_URL}/api/pull", json={"model": BASE_MODEL}, timeout=300)
+        # Use a shorter timeout to avoid hanging indefinitely
+        # The Ollama API handles pulls asynchronously, so this just initiates it
+        response = requests.post(f"{OLLAMA_URL}/api/pull", json={"model": BASE_MODEL}, timeout=60)
         if response.status_code != 200:
             logger.error(f"Failed to pull the base model '{BASE_MODEL}': {response.text}")
             return False
@@ -111,9 +114,18 @@ def initialize_model():
         return False
 
     # Check if base model exists, if not try to pull it
-    base_model_exists = exists_model() or BASE_MODEL in [
-        m["name"] for m in requests.get(f"{OLLAMA_URL}/api/tags").json().get("models", [])
-    ]
+    custom_model_exists = exists_model()
+
+    # Check if base model exists
+    base_model_exists = False
+    try:
+        response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
+        if response.status_code == 200:
+            present_models = response.json().get("models", [])
+            model_names = [m["name"] for m in present_models]
+            base_model_exists = BASE_MODEL in model_names
+    except Exception as e:
+        logger.error(f"Error checking for base model: {e}")
 
     if not base_model_exists:
         logger.info(f"Base model '{BASE_MODEL}' not found, attempting to pull...")
@@ -127,7 +139,7 @@ def initialize_model():
             return False
 
     # Delete existing custom model if it exists
-    if exists_model():
+    if custom_model_exists:
         logger.info(f"Custom model '{MODEL_NAME}' already exists, deleting...")
         if not delete():
             logger.warning("Failed to delete existing model, continuing anyway...")
