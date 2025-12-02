@@ -5,13 +5,18 @@ training and OneCycle learning-rate scheduling.
 """
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Literal, Sequence
+from typing import Any, Literal, Sequence
 
+import matplotlib
+import matplotlib.pyplot as plt
 import pytorch_lightning as pl
+import seaborn as sns  # type: ignore[import-untyped]
 import torch
 import torch.nn.functional as F
 import torchmetrics
+import wandb
 from jaxtyping import Float, Int64
 from pydantic import Field
 from torch import Tensor, nn
@@ -19,18 +24,36 @@ from torch.optim import AdamW, Optimizer
 from torch.optim.lr_scheduler import OneCycleLR
 from torchvision import models
 
+from ..interpretability import AttributionEngine, InterpretabilityConfig
 from ..models.alexnet import AlexNetParams
 from ..utils import BaseConfig, Console, Metric
 
-if TYPE_CHECKING:
-    pass
-
-# Type aliases for tensor shapes using jaxtyping
 # B = batch, C = channels, H = height, W = width, N = num_classes
 ImageBatch = Float[Tensor, "B C H W"]
 Logits = Float[Tensor, "B N"]
 Targets = Int64[Tensor, "B"]
 ScalarLoss = Float[Tensor, ""]
+
+
+@dataclass
+class BackboneSpec:
+    """Container holding backbone and classification head modules."""
+
+    model: nn.Module
+    """Full model including both backbone and head."""
+
+    backbone: nn.Module
+    """Feature extractor without the task-specific head."""
+
+    head: nn.Module
+    """Task-specific classification head producing logits."""
+
+
+def _set_requires_grad(module: nn.Module, *, requires_grad: bool) -> None:
+    """Toggle ``requires_grad`` on all parameters of ``module``."""
+
+    for param in module.parameters():
+        param.requires_grad = requires_grad
 
 
 class OptimizerConfig(BaseConfig[Optimizer]):
@@ -114,8 +137,8 @@ class BackboneType(StrEnum):
     RESNET50 = "resnet50"
     VIT_B16 = "vit_b_16"
 
-    def build(self, num_classes: int, train_head_only: bool, use_pretrained: bool) -> nn.Module:
-        """Instantiate the selected backbone with the requested number of output classes.
+    def build(self, num_classes: int, train_head_only: bool, use_pretrained: bool) -> BackboneSpec:
+        """Instantiate the selected backbone and head pair.
 
         Args:
             num_classes: Number of output classes for classification head.
@@ -123,35 +146,38 @@ class BackboneType(StrEnum):
             use_pretrained: If True, load ImageNet pretrained weights (ignored for AlexNet).
 
         Returns:
-            nn.Module: Configured model with classification head for num_classes.
+            BackboneSpec: Backbone/head modules.
         """
         match self:
             case BackboneType.ALEXNET:
-                return AlexNetParams(num_classes=num_classes).setup_target()
+                alexnet = AlexNetParams(num_classes=num_classes).setup_target()
+                backbone = alexnet.features
+                if train_head_only:
+                    _set_requires_grad(backbone, requires_grad=False)
+                return BackboneSpec(alexnet, backbone, head=alexnet.classifier)
 
             case BackboneType.RESNET50:
-                # Instantiate ResNet50 with ImageNet weights (V2: acc@1 80.86)
                 model = models.resnet50(
                     weights=models.ResNet50_Weights.IMAGENET1K_V2 if use_pretrained else None
                 )
+                in_features = model.fc.in_features
+                model.fc = nn.Identity()
+                backbone = model  # keeps class name ResNet
+                head = nn.Linear(in_features, num_classes)
                 if train_head_only:
-                    for param in model.parameters():
-                        param.requires_grad = False
-                # Replace classification head: fc = nn.Linear(2048, num_classes)
-                model.fc = nn.Linear(model.fc.in_features, num_classes)
-                return model
+                    _set_requires_grad(backbone, requires_grad=False)
+                return BackboneSpec(model=model, backbone=backbone, head=head)
 
             case BackboneType.VIT_B16:
-                # Instantiate Vision Transformer with ImageNet weights
-                model = models.vit_b_16(
+                vit = models.vit_b_16(
                     weights=models.ViT_B_16_Weights.IMAGENET1K_V1 if use_pretrained else None
                 )
+                vit.heads = nn.Identity()
+                backbone = vit  # class name VisionTransformer
+                head = nn.Linear(vit.hidden_dim, num_classes)
                 if train_head_only:
-                    for param in model.parameters():
-                        param.requires_grad = False
-                # Replace classification head: heads = nn.Linear(hidden_dim, num_classes)
-                model.heads = nn.Linear(model.hidden_dim, num_classes)
-                return model
+                    _set_requires_grad(backbone, requires_grad=False)
+                return BackboneSpec(model=vit, backbone=backbone, head=head)
 
 
 class DocClassifierConfig(BaseConfig["DocClassifierModule"]):
@@ -179,6 +205,9 @@ class DocClassifierConfig(BaseConfig["DocClassifierModule"]):
     scheduler: OneCycleSchedulerConfig = Field(default_factory=OneCycleSchedulerConfig)
     """Learning rate scheduler configuration."""
 
+    interpretability: InterpretabilityConfig | None = None
+    """Optional Captum interpretability configuration."""
+
 
 class DocClassifierModule(pl.LightningModule):
     """Lightning module implementing training/validation/test loops for document classification.
@@ -201,11 +230,21 @@ class DocClassifierModule(pl.LightningModule):
         hparams["optimizer.learning_rate"] = params.optimizer.learning_rate  # Flatten for LR Finder
         self.save_hyperparameters(hparams)
 
-        self.model = params.backbone.build(
+        Console.with_prefix(self.__class__.__name__, "__init__").log(
+            f"Using backbone: {params.backbone} with head-only training: {params.train_head_only} and pretrained: {params.use_pretrained}"
+        )
+
+        spec = params.backbone.build(
             num_classes=params.num_classes,
             train_head_only=params.train_head_only,
             use_pretrained=params.use_pretrained,
         )
+
+        self.model = spec.model
+        self.backbone = spec.backbone
+        self.head = spec.head
+
+        # Loss function
         self.loss_fn = nn.CrossEntropyLoss()
 
         # Torch Metrics
@@ -222,6 +261,10 @@ class DocClassifierModule(pl.LightningModule):
         )
 
         self._is_tuning: bool = False
+        self.attribution_engine: AttributionEngine | None = None
+
+        if params.interpretability is not None:
+            self.attribution_engine = params.interpretability.setup_target(self)
 
     # ---------------------------------------------------------------------- steps
     def forward(self, batch: ImageBatch) -> Logits:
@@ -246,7 +289,7 @@ class DocClassifierModule(pl.LightningModule):
 
         was_training = self.training
         self.eval()
-        logits = self(batch)
+        logits = self.forward(batch)
         probs = F.softmax(logits, dim=-1)
         if was_training:
             self.train()
@@ -291,6 +334,39 @@ class DocClassifierModule(pl.LightningModule):
             results.append(item_preds)
 
         return results
+
+    def attribute_batch(
+        self,
+        batch: ImageBatch,
+        *,
+        target: Targets | int | None = None,
+        additional_forward_args: Sequence[Tensor] | Tensor | None = None,
+    ) -> dict[str, Tensor]:
+        """Compute interpretability heatmaps for a batch using the configured engine.
+
+        Args:
+            batch: Normalised tensor batch with shape (B, C, H, W).
+            target: Optional class indices to attribute. Defaults to argmax per sample.
+            additional_forward_args: Extra tensors forwarded to the model.
+
+        Returns:
+            Dictionary containing ``heatmap`` (Tensor['B H W']) and ``raw`` attribution.
+
+        Raises:
+            RuntimeError: If no interpretability engine is configured.
+        """
+        if self.attribution_engine is None:
+            raise RuntimeError("Interpretability is not configured for this module.")
+
+        result = self.attribution_engine.attribute(
+            batch,
+            target=target,
+            additional_forward_args=additional_forward_args,
+        )
+        return {
+            "heatmap": result.heatmap,
+            "raw": result.raw_attribution,
+        }
 
     def training_step(self, batch: tuple[ImageBatch, Targets], batch_idx: int) -> ScalarLoss:
         """Compute the training loss and log metrics.
@@ -360,9 +436,6 @@ class DocClassifierModule(pl.LightningModule):
         # Log confusion matrix plot
         self._log_confusion_matrix_plot(confmat, class_names)
 
-        # Log confusion matrix as table
-        self._log_confusion_matrix_table(confmat, class_names)
-
         # Reset confusion matrix for next epoch
         self.confusion_matrix.reset()
 
@@ -380,23 +453,45 @@ class DocClassifierModule(pl.LightningModule):
         if not hasattr(self.logger, "experiment"):
             return
 
-        import matplotlib.pyplot as plt
-        import wandb
+        # Force headless backend to avoid X11 dependency during tests/CI
 
-        # Create confusion matrix plot using torchmetrics
-        fig, ax = self.confusion_matrix.plot(val=confmat)
+        if matplotlib.get_backend().lower() != "agg":
+            matplotlib.use("Agg", force=True)
 
-        # Customize the plot with class names if available
+        confmat_cpu = confmat.detach().float().cpu()
+
+        # Row-normalise to show proportions per true class and display fractions
+        row_sums = confmat_cpu.sum(dim=1, keepdim=True).clamp_min(1e-9)
+        confmat_frac = confmat_cpu / row_sums
+
+        fig, ax = plt.subplots(figsize=(16, 12))
+        sns.heatmap(
+            confmat_frac.numpy(),
+            annot=True,
+            fmt=".2f",
+            cmap="viridis",
+            linewidths=0.5,
+            cbar_kws={"label": "Recall"},
+            square=True,
+            ax=ax,
+            vmin=0.0,
+            vmax=1.0,
+        )
+
         if class_names is not None:
-            ax.set_xticklabels(class_names, rotation=45, ha="right", fontsize=8)
-            ax.set_yticklabels(class_names, rotation=0, fontsize=8)
-            ax.set_xlabel("Predicted Class", fontsize=10)
-            ax.set_ylabel("True Class", fontsize=10)
-            ax.set_title(
-                f"Confusion Matrix - Epoch {self.current_epoch}",
-                fontsize=12,
-                fontweight="bold",
+            ax.set_xticklabels(
+                list(map(lambda x: x.title(), class_names)), rotation=35, ha="right", fontsize=8
             )
+            ax.set_yticklabels(list(map(lambda x: x.title(), class_names)), rotation=0, fontsize=8)
+
+        ax.set_xlabel("Predicted Class", fontsize=11)
+        ax.set_ylabel("True Class", fontsize=11)
+        ax.set_title(
+            f"Confusion Matrix - Epoch {self.current_epoch}",
+            fontsize=14,
+            fontweight="bold",
+        )
+        plt.tight_layout()
 
         # Log to WandB
         self.logger.experiment.log(
@@ -406,50 +501,7 @@ class DocClassifierModule(pl.LightningModule):
             }
         )
 
-        # Close the figure to free memory
         plt.close(fig)
-
-    def _log_confusion_matrix_table(
-        self,
-        confmat: Float[Tensor, "N N"],
-        class_names: list[str] | None,
-    ) -> None:
-        """Log confusion matrix as WandB Table for interactive exploration.
-
-        Args:
-            confmat (Tensor['N N', float]): Computed confusion matrix tensor.
-            class_names: List of class names for table labels, or None.
-        """
-        if not hasattr(self.logger, "experiment"):
-            return
-
-        import wandb
-
-        # Convert tensor to numpy for table creation
-        confmat_np = confmat.cpu().numpy()
-
-        # Use class names if available, otherwise use indices
-        if class_names is None:
-            class_names = [f"Class_{i}" for i in range(len(confmat_np))]
-
-        # Create WandB Table with confusion matrix data
-        # Columns: "Actual" + predicted class names
-        columns = ["Actual"] + class_names
-        data = []
-
-        for i, actual_class in enumerate(class_names):
-            row = [actual_class] + confmat_np[i].tolist()
-            data.append(row)
-
-        table = wandb.Table(columns=columns, data=data)
-
-        # Log table to WandB
-        self.logger.experiment.log(
-            {
-                f"{Metric.VAL_CONFUSION_MATRIX}_table": table,
-                "epoch": self.current_epoch,
-            }
-        )
 
     def _get_class_names(self) -> list[str] | None:
         """Get class names from the dataset.

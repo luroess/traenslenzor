@@ -15,8 +15,7 @@ from ..data_handling.transforms import TrainTransformConfig, ValTransformConfig
 from ..utils import BaseConfig, Console, Stage
 
 # Suppress PyTorch's internal pin_memory deprecation warning (PyTorch 2.9+)
-# This warning comes from DataLoader's internal implementation, not our code
-# Will be fixed in future PyTorch releases
+# This warning comes from DataLoader's internal implementation
 warnings.filterwarnings(
     "ignore",
     message=r"The argument 'device' of Tensor\.pin_memory\(\) is deprecated",
@@ -61,11 +60,6 @@ def _default_ds(split: Stage) -> RVLCDIPConfig:
     )
 
 
-def _pin_memory(pin_memory: bool = True) -> bool:
-    # Only pin memory if CUDA is available
-    return pin_memory and torch.cuda.is_available()
-
-
 class DocDataModuleConfig(BaseConfig["DocDataModule"]):
     """Configuration for :class:`DocDataModule`."""
 
@@ -77,8 +71,8 @@ class DocDataModuleConfig(BaseConfig["DocDataModule"]):
     num_workers: int = Field(default_factory=_default_num_workers)
     """Number of worker processes for data loading."""
 
-    pin_memory: bool = True
-    """Whether to pin memory in DataLoaders for faster GPU transfer."""
+    persistent_workers: bool = True
+    """Whether to keep DataLoader worker processes alive between epochs."""
 
     limit_num_samples: int | float | None = None
     """Limit number of samples per dataset for debugging.
@@ -103,9 +97,6 @@ class DocDataModuleConfig(BaseConfig["DocDataModule"]):
     @model_validator(mode="after")
     def _debug_defaults(self) -> Self:
         """Apply debug-mode defaults when is_debug=True.
-
-        This validator runs after initialization and when is_debug is propagated
-        from parent configs via setattr(), ensuring debug settings are applied.
 
         Uses object.__setattr__() to avoid retriggering validation (which would
         cause infinite recursion).
@@ -167,34 +158,40 @@ class DocDataModule(pl.LightningDataModule):
     # ------------------------------------------------------------------ loaders
     def train_dataloader(self) -> DataLoader:
         self._ensure_dataset(Stage.TRAIN)
-        return DataLoader(
-            self._train_ds,
-            batch_size=self.config.batch_size,
-            num_workers=self.config.num_workers,
-            shuffle=True,
-            pin_memory=_pin_memory(self.config.pin_memory),
-            collate_fn=collate_hf_batch,
-        )
+        loader_kwargs: dict[str, Any] = {
+            "batch_size": self.config.batch_size,
+            "num_workers": self.config.num_workers,
+            "persistent_workers": self.config.persistent_workers,
+            "shuffle": True,
+            "collate_fn": collate_hf_batch,
+        }
+        if self.config.num_workers > 0:
+            loader_kwargs["multiprocessing_context"] = "spawn"
+        return DataLoader(self._train_ds, **loader_kwargs)
 
     def val_dataloader(self) -> DataLoader:
         self._ensure_dataset(Stage.VAL)
-        return DataLoader(
-            self._val_ds,
-            batch_size=self.config.batch_size,
-            num_workers=self.config.num_workers,
-            pin_memory=_pin_memory(self.config.pin_memory),
-            collate_fn=collate_hf_batch,
-        )
+        loader_kwargs: dict[str, Any] = {
+            "batch_size": self.config.batch_size,
+            "num_workers": self.config.num_workers,
+            "persistent_workers": self.config.persistent_workers,
+            "collate_fn": collate_hf_batch,
+        }
+        if self.config.num_workers > 0:
+            loader_kwargs["multiprocessing_context"] = "spawn"
+        return DataLoader(self._val_ds, **loader_kwargs)
 
     def test_dataloader(self) -> DataLoader:
         self._ensure_dataset(Stage.TEST)
-        return DataLoader(
-            self._test_ds,
-            batch_size=self.config.batch_size,
-            num_workers=self.config.num_workers,
-            pin_memory=_pin_memory(self.config.pin_memory),
-            collate_fn=collate_hf_batch,
-        )
+        loader_kwargs: dict[str, Any] = {
+            "batch_size": self.config.batch_size,
+            "num_workers": self.config.num_workers,
+            "persistent_workers": self.config.persistent_workers,
+            "collate_fn": collate_hf_batch,
+        }
+        if self.config.num_workers > 0:
+            loader_kwargs["multiprocessing_context"] = "spawn"
+        return DataLoader(self._test_ds, **loader_kwargs)
 
     # ---------------------------------------------------------------- properties
     @property

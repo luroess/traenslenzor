@@ -103,63 +103,25 @@ class RVLCDIPConfig(BaseConfig[HFDataset]):
         return hf_dataset
 
 
+class _TransformApplier:
+    """Pickle-friendly Albumentations batch applier for HF datasets."""
+
+    def __init__(self, albumentations_transform: "Compose") -> None:
+        self.albumentations_transform = albumentations_transform
+
+    def __call__(self, examples: dict[str, Any]) -> dict[str, Any]:
+        """Apply Albumentations transform to a batch of examples."""
+
+        images = [
+            self.albumentations_transform(image=np.array(image))["image"]
+            for image in examples["image"]
+        ]
+        return {"image": images, "label": examples["label"]}
+
+
 def make_transform_fn(
     albumentations_transform: "Compose",
 ) -> Callable[[dict[str, Any]], dict[str, Any]]:
-    """Create a transform function compatible with HuggingFace Dataset.set_transform().
+    """Create a pickleable transform callable for Dataset.set_transform()."""
 
-    This factory function wraps an Albumentations pipeline for use with HF datasets.
-
-    Args:
-        albumentations_transform: Albumentations Compose pipeline.
-
-    Returns:
-        Transform function that takes a batch dict and returns transformed batch.
-        Expects input dict with 'image' and 'label' keys.
-        Outputs dict with 'image' (tensor) and 'label' (int).
-
-    Example:
-        ```python
-        import albumentations as A
-        from albumentations.pytorch import ToTensorV2
-
-        # Define Albumentations pipeline
-        transform = A.Compose([
-            A.Resize(224, 224),
-            A.HorizontalFlip(p=0.5),
-            A.Normalize(mean=[0.485], std=[0.229]),
-            ToTensorV2(),
-        ])
-
-        # Create HF-compatible transform function
-        transform_fn = make_transform_fn(transform)
-
-        # Apply to dataset
-        dataset = config.setup_target()
-        dataset.set_transform(transform_fn)
-        ```
-    """
-
-    def transform_batch(examples: dict[str, Any]) -> dict[str, Any]:
-        """Apply Albumentations transform to a batch of examples.
-
-        Args:
-            examples: Batch dictionary with 'image' (list of PIL Images) and
-                     'label' (list of ints) from HuggingFace Dataset.
-
-        Returns:
-            Transformed batch with:
-                - 'image': List of tensors (C, H, W) after Albumentations
-                - 'label': Original labels (unchanged)
-        """
-
-        def transform_single(image):
-            """PIL → numpy → Albumentations → tensor."""
-            return albumentations_transform(image=np.array(image))["image"]
-
-        return {
-            "image": list(map(transform_single, examples["image"])),
-            "label": examples["label"],
-        }
-
-    return transform_batch
+    return _TransformApplier(albumentations_transform)

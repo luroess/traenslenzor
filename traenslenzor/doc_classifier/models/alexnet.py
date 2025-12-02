@@ -1,16 +1,12 @@
-from typing import TYPE_CHECKING
-
 import torch
+from jaxtyping import Float
 from pydantic import Field
 from torch import nn
 
 from ..utils import BaseConfig
 
-if TYPE_CHECKING:
-    from jaxtyping import Float
 
-
-class AlexNetParams(BaseConfig):
+class AlexNetParams(BaseConfig["AlexNet"]):
     """Parameter configuration for AlexNet."""
 
     target: type["AlexNet"] = Field(default_factory=lambda: AlexNet, exclude=True)
@@ -18,14 +14,10 @@ class AlexNetParams(BaseConfig):
     dropout: float = 0.5
 
 
-# Type alias for jaxtyping tensor shapes
 # B = batch, C = channels, H = height, W = width, N = num_classes
-if TYPE_CHECKING:
-    ImageBatch = Float[torch.Tensor, "B 3 H W"]
-    Logits = Float[torch.Tensor, "B N"]
-else:
-    ImageBatch = torch.Tensor
-    Logits = torch.Tensor
+
+ImageBatch = Float[torch.Tensor, "B 3 H W"]
+Logits = Float[torch.Tensor, "B N"]
 
 
 class AlexNet(nn.Module):

@@ -143,7 +143,7 @@ class ExperimentConfig(BaseConfig[Trainer]):
         console.log(f"Stage: {setup_stage}, Seed: {self.seed}")
 
         console.log("Creating Trainer...")
-        trainer = self.trainer_config.setup_target()
+        trainer = self.trainer_config.setup_target(self)
 
         resolved_stage = Stage.from_str(setup_stage)
 

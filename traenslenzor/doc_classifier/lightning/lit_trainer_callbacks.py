@@ -1,5 +1,6 @@
 from datetime import timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import model_validator
 from pytorch_lightning.callbacks import (
@@ -15,8 +16,13 @@ from pytorch_lightning.callbacks import (
 )
 from typing_extensions import Self
 
+from traenslenzor.doc_classifier.utils.console import Console
+
 from ..configs.path_config import PathConfig
 from ..utils import BaseConfig, Metric
+
+if TYPE_CHECKING:
+    pass
 
 
 class CustomTQDMProgressBar(TQDMProgressBar):
@@ -52,7 +58,7 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
     """Mode for checkpoint monitor ('min' or 'max')."""
     checkpoint_dir: Path | None = None
     """Directory to save checkpoints. If None, uses PathConfig().checkpoints."""
-    checkpoint_filename: str = f"epoch={{epoch}}-val_loss={{{Metric.VAL_LOSS}:.2f}}"
+    checkpoint_filename: str = f"{{epoch}}-{{{Metric.VAL_LOSS}:.2f}}"
     """Filename template for checkpoints."""
     checkpoint_save_top_k: int = 1
     """Number of best models to save."""
@@ -108,7 +114,8 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
             )
         return self
 
-    def setup_target(self) -> list[Callback]:
+    def setup_target(self, model_name: str | None = None) -> list[Callback]:
+        console = Console.with_prefix(self.__class__.__name__)
         callbacks: list[Callback] = []
 
         if self.use_model_checkpoint:
@@ -116,15 +123,22 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
                 self.checkpoint_dir if self.checkpoint_dir is not None else PathConfig().checkpoints
             )
             dirpath.mkdir(parents=True, exist_ok=True)
+
+            ckpt_fn = (
+                f"{model_name}-" + self.checkpoint_filename
+                if model_name
+                else self.checkpoint_filename
+            )
             callbacks.append(
                 ModelCheckpoint(
                     monitor=self.checkpoint_monitor,
                     mode=self.checkpoint_mode,
                     save_top_k=self.checkpoint_save_top_k,
-                    filename=self.checkpoint_filename.replace("/", "-"),
+                    filename=ckpt_fn.replace("/", "-"),
                     dirpath=dirpath.as_posix(),
                 ),
             )
+            console.log(f"ModelCheckpoint active, saving to: {dirpath}/{ckpt_fn}")
 
         if self.use_early_stopping:
             callbacks.append(

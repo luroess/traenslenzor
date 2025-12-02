@@ -4,7 +4,7 @@ Provides a configurable wrapper to instantiate PyTorch Lightning trainers.
 """
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import pytorch_lightning as pl
 import torch
@@ -168,9 +168,17 @@ class TrainerFactoryConfig(BaseConfig):
             self.wandb_config.tags = sorted(tags)
             console.log(f"Added stage tag to W&B: {stage}")
 
-    def setup_target(self) -> pl.Trainer:
-        """Instantiate the configured trainer."""
+    def setup_target(self, experiment: Optional["ExperimentConfig"] = None) -> pl.Trainer:
+        """Instantiate the configured trainer.
+
+        Args:
+            experiment: Optional experiment config (ignored currently, kept for API compatibility).
+        """
         console = Console.with_prefix(self.__class__.__name__, "setup_target")
+        if experiment is not None:
+            console.set_verbose(getattr(experiment, "verbose", False)).set_debug(
+                getattr(experiment, "is_debug", False)
+            )
 
         # Configure TF32 matmul precision for Tensor Cores (Ampere+ GPUs)
         if self.tf32_matmul_precision is not None:
@@ -183,7 +191,9 @@ class TrainerFactoryConfig(BaseConfig):
         console.log(f"Creating Trainer with accelerator={self.accelerator}, devices={self.devices}")
         console.log(f"Max epochs: {self.max_epochs}, precision: {self.precision}")
 
-        callbacks = self.callbacks.setup_target()
+        callbacks = self.callbacks.setup_target(
+            model_name=experiment.module_config.backbone if experiment else None
+        )
         console.log(f"Configured {len(callbacks)} callbacks: ")
         console.plog(list(map(lambda cb: type(cb).__name__, callbacks)))
 

@@ -1,8 +1,16 @@
+import warnings
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from traenslenzor.doc_classifier import ExperimentConfig
+
+# Silence Python 3.13 fork-in-thread DeprecationWarning from multiprocessing
+warnings.filterwarnings(
+    "ignore",
+    message=r".*multi-threaded, use of fork\(\) may lead to deadlocks.*",
+    category=DeprecationWarning,
+)
 
 
 class CLIExperimentConfig(BaseSettings, ExperimentConfig):
