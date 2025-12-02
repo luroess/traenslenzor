@@ -1,4 +1,5 @@
 """Logging configuration for traenslenzor."""
+
 import logging
 import os
 

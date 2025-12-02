@@ -35,9 +35,7 @@ def pull_base_model():
     """Pull the base model from Ollama. Returns True if successful."""
     logger.info(f"Pulling base model '{BASE_MODEL}'...")
     try:
-        response = requests.post(
-            f"{OLLAMA_URL}/api/pull", json={"model": BASE_MODEL}, timeout=300
-        )
+        response = requests.post(f"{OLLAMA_URL}/api/pull", json={"model": BASE_MODEL}, timeout=300)
         if response.status_code != 200:
             logger.error(f"Failed to pull the base model '{BASE_MODEL}': {response.text}")
             return False
@@ -100,10 +98,10 @@ def create():
 def initialize_model():
     """Initialize the model, pulling base model if needed. Returns True if successful."""
     global _initialized
-    
+
     if _initialized:
         return True
-    
+
     # Check if Ollama server is running
     if not _check_ollama_server():
         logger.error(
@@ -111,12 +109,12 @@ def initialize_model():
             "Please start it with 'docker compose up -d' or 'ollama serve'"
         )
         return False
-    
+
     # Check if base model exists, if not try to pull it
     base_model_exists = exists_model() or BASE_MODEL in [
         m["name"] for m in requests.get(f"{OLLAMA_URL}/api/tags").json().get("models", [])
     ]
-    
+
     if not base_model_exists:
         logger.info(f"Base model '{BASE_MODEL}' not found, attempting to pull...")
         if not pull_base_model():
@@ -127,18 +125,18 @@ def initialize_model():
                 f"  ollama pull {BASE_MODEL}"
             )
             return False
-    
+
     # Delete existing custom model if it exists
     if exists_model():
         logger.info(f"Custom model '{MODEL_NAME}' already exists, deleting...")
         if not delete():
             logger.warning("Failed to delete existing model, continuing anyway...")
-    
+
     # Create the custom model
     if not create():
         logger.error(f"Failed to create custom model '{MODEL_NAME}'")
         return False
-    
+
     _initialized = True
     logger.info("Model initialization complete")
     return True
@@ -147,7 +145,7 @@ def initialize_model():
 def get_llm():
     """Get the LLM instance, initializing if necessary."""
     global _llm
-    
+
     if _llm is None:
         if not initialize_model():
             raise RuntimeError(
@@ -156,14 +154,14 @@ def get_llm():
                 f"2. You have internet access to download the '{BASE_MODEL}' model\n"
                 f"3. Or manually pull the model with: ollama pull {BASE_MODEL}"
             )
-        
+
         _llm = ChatOllama(
             model=MODEL_NAME,
             temperature=TEMPERATURE,
             seed=SEED,
             base_url=OLLAMA_URL,
         )
-    
+
     return _llm
 
 
