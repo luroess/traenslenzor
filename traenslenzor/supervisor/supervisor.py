@@ -18,7 +18,7 @@ from langgraph.types import Command
 
 from traenslenzor.file_server.client import SessionClient
 from traenslenzor.file_server.session_state import SessionState
-from traenslenzor.supervisor.llm import llm
+from traenslenzor.supervisor.llm import get_llm
 from traenslenzor.supervisor.state import SupervisorState, ToolCall
 from traenslenzor.supervisor.tools.tools import get_tools
 
@@ -97,7 +97,7 @@ def format_session(session_id: str, session: SessionState) -> str:
 class Supervisor:
     def __init__(self, tools) -> None:
         self.agent = create_agent(
-            llm,
+            get_llm(),
             tools=tools,
             checkpointer=MemorySaver(),
             state_schema=SupervisorState,
