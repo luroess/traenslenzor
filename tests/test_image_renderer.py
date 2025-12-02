@@ -7,8 +7,10 @@ import pytest
 from PIL import Image
 
 from traenslenzor.file_server.client import FileClient
-from traenslenzor.image_renderer.image_renderer import ImageRenderer
-from traenslenzor.image_renderer.text_operations import Text, create_mask, draw_texts
+from traenslenzor.file_server.session_state import BBoxPoint, TranslatedTextItem
+from traenslenzor.image_renderer.image_rendering import ImageRenderer
+from traenslenzor.image_renderer.mcp_server import get_device
+from traenslenzor.image_renderer.text_operations import create_mask, draw_texts, get_angle_from_bbox
 
 
 @pytest.fixture
@@ -19,22 +21,25 @@ def temp_dir() -> Generator[str, None, None]:
 
 @pytest.fixture
 def renderer() -> ImageRenderer:
-    return ImageRenderer(device="cpu")
+    return ImageRenderer(device=get_device())
 
 
 @pytest.fixture
-def sample_text() -> Text:
-    return {
-        "text": "Hello",
-        "left": 10,
-        "top": 10,
-        "width": 50,
-        "height": 20,
-        "rotation_in_degrees": 0,
-        "font_size": 16,
-        "color": (0, 0, 0),
-        "font_family": "Arial",
-    }
+def sample_text() -> TranslatedTextItem:
+    return TranslatedTextItem(
+        extractedText="Hello",
+        translatedText="Hallo",
+        bbox=[
+            BBoxPoint(x=10, y=10),
+            BBoxPoint(x=60, y=10),
+            BBoxPoint(x=60, y=30),
+            BBoxPoint(x=10, y=30),
+        ],
+        confidence=0.98,
+        font_size="16",
+        color=(0, 0, 0),
+        detectedFont="Arial",
+    )
 
 
 @pytest.fixture
@@ -51,16 +56,28 @@ async def sample_img_id(file_server: type[FileClient], sample_img: Image.Image) 
     return id
 
 
-def test_create_mask_single_text_region(renderer: ImageRenderer, sample_text: Text) -> None:
+def test_create_mask_single_text_region(
+    renderer: ImageRenderer, sample_text: TranslatedTextItem
+) -> None:
     mask = create_mask([sample_text], (100, 100))
     assert mask.shape == (1, 100, 100)
     assert mask.dtype == np.uint8
     assert mask[0, 10:30, 10:60].sum() > 0
 
 
-def test_create_mask_multiple_text_regions(renderer: ImageRenderer, sample_text: Text) -> None:
-    text2 = sample_text.copy()
-    text2["left"] = 60
+def test_create_mask_multiple_text_regions(
+    renderer: ImageRenderer, sample_text: TranslatedTextItem
+) -> None:
+    text2 = sample_text.model_copy(
+        update={
+            "bbox": [
+                BBoxPoint(x=60, y=10),
+                BBoxPoint(x=110, y=10),
+                BBoxPoint(x=110, y=30),
+                BBoxPoint(x=60, y=30),
+            ]
+        }
+    )
     mask = create_mask([sample_text, text2], (100, 100))
     # Verify first text region (left=10, width=50)
     assert mask[0, 10:30, 10:60].sum() > 0
@@ -70,9 +87,19 @@ def test_create_mask_multiple_text_regions(renderer: ImageRenderer, sample_text:
     assert mask.sum() > mask[0, 10:30, 10:60].sum()
 
 
-def test_create_mask_overlapping_regions(renderer: ImageRenderer, sample_text: Text) -> None:
-    text2 = sample_text.copy()
-    text2["left"] = 15
+def test_create_mask_overlapping_regions(
+    renderer: ImageRenderer, sample_text: TranslatedTextItem
+) -> None:
+    text2 = sample_text.model_copy(
+        update={
+            "bbox": [
+                BBoxPoint(x=15, y=10),
+                BBoxPoint(x=65, y=10),
+                BBoxPoint(x=65, y=30),
+                BBoxPoint(x=15, y=30),
+            ]
+        }
+    )
     mask = create_mask([sample_text, text2], (100, 100))
     assert mask.shape == (1, 100, 100)
     # Verify overlapping region (left=15 to left=60 where both texts should appear)
@@ -83,36 +110,51 @@ def test_create_mask_overlapping_regions(renderer: ImageRenderer, sample_text: T
 
 
 def test_create_mask_clamps_to_boundaries(renderer: ImageRenderer) -> None:
-    text: Text = {
-        "text": "Test",
-        "left": 80,
-        "top": 80,
-        "width": 50,
-        "height": 50,
-        "rotation_in_degrees": 0,
-        "font_size": 16,
-        "color": (0, 0, 0),
-        "font_family": "Arial",
-    }
+    text = TranslatedTextItem(
+        extractedText="Test",
+        translatedText="Hallo",
+        bbox=[
+            BBoxPoint(x=80, y=80),
+            BBoxPoint(x=130, y=80),
+            BBoxPoint(x=130, y=130),
+            BBoxPoint(x=80, y=130),
+        ],
+        confidence=0.98,
+        font_size="16",
+        color=(0, 0, 0),
+        detectedFont="Arial",
+    )
     mask = create_mask([text], (100, 100))
     assert mask.shape == (1, 100, 100)
 
 
-def test_create_mask_correct_shape(renderer: ImageRenderer, sample_text: Text) -> None:
+def test_create_mask_correct_shape(
+    renderer: ImageRenderer, sample_text: TranslatedTextItem
+) -> None:
     mask = create_mask([sample_text], (200, 150))
     assert mask.shape == (1, 200, 150)
 
 
-def test_draw_texts_single_text(renderer: ImageRenderer, sample_text: Text) -> None:
+def test_draw_texts_single_text(renderer: ImageRenderer, sample_text: TranslatedTextItem) -> None:
     img = np.ones((100, 100, 3), dtype=np.float32) * 0.5
     result = draw_texts(img, [sample_text])
     assert result.shape == (100, 100, 3)
     assert result.dtype == np.float32
 
 
-def test_draw_texts_multiple_texts(renderer: ImageRenderer, sample_text: Text) -> None:
-    text2 = sample_text.copy()
-    text2["left"] = 60
+def test_draw_texts_multiple_texts(
+    renderer: ImageRenderer, sample_text: TranslatedTextItem
+) -> None:
+    text2 = sample_text.model_copy(
+        update={
+            "bbox": [
+                BBoxPoint(x=60, y=10),
+                BBoxPoint(x=110, y=10),
+                BBoxPoint(x=110, y=30),
+                BBoxPoint(x=60, y=30),
+            ]
+        }
+    )
     img = np.ones((100, 100, 3), dtype=np.float32) * 0.5
     result = draw_texts(img, [sample_text, text2])
     assert result.shape == (100, 100, 3)
@@ -125,17 +167,20 @@ def test_draw_texts_multiple_texts(renderer: ImageRenderer, sample_text: Text) -
 
 
 def test_draw_texts_respects_font_properties(renderer: ImageRenderer) -> None:
-    text: Text = {
-        "text": "Test",
-        "left": 10,
-        "top": 10,
-        "width": 50,
-        "height": 20,
-        "rotation_in_degrees": 0,
-        "font_size": 24,
-        "color": (255, 0, 0),
-        "font_family": "Arial",
-    }
+    text = TranslatedTextItem(
+        extractedText="Test",
+        translatedText="Test",
+        bbox=[
+            BBoxPoint(x=10, y=10),
+            BBoxPoint(x=60, y=10),
+            BBoxPoint(x=60, y=30),
+            BBoxPoint(x=10, y=30),
+        ],
+        confidence=0.98,
+        font_size="24",
+        color=(255, 0, 0),
+        detectedFont="Arial",
+    )
     img = np.ones((100, 100, 3), dtype=np.float32)
     result = draw_texts(img, [text])
     assert result is not None
@@ -148,7 +193,9 @@ def test_draw_texts_respects_font_properties(renderer: ImageRenderer) -> None:
     assert not np.allclose(result, 1.0)
 
 
-def test_draw_texts_preserves_image_dimensions(renderer: ImageRenderer, sample_text: Text) -> None:
+def test_draw_texts_preserves_image_dimensions(
+    renderer: ImageRenderer, sample_text: TranslatedTextItem
+) -> None:
     img = np.ones((200, 150, 3), dtype=np.float32)
     result = draw_texts(img, [sample_text])
     assert result.shape == (200, 150, 3)
@@ -162,7 +209,7 @@ def test_draw_texts_preserves_image_dimensions(renderer: ImageRenderer, sample_t
 
 @pytest.mark.anyio
 async def test_replace_text_returns_pil_image(
-    renderer: ImageRenderer, sample_text: Text, sample_img: Image.Image
+    renderer: ImageRenderer, sample_text: TranslatedTextItem, sample_img: Image.Image
 ) -> None:
     result = await renderer.replace_text(sample_img, [sample_text])
     assert isinstance(result, Image.Image)
@@ -175,7 +222,7 @@ async def test_replace_text_returns_pil_image(
 
 @pytest.mark.anyio
 async def test_replace_text_with_debug_saves_mask(
-    renderer: ImageRenderer, temp_dir: str, sample_text: Text, sample_img: Image.Image
+    renderer: ImageRenderer, temp_dir: str, sample_text: TranslatedTextItem, sample_img: Image.Image
 ) -> None:
     await renderer.replace_text(sample_img, [sample_text], save_debug=True, debug_dir=temp_dir)
 
@@ -184,7 +231,7 @@ async def test_replace_text_with_debug_saves_mask(
 
 @pytest.mark.anyio
 async def test_replace_text_with_debug_saves_overlay(
-    renderer: ImageRenderer, temp_dir: str, sample_text: Text, sample_img: Image.Image
+    renderer: ImageRenderer, temp_dir: str, sample_text: TranslatedTextItem, sample_img: Image.Image
 ) -> None:
     await renderer.replace_text(sample_img, [sample_text], save_debug=True, debug_dir=temp_dir)
 
@@ -194,7 +241,7 @@ async def test_replace_text_with_debug_saves_overlay(
 @pytest.mark.anyio
 async def test_replace_text_integration_workflow(
     renderer: ImageRenderer,
-    sample_text: Text,
+    sample_text: TranslatedTextItem,
     sample_img: Image.Image,
 ) -> None:
     # Count black pixels in original (should be 0 on uniform white background)
@@ -213,3 +260,83 @@ async def test_replace_text_integration_workflow(
     assert result_black_pixels != original_black_pixels
     # Result should have black text pixels
     assert result_black_pixels > 0
+
+
+def test_bbox_to_rotation() -> None:
+    # Start with a horizontal rectangle in the origin
+    bbox = [
+        BBoxPoint(x=0, y=0),
+        BBoxPoint(x=60, y=0),
+        BBoxPoint(x=60, y=30),
+        BBoxPoint(x=0, y=30),
+    ]
+
+    # Convert to numpy array
+    array_bbox = np.array([[point.x, point.y] for point in bbox])
+
+    # Apply rotation matrix (only works when rectangle is centered at origin)
+    expected_angle = 30.0
+    rotation_matrix = np.array(
+        [
+            [np.cos(np.radians(expected_angle)), -np.sin(np.radians(expected_angle))],
+            [np.sin(np.radians(expected_angle)), np.cos(np.radians(expected_angle))],
+        ]
+    )
+
+    rotated_bbox = array_bbox @ rotation_matrix.T
+
+    # Convert back to BBoxPoint
+    rotated_bbox_points = [BBoxPoint(x=float(x), y=float(y)) for x, y in rotated_bbox]
+
+    # Calculate angle and verify
+    calculated_angle = get_angle_from_bbox(rotated_bbox_points)
+    assert abs(calculated_angle - expected_angle) < 0.01  # Allow small numerical error
+
+
+@pytest.mark.anyio
+async def test_draw_rotated_text(
+    renderer: ImageRenderer,
+    sample_img: Image.Image,
+):
+    # Start with a horizontal rectangle in the origin
+    bbox = [
+        BBoxPoint(x=40, y=20),
+        BBoxPoint(x=80, y=20),
+        BBoxPoint(x=80, y=38),
+        BBoxPoint(x=40, y=38),
+    ]
+
+    # Convert to numpy array
+    array_bbox = np.array([[point.x, point.y] for point in bbox])
+
+    # Apply rotation matrix (only works when rectangle is centered at origin)
+    expected_angle = 30.0
+    rotation_matrix = np.array(
+        [
+            [np.cos(np.radians(expected_angle)), -np.sin(np.radians(expected_angle))],
+            [np.sin(np.radians(expected_angle)), np.cos(np.radians(expected_angle))],
+        ]
+    )
+
+    rotated_bbox = array_bbox @ rotation_matrix.T
+
+    # Convert back to BBoxPoint
+    rotated_bbox_points = [BBoxPoint(x=float(x), y=float(y)) for x, y in rotated_bbox]
+
+    translated_text = TranslatedTextItem(
+        extractedText="Test",
+        translatedText="Test",
+        bbox=rotated_bbox_points,
+        confidence=0.98,
+        font_size="16",
+        color=(0, 0, 0),
+        detectedFont="Arial",
+    )
+
+    result = await renderer.replace_text(
+        sample_img, texts=[translated_text], save_debug=True, debug_dir="./debug"
+    )
+
+    result.save("./debug/rotated_text_result.png")
+
+    assert False

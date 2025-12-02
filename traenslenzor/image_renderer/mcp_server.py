@@ -7,7 +7,8 @@ import torch
 from fastmcp import FastMCP
 
 from traenslenzor.file_server.client import FileClient, SessionClient
-from traenslenzor.image_renderer.image_renderer import ImageRenderer
+from traenslenzor.file_server.session_state import TranslatedTextItem
+from traenslenzor.image_renderer.image_rendering import ImageRenderer
 
 ADDRESS = "127.0.0.1"
 PORT = 8006
@@ -55,6 +56,20 @@ async def replace_text(session_id: str) -> str:
     logger.info(f"Extracting text in session '{session_id}'")
     session = await SessionClient.get(session_id)
 
+    if session.text is None or len(session.text) == 0:
+        logger.error("No text items found in session")
+        return "No text items found in session"
+
+    # Validate all text items are translated
+    if not all(text.type == "translated" for text in session.text):
+        untranslated = [text.extractedText for text in session.text if text.type != "translated"]
+        logger.error(f"Text items are not translated yet: {untranslated}")
+        return "Text items are not translated yet"
+
+    # Type narrowing: we know all items are translated now
+    translated_texts: list[TranslatedTextItem] = [
+        text for text in session.text if text.type == "translated"
+    ]
     if session.rawDocumentId is None:
         logger.error(f"No raw document available for session : {session_id}")
         return "No raw document available for this session"
@@ -65,13 +80,11 @@ async def replace_text(session_id: str) -> str:
         logger.error("Invalid file id, no such document found")
         return f"Document not found: {session.rawDocumentId}"
 
-    texts = []  # TODO: @BENE extract from session. Please take a look at the paddleocr boxes we get returned :)
-
     # Process image
     renderer = get_renderer()
     result_image = await renderer.replace_text(
         image=image,
-        texts=texts,
+        texts=translated_texts,
         inverse_transformation=None,
         save_debug=save_debug,
         debug_dir=debug_dir,

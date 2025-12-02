@@ -7,8 +7,9 @@ from PIL import Image
 from PIL.Image import Image as PILImage
 
 import traenslenzor.image_utils.image_utils as ImageUtils
+from traenslenzor.file_server.session_state import TranslatedTextItem
 from traenslenzor.image_renderer.inpainting import Inpainter
-from traenslenzor.image_renderer.text_operations import Text, create_mask, draw_texts
+from traenslenzor.image_renderer.text_operations import create_mask, draw_texts
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +39,9 @@ class ImageRenderer:
     async def replace_text(
         self,
         image: PILImage,
-        texts: list[Text],
+        texts: list[TranslatedTextItem],
         inverse_transformation: NDArray[np.float64] | None = None,
-        save_debug: bool = False,
+        save_debug: bool = True,
         debug_dir: str = "./debug",
     ) -> PILImage:
         """
@@ -59,6 +60,7 @@ class ImageRenderer:
 
         # Create mask from text regions
         mask = create_mask(texts, (image.height, image.width))
+        print(mask)
 
         # Save debug mask if requested
         if save_debug:
