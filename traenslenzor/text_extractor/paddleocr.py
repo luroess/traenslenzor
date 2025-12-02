@@ -11,7 +11,7 @@ import numpy as np
 # https://github.com/PaddlePaddle/PaddleOCR/issues/16711#issuecomment-3446427004
 # This must be imported prior to paddleocr
 from traenslenzor.file_server.session_state import BBoxPoint, TextItem
-from traenslenzor.__main__ import setup_logger
+from traenslenzor.logging_config import setup_logger
 import traenslenzor.text_extractor.shim_langchain_backcomp  # noqa: F401
 from paddleocr import PaddleOCR
 from pydantic import Json
