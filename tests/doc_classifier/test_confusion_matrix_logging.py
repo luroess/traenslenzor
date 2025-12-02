@@ -2,6 +2,7 @@
 
 from unittest.mock import Mock, patch
 
+import matplotlib
 import torch
 import wandb
 
@@ -92,22 +93,12 @@ class TestConfusionMatrixLogging:
         with patch("matplotlib.pyplot.close") as mock_close:
             module.on_validation_epoch_end()
 
-            # Verify WandB logging was called twice (plot + table)
-            assert mock_experiment.log.call_count == 2
-
-            # Check first call (plot)
-            first_call_args = mock_experiment.log.call_args_list[0][0][0]
-            assert Metric.VAL_CONFUSION_MATRIX in first_call_args
-            assert "epoch" in first_call_args
-            assert first_call_args["epoch"] == 5
-            assert isinstance(first_call_args[Metric.VAL_CONFUSION_MATRIX], wandb.Image)
-
-            # Check second call (table)
-            second_call_args = mock_experiment.log.call_args_list[1][0][0]
-            assert f"{Metric.VAL_CONFUSION_MATRIX}_table" in second_call_args
-            assert "epoch" in second_call_args
-            assert second_call_args["epoch"] == 5
-            assert isinstance(second_call_args[f"{Metric.VAL_CONFUSION_MATRIX}_table"], wandb.Table)
+            # Verify WandB logging was called for the plot
+            assert mock_experiment.log.call_count == 1
+            logged = mock_experiment.log.call_args_list[0][0][0]
+            assert Metric.VAL_CONFUSION_MATRIX in logged
+            assert logged["epoch"] == 5
+            assert isinstance(logged[Metric.VAL_CONFUSION_MATRIX], wandb.Image)
 
             # Verify figure was closed
             assert mock_close.called
@@ -195,63 +186,41 @@ class TestConfusionMatrixLogging:
             # Verify figure was closed
             assert mock_close.called
 
-    def test_log_confusion_matrix_table(self):
-        """Test _log_confusion_matrix_table method."""
-        config = DocClassifierConfig(num_classes=3)
+    def test_confusion_matrix_plot_forces_agg_backend(self, monkeypatch):
+        """_log_confusion_matrix_plot should enforce the headless 'Agg' backend to avoid X11."""
+
+        config = DocClassifierConfig(num_classes=2)
         module = DocClassifierModule(config)
 
-        # Mock the trainer with WandB logger
-        mock_trainer = Mock()
         mock_logger = Mock()
-        mock_experiment = Mock()
-        mock_logger.experiment = mock_experiment
+        mock_logger.experiment = Mock()
+        mock_trainer = Mock()
         mock_trainer.logger = mock_logger
-        mock_trainer.current_epoch = 2  # Mock current_epoch on trainer
         module.trainer = mock_trainer
 
-        # Create a fake confusion matrix
-        confmat = torch.tensor([[2, 0, 1], [1, 3, 0], [0, 1, 2]], dtype=torch.float32)
-        class_names = ["class_a", "class_b", "class_c"]
+        confmat = torch.tensor([[1, 0], [0, 1]], dtype=torch.float32)
+        class_names = ["a", "b"]
 
-        # Call the method
-        module._log_confusion_matrix_table(confmat, class_names)
+        original_backend = matplotlib.get_backend()
+        original_use = matplotlib.use
 
-        # Verify WandB logging was called
-        assert mock_experiment.log.called
-        logged_data = mock_experiment.log.call_args[0][0]
-        assert f"{Metric.VAL_CONFUSION_MATRIX}_table" in logged_data
-        assert isinstance(logged_data[f"{Metric.VAL_CONFUSION_MATRIX}_table"], wandb.Table)
-        assert logged_data["epoch"] == 2
+        backend_calls: dict[str, object] = {}
 
-        # Verify table structure
-        table = logged_data[f"{Metric.VAL_CONFUSION_MATRIX}_table"]
-        assert table.columns == ["Actual", "class_a", "class_b", "class_c"]
-        assert len(table.data) == 3
+        def fake_get_backend() -> str:
+            return "qtagg"
 
-    def test_log_confusion_matrix_table_without_class_names(self):
-        """Test _log_confusion_matrix_table uses default names when class_names is None."""
-        config = DocClassifierConfig(num_classes=3)
-        module = DocClassifierModule(config)
+        def tracking_use(backend: str, force: bool = False, **kwargs):
+            backend_calls["backend"] = backend
+            backend_calls["force"] = force
+            return original_use(backend, force=force, **kwargs)
 
-        # Mock the trainer with WandB logger
-        mock_trainer = Mock()
-        mock_logger = Mock()
-        mock_experiment = Mock()
-        mock_logger.experiment = mock_experiment
-        mock_trainer.logger = mock_logger
-        mock_trainer.current_epoch = 1  # Mock current_epoch on trainer
-        module.trainer = mock_trainer
+        monkeypatch.setattr(matplotlib, "get_backend", fake_get_backend)
+        monkeypatch.setattr(matplotlib, "use", tracking_use)
 
-        # Create a fake confusion matrix
-        confmat = torch.tensor([[2, 0, 1], [1, 3, 0], [0, 1, 2]], dtype=torch.float32)
+        try:
+            module._log_confusion_matrix_plot(confmat, class_names)
+        finally:
+            original_use(original_backend, force=True)
 
-        # Call the method with None class_names
-        module._log_confusion_matrix_table(confmat, class_names=None)
-
-        # Verify WandB logging was called
-        assert mock_experiment.log.called
-        logged_data = mock_experiment.log.call_args[0][0]
-
-        # Verify table uses default class names
-        table = logged_data[f"{Metric.VAL_CONFUSION_MATRIX}_table"]
-        assert table.columns == ["Actual", "Class_0", "Class_1", "Class_2"]
+        assert backend_calls.get("backend", "").lower() == "agg"
+        assert backend_calls.get("force") is True

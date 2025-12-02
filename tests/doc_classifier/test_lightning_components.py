@@ -1,6 +1,3 @@
-from types import SimpleNamespace
-from unittest.mock import MagicMock
-
 import numpy as np
 import pytest
 import torch
@@ -74,11 +71,19 @@ def test_train_head_only_freezes_backbone(monkeypatch):
     class DummyResNet(nn.Module):
         def __init__(self):
             super().__init__()
-            self.layer = nn.Linear(8, 4)
+            self.conv1 = nn.Conv2d(3, 4, kernel_size=3, padding=1)
+            self.bn1 = nn.BatchNorm2d(4)
+            self.relu = nn.ReLU()
+            self.maxpool = nn.MaxPool2d(2)
+            self.layer1 = nn.Identity()
+            self.layer2 = nn.Identity()
+            self.layer3 = nn.Identity()
+            self.layer4 = nn.Identity()
+            self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
             self.fc = nn.Linear(4, 2)
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.fc(self.layer(torch.flatten(x, 1)))
+            return self.fc(torch.flatten(self.avgpool(self.conv1(x)), 1))
 
     monkeypatch.setattr(lit_module.models, "resnet50", lambda **_: DummyResNet())
 
@@ -90,16 +95,14 @@ def test_train_head_only_freezes_backbone(monkeypatch):
     )
     module = config.setup_target()
 
-    non_head_params = [
-        param.requires_grad
-        for name, param in module.model.named_parameters()
-        if not name.startswith("fc.")
-    ]
-    assert non_head_params
-    assert all(flag is False for flag in non_head_params)
+    backbone_flags = [param.requires_grad for param in module.backbone.parameters()]
+    assert backbone_flags and all(flag is False for flag in backbone_flags)
 
-    assert module.model.fc.out_features == 3
-    assert all(param.requires_grad for param in module.model.fc.parameters())
+    head_flags = [param.requires_grad for param in module.head.parameters()]
+    assert head_flags and all(head_flags)
+
+    assert isinstance(module.head, nn.Linear)
+    assert module.head.out_features == 3
 
 
 class _DummyDataset(Dataset):
@@ -128,7 +131,7 @@ def test_doc_data_module_loaders_use_patched_datasets(monkeypatch):
 
     monkeypatch.setattr(RVLCDIPConfig, "setup_target", fake_setup_target)
 
-    config = DocDataModuleConfig(batch_size=2, num_workers=0)
+    config = DocDataModuleConfig(batch_size=2, num_workers=0, persistent_workers=False)
     datamodule = config.setup_target()
 
     datamodule.setup(Stage.TRAIN)
@@ -158,7 +161,7 @@ def test_doc_data_module_setup_without_stage(monkeypatch):
 
     monkeypatch.setattr(RVLCDIPConfig, "setup_target", fake_setup_target)
 
-    datamodule = DocDataModuleConfig(batch_size=1, num_workers=0).setup_target()
+    datamodule = DocDataModuleConfig(batch_size=1, num_workers=0, persistent_workers=False).setup_target()
     datamodule.setup(None)
 
     assert datamodule.train_ds is datasets[Stage.TRAIN]
@@ -168,7 +171,7 @@ def test_doc_data_module_setup_without_stage(monkeypatch):
 
 def test_doc_data_module_invalid_stage(monkeypatch):
     monkeypatch.setattr(RVLCDIPConfig, "setup_target", lambda self: _DummyDataset(0))
-    datamodule = DocDataModuleConfig(batch_size=1, num_workers=0).setup_target()
+    datamodule = DocDataModuleConfig(batch_size=1, num_workers=0, persistent_workers=False).setup_target()
 
     with pytest.raises(ValueError):
         datamodule.setup("invalid")
@@ -178,7 +181,9 @@ def test_doc_data_module_lazy_initialization(monkeypatch):
     dataset = _DummyDataset(0)
     monkeypatch.setattr(RVLCDIPConfig, "setup_target", lambda self: dataset)
 
-    datamodule = DocDataModuleConfig(batch_size=1, num_workers=0).setup_target()
+    datamodule = DocDataModuleConfig(
+        batch_size=1, num_workers=0, persistent_workers=False
+    ).setup_target()
     datamodule._train_ds = None
     datamodule._val_ds = None
     datamodule._test_ds = None
@@ -254,14 +259,29 @@ def test_rvlcdip_config_setup_target_applies_transform(monkeypatch, fresh_path_c
 
 
 def test_vit_backbone_replacement(monkeypatch):
+    class DummyEncoder(nn.Module):
+        def forward(self, tokens: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
+            return tokens + 1
+
     class DummyViT(nn.Module):
         def __init__(self):
             super().__init__()
             self.hidden_dim = 8
+            self.class_token = nn.Parameter(torch.zeros(1, 1, 8))
+            self.encoder = DummyEncoder()
             self.heads = nn.Linear(8, 4)
 
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.heads(torch.flatten(x, 1))
+        def _process_input(self, x: torch.Tensor) -> torch.Tensor:
+            batch = x.shape[0]
+            return torch.zeros(batch, 1, 8)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
+            tokens = self._process_input(x)
+            cls = self.class_token.expand(tokens.shape[0], -1, -1)
+            tokens = torch.cat([cls, tokens], dim=1)
+            tokens = self.encoder(tokens)
+            tokens = tokens[:, 0]
+            return self.heads(tokens)
 
     monkeypatch.setattr(lit_module.models, "vit_b_16", lambda **_: DummyViT())
 
@@ -273,10 +293,11 @@ def test_vit_backbone_replacement(monkeypatch):
     )
     module = config.setup_target()
 
-    assert module.model.heads.out_features == 5
-    for name, param in module.model.named_parameters():
-        if name.startswith("heads"):
-            assert param.requires_grad
-        else:
-            assert param.requires_grad is False
+    assert isinstance(module.head, nn.Linear)
+    assert module.head.out_features == 5
 
+    backbone_flags = [param.requires_grad for param in module.backbone.parameters()]
+    assert backbone_flags and all(flag is False for flag in backbone_flags)
+
+    head_flags = [param.requires_grad for param in module.head.parameters()]
+    assert head_flags and all(head_flags)

@@ -1,47 +1,50 @@
-import warnings
+from __future__ import annotations
+
+from pathlib import Path
 
 import pytest
 
-import traenslenzor.doc_classifier.utils.schemas as schemas
 from traenslenzor.doc_classifier.configs.path_config import PathConfig
 
-# Suppress PyTorch's internal pin_memory deprecation warning (PyTorch 2.9+)
-# This warning comes from DataLoader's internal implementation, not our code
-# Must be applied before torch modules are imported
-warnings.filterwarnings(
-    "ignore",
-    message=r"The argument 'device' of Tensor\.(pin_memory|is_pinned)\(\) is deprecated",
-    category=DeprecationWarning,
-)
-
-if not hasattr(schemas, "MetricName") and hasattr(schemas, "Metric"):
-    # Backwards compatibility shim for renamed Metric enum.
-    schemas.MetricName = schemas.Metric
+_DEFAULT_CKPT_NAME = "alexnet-scratch-epoch=epoch=1-val_loss=val/loss=0.84.ckpt"
 
 
 @pytest.fixture
-def project_root(tmp_path):
-    """Provide an isolated project root and reset the PathConfig singleton."""
+def running_file_server(file_server: None) -> None:
+    """Reuse the session-wide file server fixture from tests/conftest.py."""
+    yield
 
-    root = tmp_path / "project"
-    root.mkdir()
-    PathConfig._instances.pop(PathConfig, None)
-    try:
-        yield root
-    finally:
-        PathConfig._instances.pop(PathConfig, None)
+
+@pytest.fixture(autouse=True)
+def ensure_dummy_checkpoint() -> Path:
+    """Create a stub checkpoint so DocClassifierMCPConfig validation passes."""
+    cfg = PathConfig()
+    ckpt_path = cfg.checkpoints / _DEFAULT_CKPT_NAME
+    ckpt_path.parent.mkdir(parents=True, exist_ok=True)
+    ckpt_path.touch(exist_ok=True)
+    return ckpt_path
 
 
 @pytest.fixture
-def fresh_path_config(project_root) -> PathConfig:
-    """Return a PathConfig instance rooted at the isolated project directory."""
+def project_root(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Temporary project root for path-related tests."""
+    return tmp_path_factory.mktemp("project_root")
 
-    config = PathConfig()
-    config.root = project_root
-    config.data_root = project_root / ".data"
-    config.hf_cache = config.data_root / "hf_cache"
-    logs_dir = project_root / ".logs"
-    config.checkpoints = logs_dir / "checkpoints"
-    config.wandb = logs_dir / "wandb"
-    config.configs_dir = project_root / ".configs"
-    return config
+
+@pytest.fixture
+def fresh_path_config(project_root: Path) -> PathConfig:
+    """Return a PathConfig instance rooted at a temporary directory."""
+    cfg = PathConfig()
+    cfg.root = project_root
+    cfg.data_root = project_root / ".cache"
+    cfg.hf_cache = cfg.data_root / "hf_cache"
+    cfg.checkpoints = project_root / ".artifacts" / "ckpts"
+    cfg.wandb = project_root / ".artifacts" / "wandb"
+    cfg.configs_dir = project_root / ".configs"
+    for path in (cfg.data_root, cfg.hf_cache, cfg.checkpoints, cfg.wandb, cfg.configs_dir):
+        path.mkdir(parents=True, exist_ok=True)
+    # Ensure the default checkpoint path exists for components that validate it eagerly
+    default_ckpt = cfg.checkpoints / _DEFAULT_CKPT_NAME
+    default_ckpt.parent.mkdir(parents=True, exist_ok=True)
+    default_ckpt.touch(exist_ok=True)
+    return cfg

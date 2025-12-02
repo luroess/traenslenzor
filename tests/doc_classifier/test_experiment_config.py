@@ -1,10 +1,8 @@
 from types import SimpleNamespace
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
-import traenslenzor.doc_classifier.lightning.lit_module as lit_module
 from traenslenzor.doc_classifier.configs import ExperimentConfig, OptunaConfig
 from traenslenzor.doc_classifier.utils import Optimizable, Stage
 
@@ -52,13 +50,14 @@ def test_setup_target_invokes_components(monkeypatch, fresh_path_config):
     datamodule = DummyDataModule()
 
     monkeypatch.setattr(
-        f"{EXPERIMENT_MODULE}.TrainerFactoryConfig.setup_target", lambda self: trainer
+        f"{EXPERIMENT_MODULE}.TrainerFactoryConfig.setup_target",
+        lambda self, *_, **__: trainer,
     )
     monkeypatch.setattr(
-        f"{EXPERIMENT_MODULE}.DocClassifierConfig.setup_target", lambda self: module
+        f"{EXPERIMENT_MODULE}.DocClassifierConfig.setup_target", lambda self, *_, **__: module
     )
     monkeypatch.setattr(
-        f"{EXPERIMENT_MODULE}.DocDataModuleConfig.setup_target", lambda self: datamodule
+        f"{EXPERIMENT_MODULE}.DocDataModuleConfig.setup_target", lambda self, *_, **__: datamodule
     )
 
     trainer_obj, module_obj, dm_obj = config.setup_target(setup_stage="val")

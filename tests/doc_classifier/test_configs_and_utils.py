@@ -9,9 +9,8 @@ from datasets import Split
 from pydantic import Field
 
 import traenslenzor.doc_classifier.configs.optuna_config as optuna_config_module
-import traenslenzor.doc_classifier.configs.wandb_config as wandb_config_module
 import traenslenzor.doc_classifier.lightning.lit_trainer_factory as trainer_factory_module
-from traenslenzor.doc_classifier.configs import ExperimentConfig, PathConfig, WandbConfig
+from traenslenzor.doc_classifier.configs import ExperimentConfig, PathConfig
 from traenslenzor.doc_classifier.configs.optuna_config import OptunaConfig
 from traenslenzor.doc_classifier.lightning import TrainerCallbacksConfig, TrainerFactoryConfig
 from traenslenzor.doc_classifier.utils import (
@@ -99,11 +98,11 @@ def test_trainer_factory_setup_target_invokes_dependencies(monkeypatch):
 
     monkeypatch.setattr(
         f"{trainer_factory_module.__name__}.WandbConfig.setup_target",
-        lambda self: "logger",
+        lambda self, *_, **__: "logger",
     )
     monkeypatch.setattr(
         f"{trainer_factory_module.__name__}.TrainerCallbacksConfig.setup_target",
-        lambda self: ["cb"],
+        lambda self, *_, **__: ["cb"],
     )
 
     class DummyTrainer:
