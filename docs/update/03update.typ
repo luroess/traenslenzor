@@ -34,4 +34,8 @@
   - Paddle messes with python logging setup
     - PR Merged: https://github.com/PaddlePaddle/Paddle/pull/76699
 - Session ID System integration
-  
+
+== Image Renderer
+- Adjust to Session changes
+- Handle rotated texts
+- Handle transformation back onto original image
