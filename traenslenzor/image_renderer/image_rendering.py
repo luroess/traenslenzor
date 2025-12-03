@@ -1,11 +1,11 @@
 import logging
 from pathlib import Path
 
+import cv2
 import numpy as np
 from numpy.typing import NDArray
 from PIL import Image
 from PIL.Image import Image as PILImage
-from PIL.Image import Resampling, Transform
 
 import traenslenzor.image_utils.image_utils as ImageUtils
 from traenslenzor.file_server.session_state import TranslatedTextItem
@@ -106,21 +106,59 @@ class ImageRenderer:
 
         return ImageUtils.np_img_to_pil(result)
 
-    def transform_image(self, image: PILImage, matrix: NDArray[np.float64]) -> PILImage:
+    def transform_image(
+        self, image: PILImage, matrix: NDArray[np.float64], original_size: tuple[int, int]
+    ) -> PILImage:
         """
         Apply a transformation matrix to the image.
 
         Args:
             image: PIL Image to transform
-            matrix: 2x3 transformation matrix
+            matrix: 3x3 homogeneous transformation matrix
 
         Returns:
-            Transformed PIL Image
+            Transformed PIL Image with transparent background
         """
-        transformed_image = image.transform(
-            image.size,
-            Transform.AFFINE,
-            data=matrix.flatten()[:6],
-            resample=Resampling.BILINEAR,
+
+        # Create mask (255 where image exists)
+        mask = np.ones((image.height, image.width), dtype=np.uint8) * 255
+
+        # Transform the mask
+        transformed_mask = cv2.warpPerspective(
+            mask,
+            matrix,
+            original_size,
+            flags=cv2.INTER_CUBIC,
         )
-        return transformed_image
+
+        # Transform the image
+        transformed_image = cv2.warpPerspective(
+            np.array(image),
+            matrix,
+            original_size,
+            flags=cv2.INTER_CUBIC,
+        )
+
+        # Convert to PIL and apply mask as alpha channel
+        img = Image.fromarray(transformed_image).convert("RGBA")
+        img.putalpha(Image.fromarray(transformed_mask, mode="L"))
+
+        return img
+
+    def paste_replaced_to_original(self, original, replaced) -> PILImage:
+        """
+        Paste the replaced image onto the original image, preserving transparency.
+
+        Args:
+            original: Original PIL Image
+            replaced: Replaced PIL Image with transparency
+
+        Returns:
+            Combined PIL Image
+        """
+
+        original = original.convert("RGBA")
+        resize = replaced.resize(original.size)
+        combined = Image.alpha_composite(original, resize)
+
+        return combined.convert("RGB")

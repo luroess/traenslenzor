@@ -1,0 +1,3 @@
+- [] save model in in root folder for easier loading ".models/lama" or similar
+- [] transform inpainted image back to original size
+- []

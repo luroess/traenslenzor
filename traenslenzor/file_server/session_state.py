@@ -37,7 +37,6 @@ class TranslatedTextItem(BaseModel):
     color: tuple[int, int, int] | None = None  # TODO: FS look if this is available via paddle
 
 
-# Discriminated union type
 TextItem = Annotated[
     Union[OCRTextItem, DetectedFontTextItem, TranslatedTextItem], Discriminator("type")
 ]
@@ -45,7 +44,7 @@ TextItem = Annotated[
 
 class ExtractedDocument(BaseModel):
     id: str
-    documentCoordinates: List[BBoxPoint]  # 4 points: UL, UR, LR, LL
+    transformation_matrix: List[List[float]]  # 4 points: UL, UR, LR, LL
 
 
 class SessionState(BaseModel):

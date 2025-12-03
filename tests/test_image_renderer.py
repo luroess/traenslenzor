@@ -12,6 +12,7 @@ from traenslenzor.file_server.session_state import BBoxPoint, TranslatedTextItem
 from traenslenzor.image_renderer.image_rendering import ImageRenderer
 from traenslenzor.image_renderer.mcp_server import get_device
 from traenslenzor.image_renderer.text_operations import create_mask, draw_texts, get_angle_from_bbox
+from traenslenzor.text_extractor.flatten_image import deskew_document
 
 
 @pytest.fixture
@@ -51,6 +52,11 @@ def sample_img() -> Image.Image:
 @pytest.fixture
 def sample_img_fixture() -> PILImage:
     return Image.open(Path(__file__).parent / "fixtures" / "image_1.png").convert("RGB")
+
+
+@pytest.fixture
+def sample_img_skewed() -> PILImage:
+    return Image.open(Path(__file__).parent / "fixtures" / "skewed_image_3.jpeg").convert("RGB")
 
 
 @pytest.fixture
@@ -421,5 +427,45 @@ async def test_draw_rotated_text(
 
 
 @pytest.mark.anyio
-async def test_transform_image():
-    matrix = np.array([[1, 0, 20], [0, 1, 30], [0, 0, 1]], dtype=np.float64)
+async def test_transform_image(renderer: ImageRenderer, sample_img_skewed: PILImage):
+    result = deskew_document(np.array(sample_img_skewed))
+
+    if result is None:
+        assert False
+
+    unskewed_img, matrix = result
+    unskewed_pil = Image.fromarray(unskewed_img)
+    unskewed_pil.save("./debug/deskewed_image.png")
+
+    bbox = [
+        BBoxPoint(x=22, y=27),
+        BBoxPoint(x=210, y=27),
+        BBoxPoint(x=210, y=45),
+        BBoxPoint(x=22, y=45),
+    ]
+    translated_text = TranslatedTextItem(
+        extractedText="Verhalten im Brandfall",
+        translatedText="Im Falle von Brand? Bier!",
+        bbox=bbox,
+        confidence=0.98,
+        font_size="18",
+        color=(0, 0, 0),
+        detectedFont="Arial",
+    )
+
+    result = await renderer.replace_text(
+        unskewed_pil, texts=[translated_text], save_debug=True, debug_dir="./debug"
+    )
+
+    result.save("./debug/replaced_unskewed.png")
+
+    transformed = renderer.transform_image(
+        result,
+        np.linalg.inv(matrix),
+        original_size=(sample_img_skewed.height, sample_img_skewed.width),
+    )
+    transformed.save("./debug/replaced_reprojected.png")
+
+    composited = renderer.paste_replaced_to_original(sample_img_skewed, transformed)
+
+    composited.save("./debug/replaced_full.png")

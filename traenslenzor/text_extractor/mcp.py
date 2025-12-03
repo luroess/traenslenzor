@@ -45,10 +45,13 @@ async def extract_text(session_id: str) -> str:
 
     orig_img = bytes_to_numpy_image(file_data)
 
-    flattened_img = deskew_document(orig_img)
-    if flattened_img is None:
+    flattening_result = deskew_document(orig_img)
+
+    flattened_img = orig_img
+    transformation_matrix = np.eye(3, dtype=np.float64)
+    if flattening_result is not None:
         logger.error("Image flattening failed, fallback to original.")
-        flattened_img = orig_img
+        flattened_img, transformation_matrix = flattening_result
 
     upload_image = cv2.cvtColor(flattened_img, cv2.COLOR_BGR2RGB)
     flattened_image_id = await FileClient.put_img(
@@ -60,8 +63,7 @@ async def extract_text(session_id: str) -> str:
 
     extracted_document = ExtractedDocument(
         id=flattened_image_id,
-        # TODO: fix this shit
-        documentCoordinates=[],
+        transformation_matrix=transformation_matrix,
     )
 
     res = run_ocr("en", flattened_img)
