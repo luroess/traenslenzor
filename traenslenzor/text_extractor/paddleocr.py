@@ -10,7 +10,7 @@ import numpy as np
 # This is an ugly fix to make paddleocr compatible with langchain 1.0.0
 # https://github.com/PaddlePaddle/PaddleOCR/issues/16711#issuecomment-3446427004
 # This must be imported prior to paddleocr
-from traenslenzor.file_server.session_state import BBoxPoint, TextItem
+from traenslenzor.file_server.session_state import BBoxPoint, OCRTextItem
 import traenslenzor.text_extractor.shim_langchain_backcomp  # noqa: F401
 from paddleocr import PaddleOCR
 from pydantic import Json
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 def parse_result(results) -> Any:
     return [
-        TextItem(
+        OCRTextItem(
             extractedText=text,
             confidence=score,
             bbox=[BBoxPoint(x=int(pt[0]), y=int(pt[1])) for pt in poly],

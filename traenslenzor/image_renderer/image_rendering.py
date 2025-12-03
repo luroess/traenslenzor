@@ -5,6 +5,7 @@ import numpy as np
 from numpy.typing import NDArray
 from PIL import Image
 from PIL.Image import Image as PILImage
+from PIL.Image import Resampling, Transform
 
 import traenslenzor.image_utils.image_utils as ImageUtils
 from traenslenzor.file_server.session_state import TranslatedTextItem
@@ -14,6 +15,19 @@ from traenslenzor.image_renderer.text_operations import create_mask, draw_texts
 logger = logging.getLogger(__name__)
 
 logger.setLevel(logging.DEBUG)
+
+
+def save_histogram(data: NDArray[np.float32], filename: str) -> None:
+    """Save a histogram of the data to a file."""
+    import matplotlib.pyplot as plt
+
+    plt.figure()
+    plt.hist(data.flatten(), bins=50, color="blue", alpha=0.7)
+    plt.title("Histogram")
+    plt.xlabel("Value")
+    plt.ylabel("Frequency")
+    plt.savefig(filename)
+    plt.close()
 
 
 class ImageRenderer:
@@ -40,7 +54,6 @@ class ImageRenderer:
         self,
         image: PILImage,
         texts: list[TranslatedTextItem],
-        inverse_transformation: NDArray[np.float64] | None = None,
         save_debug: bool = True,
         debug_dir: str = "./debug",
     ) -> PILImage:
@@ -60,14 +73,16 @@ class ImageRenderer:
 
         # Create mask from text regions
         mask = create_mask(texts, (image.height, image.width))
-        print(mask)
 
         # Save debug mask if requested
         if save_debug:
             debug_path = Path(debug_dir)
             debug_path.mkdir(parents=True, exist_ok=True)
-            overlay = Image.fromarray(mask[0])
+            overlay = Image.fromarray(mask[0] * 255)
             overlay.save(debug_path / "debug-mask.png")
+            save_histogram(
+                np.array(image), str(debug_path / "debug-inpainted-histogram_before.png")
+            )
 
         # Inpaint the masked regions
         result = self.inpainter.inpaint(image, mask)
@@ -81,9 +96,31 @@ class ImageRenderer:
             debug = ImageUtils.highlight_mask(base, overlay)
             debug.save(debug_path / "debug-overlay.png")
 
-        # Draw new text on inpainted image
-        result = draw_texts(result, texts)
+            Image.fromarray((result.copy() * 255).astype(np.uint8)).save(
+                debug_path / "debug-inpainted.png"
+            )
+            save_histogram(result.copy(), str(debug_path / "debug-inpainted-histogram.png"))
 
-        # result = result * inverse_transformation
+        # Draw new text on inpainted image
+        result = draw_texts(result, texts, debug=False)
 
         return ImageUtils.np_img_to_pil(result)
+
+    def transform_image(self, image: PILImage, matrix: NDArray[np.float64]) -> PILImage:
+        """
+        Apply a transformation matrix to the image.
+
+        Args:
+            image: PIL Image to transform
+            matrix: 2x3 transformation matrix
+
+        Returns:
+            Transformed PIL Image
+        """
+        transformed_image = image.transform(
+            image.size,
+            Transform.AFFINE,
+            data=matrix.flatten()[:6],
+            resample=Resampling.BILINEAR,
+        )
+        return transformed_image

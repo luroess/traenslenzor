@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from PIL import Image
+from PIL.Image import Image as PILImage
 
 from traenslenzor.file_server.client import FileClient
 from traenslenzor.file_server.session_state import BBoxPoint, TranslatedTextItem
@@ -45,6 +46,11 @@ def sample_text() -> TranslatedTextItem:
 @pytest.fixture
 def sample_img() -> Image.Image:
     return Image.new("RGB", (100, 100), color=(255, 255, 255))
+
+
+@pytest.fixture
+def sample_img_fixture() -> PILImage:
+    return Image.open(Path(__file__).parent / "fixtures" / "image_1.png").convert("RGB")
 
 
 @pytest.fixture
@@ -275,42 +281,48 @@ def test_bbox_to_rotation() -> None:
     array_bbox = np.array([[point.x, point.y] for point in bbox])
 
     # Apply rotation matrix (only works when rectangle is centered at origin)
-    expected_angle = 30.0
-    rotation_matrix = np.array(
-        [
-            [np.cos(np.radians(expected_angle)), -np.sin(np.radians(expected_angle))],
-            [np.sin(np.radians(expected_angle)), np.cos(np.radians(expected_angle))],
-        ]
-    )
+    expected_angles = [30.0, 60.0, 120.0, 150.0, 180.0, 210.0, 240.0, 270.0, 300.0, 330.0]
 
-    rotated_bbox = array_bbox @ rotation_matrix.T
+    for expected_angle in expected_angles:
+        rotation_matrix = np.array(
+            [
+                [np.cos(np.radians(expected_angle)), -np.sin(np.radians(expected_angle))],
+                [np.sin(np.radians(expected_angle)), np.cos(np.radians(expected_angle))],
+            ]
+        )
 
-    # Convert back to BBoxPoint
-    rotated_bbox_points = [BBoxPoint(x=float(x), y=float(y)) for x, y in rotated_bbox]
+        rotated_bbox = array_bbox @ rotation_matrix.T
 
-    # Calculate angle and verify
-    calculated_angle = get_angle_from_bbox(rotated_bbox_points)
-    assert abs(calculated_angle - expected_angle) < 0.01  # Allow small numerical error
+        # Convert back to BBoxPoint
+        rotated_bbox_points = [BBoxPoint(x=float(x), y=float(y)) for x, y in rotated_bbox]
+
+        # Calculate angle and verify
+        calculated_angle, _ = get_angle_from_bbox(rotated_bbox_points)
+        assert abs(calculated_angle - expected_angle) < 0.01, (
+            f"angle mismatch. expected: {expected_angle}, got: {calculated_angle}"
+        )  # Allow small numerical error
 
 
 @pytest.mark.anyio
 async def test_draw_rotated_text(
     renderer: ImageRenderer,
-    sample_img: Image.Image,
+    sample_img_fixture: Image.Image,
 ):
-    # Start with a horizontal rectangle in the origin
     bbox = [
-        BBoxPoint(x=40, y=20),
-        BBoxPoint(x=80, y=20),
-        BBoxPoint(x=80, y=38),
-        BBoxPoint(x=40, y=38),
+        BBoxPoint(x=140, y=120),
+        BBoxPoint(x=247, y=120),
+        BBoxPoint(x=247, y=205),
+        BBoxPoint(x=140, y=205),
     ]
 
     # Convert to numpy array
     array_bbox = np.array([[point.x, point.y] for point in bbox])
 
-    # Apply rotation matrix (only works when rectangle is centered at origin)
-    expected_angle = 30.0
+    # Calculate the center of the bbox for rotation
+    center = array_bbox.mean(axis=0)
+
+    # Apply rotation: translate to origin, rotate, translate back
+    expected_angle = 330.0
     rotation_matrix = np.array(
         [
             [np.cos(np.radians(expected_angle)), -np.sin(np.radians(expected_angle))],
@@ -318,7 +330,10 @@ async def test_draw_rotated_text(
         ]
     )
 
-    rotated_bbox = array_bbox @ rotation_matrix.T
+    # Translate to origin, rotate, translate back
+    bbox_centered = array_bbox - center
+    bbox_rotated = bbox_centered @ rotation_matrix.T
+    rotated_bbox = bbox_rotated + center
 
     # Convert back to BBoxPoint
     rotated_bbox_points = [BBoxPoint(x=float(x), y=float(y)) for x, y in rotated_bbox]
@@ -328,18 +343,20 @@ async def test_draw_rotated_text(
         translatedText="Test",
         bbox=rotated_bbox_points,
         confidence=0.98,
-        font_size="16",
-        color=(0, 0, 0),
+        font_size="18",
+        color=(255, 255, 255),
         detectedFont="Arial",
     )
 
     result = await renderer.replace_text(
-        sample_img, texts=[translated_text], save_debug=True, debug_dir="./debug"
+        sample_img_fixture, texts=[translated_text], save_debug=True, debug_dir="./debug"
     )
+
+    result.save("./debug/rotated_text_result.png")
 
     # Convert to numpy for pixel analysis
     result_array = np.array(result)
-    original_array = np.array(sample_img)
+    original_array = np.array(sample_img_fixture)
     # 1. Verify the image was modified
     assert not np.array_equal(result_array, original_array), "Image should be modified"
 
@@ -401,3 +418,8 @@ async def test_draw_rotated_text(
     assert unchanged_percentage > 50, (
         f"Expected >50% of image unchanged, got {unchanged_percentage:.1f}%"
     )
+
+
+@pytest.mark.anyio
+async def test_transform_image():
+    matrix = np.array([[1, 0, 20], [0, 1, 30], [0, 0, 1]], dtype=np.float64)
