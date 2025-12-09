@@ -1,66 +1,59 @@
 import asyncio
 import logging
-from typing import cast
+from typing import Callable, Optional, cast
 
 from langchain.agents import create_agent
-from langchain.agents.middleware import AgentState, ModelRequest, before_agent, dynamic_prompt
+from langchain.agents.middleware import (
+    before_agent,
+    wrap_tool_call,
+)
+from langchain_core.messages import ToolMessage
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
 from traenslenzor.file_server.client import SessionClient
 from traenslenzor.file_server.session_state import SessionState
 from traenslenzor.supervisor.llm import llm
-from traenslenzor.supervisor.state import SupervisorState
+from traenslenzor.supervisor.prompt import context_aware_prompt
+from traenslenzor.supervisor.state import SupervisorState, ToolCall
 from traenslenzor.supervisor.tools.tools import get_tools
 
 logger = logging.getLogger(__name__)
 
 
-@before_agent
-async def initialize_session(state: AgentState, runtime: Runtime) -> Command:
-    logger.info("Creating a new session")
-    return Command(update={"session_id": await SessionClient.create(SessionState())})
-
-
-@dynamic_prompt
-async def context_aware_prompt(request: ModelRequest) -> str:
+@wrap_tool_call  # type: ignore
+async def wrap_tools(
+    request: ToolCallRequest, handler: Callable[[ToolCallRequest], ToolMessage | Command]
+) -> Command:
+    result = await handler(request)  # type: ignore
+    if isinstance(result, ToolMessage):
+        result = Command(
+            update={
+                "messages": [result],
+            }
+        )
     state = cast(SupervisorState, request.state)
-    session_id = state.get("session_id")
-    session = await SessionClient.get(session_id)
+    history = state.get("tool_history", []) + [
+        ToolCall(request.tool_call["name"], request.tool_call["args"])
+    ]
+    result.update["tool_history"] = history  # type: ignore
 
-    formatted_session = format_session(session_id, session)
-    logger.info("Current Session:")
-    logger.info(formatted_session)
+    logger.info("Tool history")
+    logger.info(history)
 
-    return f"""
-    Task:
-        You are an image translation assistant.
-        Your goal is to turn an image with text in one language into an image in another language.
-        Do not imitate actions or describe intended tool use.
-        Whenever an action is required, output solely the tool invocation as JSON, with no additional text.
-        Execute the steps in order as far as possible.
-
-    Steps:
-        1. Ask the user to provide an image or document. Do not assume any file exists.
-        2. Retrieve the target language to translate the document into FROM THE USER and save it. Do not assume any language.
-        3. Extract all text from the image and detect font type, size, and color. Show the text to the user for verification.
-        4. Translate the text into the target language, preserving formatting where possible.
-        5. Render the translated text on the image, matching the original font and style. Let the user review and request adjustments.
-    
-    Context:
-        {formatted_session}
-    """
-    # 3. Offer preprocessing options (crop, rotate, enhance). Only continue after the user confirms the image is ready.
+    return result
 
 
-def format_session(session_id: str, session: SessionState) -> str:
-    return f"""
-        - the current session_id is '{session_id}'
-        - {f"the user has selected the language {session.language}" if session.language else "the user has no language selected"}
-        - {"the user has a document loaded" if session.rawDocumentId else "the user has no document selected"}
-    """
+@before_agent
+async def initialize_session(state: SupervisorState, runtime: Runtime) -> Optional[Command]:
+    if "session_id" not in state:
+        logger.info("Creating a new session")
+        return Command(update={"session_id": await SessionClient.create(SessionState())})
+    logger.info("using existing session %s", state["session_id"])
+    return None
 
 
 class Supervisor:
@@ -71,7 +64,7 @@ class Supervisor:
             checkpointer=MemorySaver(),
             state_schema=SupervisorState,
             # debug= True, # enhanced logging
-            middleware={initialize_session, context_aware_prompt},  # type: ignore
+            middleware={initialize_session, context_aware_prompt, wrap_tools},  # type: ignore
         )
 
 

@@ -12,8 +12,6 @@ from traenslenzor.image_renderer.text_operations import Text, create_mask, draw_
 
 logger = logging.getLogger(__name__)
 
-logger.setLevel(logging.DEBUG)
-
 
 class ImageRenderer:
     def __init__(self, device: str = "mps") -> None:

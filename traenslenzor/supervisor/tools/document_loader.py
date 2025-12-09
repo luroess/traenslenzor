@@ -5,7 +5,7 @@ from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 
 from traenslenzor.file_server.client import FileClient, SessionClient
-from traenslenzor.file_server.session_state import SessionState
+from traenslenzor.file_server.session_state import initialize_session
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +17,12 @@ async def document_loader(filepath: str, runtime: ToolRuntime) -> Command:
 
     try:
         file_id = await FileClient.put(filepath)
-
-        def update_document_id(session: SessionState):
-            session.rawDocumentId = file_id
-
-        await SessionClient.update(runtime.state["session_id"], update_document_id)
+        session_id = runtime.state["session_id"]
+        existing_session = await SessionClient.get(session_id)
+        session = initialize_session()
+        session.rawDocumentId = file_id
+        session.language = existing_session.language
+        await SessionClient.put(session_id, session)
 
         logger.info(f"Successfully loaded file: '{filepath}'")
         return Command(
