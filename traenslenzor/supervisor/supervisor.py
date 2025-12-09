@@ -1,8 +1,8 @@
 import asyncio
 import logging
-from typing import Callable, cast
+from typing import Callable, Optional, cast
 
-from langchain.agents import AgentState, create_agent
+from langchain.agents import create_agent
 from langchain.agents.middleware import (
     before_agent,
     wrap_tool_call,
@@ -48,11 +48,12 @@ async def wrap_tools(
 
 
 @before_agent
-async def initialize_session(state: AgentState, runtime: Runtime) -> Command:
+async def initialize_session(state: SupervisorState, runtime: Runtime) -> Optional[Command]:
     if "session_id" not in state:
         logger.info("Creating a new session")
         return Command(update={"session_id": await SessionClient.create(SessionState())})
-    logger.info("using existing session", state["session_id"])
+    logger.info("using existing session %s", state["session_id"])
+    return None
 
 
 class Supervisor:

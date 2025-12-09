@@ -22,11 +22,12 @@ async def translate(session_id: str) -> str:
     """
 
     def update_session(session: SessionState):
-        for t in session.text:
-            t.translatedText = t.extractedText
+        if session.text is not None:
+            for t in session.text:
+                t.translatedText = t.extractedText
 
-    SessionClient.update(session_id, update_session)
-    return ""
+    await SessionClient.update(session_id, update_session)
+    return "Translation successful"
 
 
 async def run():

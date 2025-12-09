@@ -17,9 +17,12 @@ async def document_loader(filepath: str, runtime: ToolRuntime) -> Command:
 
     try:
         file_id = await FileClient.put(filepath)
+        session_id = runtime.state["session_id"]
+        existing_session = await SessionClient.get(session_id)
         session = initialize_session()
         session.rawDocumentId = file_id
-        await SessionClient.put(runtime.state["session_id"], session)
+        session.language = existing_session.language
+        await SessionClient.put(session_id, session)
 
         logger.info(f"Successfully loaded file: '{filepath}'")
         return Command(

@@ -13,7 +13,7 @@ from traenslenzor.supervisor.state import SupervisorState
 logger = logging.getLogger(__name__)
 
 
-def has_translated_text(session: SessionState):
+def has_translated_text(session: SessionState) -> bool:
     """
     Checks if any text element has a translation.
     If so, it is assumed, that the session has been translated.
@@ -26,17 +26,39 @@ def has_translated_text(session: SessionState):
     return False
 
 
-def has_text_been_extracted(session: SessionState):
+def has_text_been_extracted(session: SessionState) -> bool:
     return session.extractedDocument is not None
+
+
+def has_font_been_detected(session: SessionState) -> bool:
+    if session.text is None:
+        return False
+    for text in session.text:
+        if text.detectedFont is not None or text.font_size is not None:
+            return True
+    return False
+
+
+def has_document_been_classified(session: SessionState) -> bool:
+    return session.class_probabilities is not None
+
+
+def has_result_been_rendered(session: SessionState) -> bool:
+    return session.renderedDocumentId is not None
 
 
 def format_session(session_id: str, session: SessionState) -> str:
     return f"""
-        - ✅ the current session_id is '{session_id}'
-        - {f"✅ the user has selected the language {session.language}" if session.language else "❌ the user has no language selected"}
-        - {"✅ the user has a document loaded" if session.rawDocumentId else "❌ the user has no document selected"}
-        - {"✅ text was extracted from the document" if has_text_been_extracted(session) else "❌ no text was extracted from the document"}
-        - {"✅ the text was translated" if has_translated_text(session) else "❌ the text has not yet been translated"}
+        ✅ the current session_id is '{session_id}'
+        {f"✅ the user has selected the language {session.language}" if session.language else "❌ the user has no language selected"}
+        {"✅ the user has a document loaded" if session.rawDocumentId else "❌ the user has no document selected"}
+
+        {"✅ text was extracted from the document" if has_text_been_extracted(session) else "❌ no text was extracted from the document"}
+        {"✅ the text was translated" if has_translated_text(session) else "❌ the text has not yet been translated"}
+        {"✅ the font has been detected" if has_font_been_detected(session) else "❌ the font has not yet been detected"}
+        {"✅ the document has been classified" if has_document_been_classified(session) else "❌ the document has not yet been classified"}
+
+        {"✅ the result has been rendered" if has_result_been_rendered(session) else "❌ the result has not yet been rendered"}
     """
 
 
@@ -61,9 +83,11 @@ async def context_aware_prompt(request: ModelRequest) -> str:
     Steps:
         1. Ask the user to provide an image or document. Do not assume any file exists.
         2. Retrieve the target language to translate the document into FROM THE USER and save it. Do not assume any language.
-        3. Extract all text from the image and detect font type, size, and color. Show the text to the user for verification.
+        3. Extract text from the image. Do not ask the user for a confirmation of the extracted text.
         4. Translate the text into the target language, preserving formatting where possible.
-        5. Render the translated text on the image, matching the original font and style. Let the user review and request adjustments.
+        5. Detect what font was used in the image.
+        6. Render the translated text on the image. Let the user review and request adjustments.
+        7. Classify the document so the user knows what class of document he is working with.
     
     Context:
         {formatted_session}
