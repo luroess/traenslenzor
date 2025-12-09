@@ -4,9 +4,7 @@ from typing import Callable, cast
 
 from langchain.agents import AgentState, create_agent
 from langchain.agents.middleware import (
-    ModelRequest,
     before_agent,
-    dynamic_prompt,
     wrap_tool_call,
 )
 from langchain_core.messages import ToolMessage
@@ -19,6 +17,7 @@ from langgraph.types import Command
 from traenslenzor.file_server.client import SessionClient
 from traenslenzor.file_server.session_state import SessionState
 from traenslenzor.supervisor.llm import llm
+from traenslenzor.supervisor.prompt import context_aware_prompt
 from traenslenzor.supervisor.state import SupervisorState, ToolCall
 from traenslenzor.supervisor.tools.tools import get_tools
 
@@ -50,48 +49,10 @@ async def wrap_tools(
 
 @before_agent
 async def initialize_session(state: AgentState, runtime: Runtime) -> Command:
-    logger.info("Creating a new session")
-    return Command(update={"session_id": await SessionClient.create(SessionState())})
-
-
-@dynamic_prompt
-async def context_aware_prompt(request: ModelRequest) -> str:
-    state = cast(SupervisorState, request.state)
-    session_id = state.get("session_id")
-    assert session_id is not None
-    session = await SessionClient.get(session_id)
-
-    formatted_session = format_session(session_id, session)
-    logger.info("Current Session:")
-    logger.info(formatted_session)
-
-    return f"""
-    Task:
-        You are an image translation assistant.
-        Your goal is to turn an image with text in one language into an image in another language.
-        Do not imitate actions or describe intended tool use.
-        Whenever an action is required, output solely the tool invocation as JSON, with no additional text.
-        Execute the steps in order as far as possible.
-
-    Steps:
-        1. Ask the user to provide an image or document. Do not assume any file exists.
-        2. Retrieve the target language to translate the document into FROM THE USER and save it. Do not assume any language.
-        3. Extract all text from the image and detect font type, size, and color. Show the text to the user for verification.
-        4. Translate the text into the target language, preserving formatting where possible.
-        5. Render the translated text on the image, matching the original font and style. Let the user review and request adjustments.
-    
-    Context:
-        {formatted_session}
-    """
-    # 3. Offer preprocessing options (crop, rotate, enhance). Only continue after the user confirms the image is ready.
-
-
-def format_session(session_id: str, session: SessionState) -> str:
-    return f"""
-        - the current session_id is '{session_id}'
-        - {f"the user has selected the language {session.language}" if session.language else "the user has no language selected"}
-        - {"the user has a document loaded" if session.rawDocumentId else "the user has no document selected"}
-    """
+    if "session_id" not in state:
+        logger.info("Creating a new session")
+        return Command(update={"session_id": await SessionClient.create(SessionState())})
+    logger.info("using existing session", state["session_id"])
 
 
 class Supervisor:
