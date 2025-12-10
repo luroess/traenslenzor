@@ -53,3 +53,8 @@ class SessionState(BaseModel):
     renderedDocumentId: str | None = None
     text: List[TextItem] | None = None
     language: str | None = None
+    class_probabilities: dict[str, float] | None = None
+
+
+def initialize_session() -> SessionState:
+    return SessionState()

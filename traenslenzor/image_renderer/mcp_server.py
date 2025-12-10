@@ -7,8 +7,13 @@ import torch
 from fastmcp import FastMCP
 
 from traenslenzor.file_server.client import FileClient, SessionClient
+<<<<<<< HEAD:traenslenzor/image_renderer/mcp_server.py
 from traenslenzor.file_server.session_state import TranslatedTextItem
 from traenslenzor.image_renderer.image_rendering import ImageRenderer
+=======
+from traenslenzor.file_server.session_state import SessionState
+from traenslenzor.image_renderer.image_renderer import ImageRenderer
+>>>>>>> master:traenslenzor/image_renderer/mcp.py
 
 ADDRESS = "127.0.0.1"
 PORT = 8006
@@ -98,7 +103,12 @@ async def replace_text(session_id: str) -> str:
     result_id = await FileClient.put_img(f"{session_id}_rendered_img", result_image)
     assert result_id is not None, "Failed to save result image"
 
-    return result_id
+    def update_session(session: SessionState):
+        session.renderedDocumentId = result_id
+
+    await SessionClient.update(session_id, update_session)
+
+    return "Image render successful"
 
 
 async def run():

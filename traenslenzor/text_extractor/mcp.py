@@ -74,7 +74,7 @@ async def extract_text(session_id: str) -> str:
         session.extractedDocument = extracted_document
 
     await SessionClient.update(session_id, update_session)
-    return f"The extracted text is located in file with id: '{res}'"
+    return "Text extraction successful"
 
 
 async def run():

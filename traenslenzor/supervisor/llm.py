@@ -61,15 +61,15 @@ def create():
         exit(-1)
 
 
-def initialize_model():
-    if exists_model():
-        delete()
-    create()
+# def initialize_model():
+#   if exists_model():
+#       delete()
+#   create()
+# initialize_model()
 
 
-initialize_model()
 llm = ChatOllama(
-    model=MODEL_NAME,
+    model="qwen3:4b",
     temperature=TEMPERATURE,
     seed=SEED,
     base_url=OLLAMA_URL,
