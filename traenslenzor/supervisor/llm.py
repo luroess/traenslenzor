@@ -11,9 +11,11 @@ logger = logging.getLogger(__name__)
 SEED = 69
 TEMPERATURE = 0
 
-BASE_MODEL = "llama3.2"
+BASE_MODEL = "qwen3:4b"
 MODEL_NAME = "traenslenzor_2000:0.1"
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+# OLLAMA_URL = os.getenv("OLLAMA_URL", "http://wgserver.ddnss.ch:45876")
+
 with open(Path(__file__).parent / "system.tmpl", "r", encoding="utf-8") as f:
     TEMPLATE = f.read()
 
@@ -61,15 +63,16 @@ def create():
         exit(-1)
 
 
-# def initialize_model():
-#   if exists_model():
-#       delete()
-#   create()
-# initialize_model()
+def initialize_model():
+    if exists_model():
+        delete()
+    create()
 
+
+initialize_model()
 
 llm = ChatOllama(
-    model="qwen3:4b",
+    model=MODEL_NAME,
     temperature=TEMPERATURE,
     seed=SEED,
     base_url=OLLAMA_URL,
