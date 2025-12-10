@@ -42,8 +42,8 @@ def exists_model():
 def initialize_model():
     if exists_model():
         return
-    resp = input(f"This application requires {MODEL} LLM. Proceed to download model? (y/N)\n")
-    if resp.strip().lower() not in ["y", "yes"]:
+    resp = input(f"This application requires {MODEL} LLM. Proceed to download model? (Y/n)\n")
+    if resp.strip().lower() not in ["", "y", "yes"]:
         print(f"{MODEL} is required for execution, exiting.")
         exit(0)
     pull_model()
