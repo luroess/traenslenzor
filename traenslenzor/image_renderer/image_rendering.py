@@ -80,9 +80,6 @@ class ImageRenderer:
             debug_path.mkdir(parents=True, exist_ok=True)
             overlay = Image.fromarray(mask[0] * 255)
             overlay.save(debug_path / "debug-mask.png")
-            save_histogram(
-                np.array(image), str(debug_path / "debug-inpainted-histogram_before.png")
-            )
 
         # Inpaint the masked regions
         result = self.inpainter.inpaint(image, mask)
@@ -91,15 +88,13 @@ class ImageRenderer:
         if save_debug:
             debug_path = Path(debug_dir)
             debug_path.mkdir(parents=True, exist_ok=True)
-            base = Image.fromarray((result * 255).astype(np.uint8))
-            overlay = Image.fromarray(mask[0])
-            debug = ImageUtils.highlight_mask(base, overlay)
-            debug.save(debug_path / "debug-overlay.png")
+            overlay = Image.fromarray(mask[0] * 255)
+            debug = ImageUtils.highlight_mask(image, overlay, opacity=0.5)
+            debug.save(debug_path / "debug-overlay-2.png")
 
             Image.fromarray((result.copy() * 255).astype(np.uint8)).save(
                 debug_path / "debug-inpainted.png"
             )
-            save_histogram(result.copy(), str(debug_path / "debug-inpainted-histogram.png"))
 
         # Draw new text on inpainted image
         result = draw_texts(result, texts, debug=False)

@@ -1,3 +1,4 @@
+import asyncio
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
@@ -13,6 +14,8 @@ from traenslenzor.image_renderer.image_rendering import ImageRenderer
 from traenslenzor.image_renderer.mcp_server import get_device
 from traenslenzor.image_renderer.text_operations import create_mask, draw_texts, get_angle_from_bbox
 from traenslenzor.text_extractor.flatten_image import deskew_document
+from traenslenzor.text_extractor.paddleocr import run_ocr
+from traenslenzor.translator.translator import translate
 
 
 @pytest.fixture
@@ -427,6 +430,52 @@ async def test_draw_rotated_text(
 
 
 @pytest.mark.anyio
+async def test_transform_image_with_ocr_bbox(renderer: ImageRenderer, sample_img_skewed: PILImage):
+    print("Starting deskewing process...")
+    result = deskew_document(np.array(sample_img_skewed))
+    print("Deskewing process completed.")
+
+    assert result is not None
+
+    unskewed_img, matrix = result
+    unskewed_pil = Image.fromarray(unskewed_img)
+    unskewed_pil.save("./debug/deskewed_image.png")
+
+    print("Running OCR on deskewed image...")
+    ocr_result = run_ocr("de", np.array(unskewed_img))
+    print("OCR process completed.")
+
+    assert ocr_result is not None
+
+    print("Starting translation process...")
+    translatedTexts = await asyncio.gather(
+        *[asyncio.create_task(translate(item, "en_GB")) for item in ocr_result]
+    )
+    print("Translation process completed.")
+    for text in [
+        f"{o.extractedText} -> {t.translatedText}" for o, t in zip(ocr_result, translatedTexts)
+    ]:
+        print(text)
+
+    result = await renderer.replace_text(
+        unskewed_pil, texts=translatedTexts, save_debug=True, debug_dir="./debug"
+    )
+
+    result.save("./debug/replaced_unskewed.png")
+
+    transformed = renderer.transform_image(
+        result,
+        np.linalg.inv(matrix),
+        original_size=(sample_img_skewed.height, sample_img_skewed.width),
+    )
+    transformed.save("./debug/replaced_reprojected.png")
+
+    composited = renderer.paste_replaced_to_original(sample_img_skewed, transformed)
+
+    composited.save("./debug/replaced_full.png")
+
+
+@pytest.mark.anyio
 async def test_transform_image(renderer: ImageRenderer, sample_img_skewed: PILImage):
     result = deskew_document(np.array(sample_img_skewed))
 
@@ -437,6 +486,7 @@ async def test_transform_image(renderer: ImageRenderer, sample_img_skewed: PILIm
     unskewed_pil = Image.fromarray(unskewed_img)
     unskewed_pil.save("./debug/deskewed_image.png")
 
+    # handcoded points from the image
     bbox = [
         BBoxPoint(x=22, y=27),
         BBoxPoint(x=210, y=27),

@@ -2,7 +2,7 @@ import ast  # noqa: I001 // Do not sort imports or this wont work
 import inspect
 import logging
 import re
-from typing import Any, Optional, Sequence
+from typing import Optional, Sequence
 
 import cv2
 import numpy as np
@@ -20,7 +20,7 @@ from pydantic import Json
 logger = logging.getLogger(__name__)
 
 
-def parse_result(results) -> Any:
+def parse_result(results) -> list[OCRTextItem]:
     return [
         OCRTextItem(
             extractedText=text,
@@ -80,7 +80,7 @@ def normalize_language(lang: str) -> str:
     return "latin"
 
 
-def run_ocr(lang: str, image: np.ndarray) -> Optional[Any]:
+def run_ocr(lang: str, image: np.ndarray) -> Optional[list[OCRTextItem]]:
     lang = normalize_language(lang)
     try:
         ocr_res = paddle_ocr(lang, image)

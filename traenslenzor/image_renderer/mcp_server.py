@@ -7,13 +7,8 @@ import torch
 from fastmcp import FastMCP
 
 from traenslenzor.file_server.client import FileClient, SessionClient
-<<<<<<< HEAD:traenslenzor/image_renderer/mcp_server.py
-from traenslenzor.file_server.session_state import TranslatedTextItem
+from traenslenzor.file_server.session_state import SessionState, TranslatedTextItem
 from traenslenzor.image_renderer.image_rendering import ImageRenderer
-=======
-from traenslenzor.file_server.session_state import SessionState
-from traenslenzor.image_renderer.image_renderer import ImageRenderer
->>>>>>> master:traenslenzor/image_renderer/mcp.py
 
 ADDRESS = "127.0.0.1"
 PORT = 8006
@@ -90,7 +85,6 @@ async def replace_text(session_id: str) -> str:
     result_image = await renderer.replace_text(
         image=image,
         texts=translated_texts,
-        inverse_transformation=None,
         save_debug=save_debug,
         debug_dir=debug_dir,
     )
