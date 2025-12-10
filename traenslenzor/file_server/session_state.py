@@ -44,7 +44,7 @@ TextItem = Annotated[
 
 class ExtractedDocument(BaseModel):
     id: str
-    transformation_matrix: List[List[float]]  # 4 points: UL, UR, LR, LL
+    transformation_matrix: List[List[float]]  # matrix from openCV's warp function
 
 
 class SessionState(BaseModel):
