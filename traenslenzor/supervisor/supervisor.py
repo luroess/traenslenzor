@@ -36,13 +36,10 @@ async def wrap_tools(
             }
         )
     state = cast(SupervisorState, request.state)
-    history = state.get("tool_history", []) + [
-        ToolCall(request.tool_call["name"], request.tool_call["args"])
-    ]
-    result.update["tool_history"] = history  # type: ignore
+    result.update["tool_history"] = [ToolCall(request.tool_call["name"], request.tool_call["args"])]  # type: ignore
 
     logger.info("Tool history")
-    logger.info(history)
+    logger.info(state.get("tool_history", []))
 
     return result
 
