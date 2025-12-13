@@ -90,7 +90,7 @@ class ImageRenderer:
             debug_path.mkdir(parents=True, exist_ok=True)
             overlay = Image.fromarray(mask[0] * 255)
             debug = ImageUtils.highlight_mask(image, overlay, opacity=0.5)
-            debug.save(debug_path / "debug-overlay-2.png")
+            debug.save(debug_path / "debug-overlay.png")
 
             Image.fromarray((result.copy() * 255).astype(np.uint8)).save(
                 debug_path / "debug-inpainted.png"

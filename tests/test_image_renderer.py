@@ -1,4 +1,3 @@
-import asyncio
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
@@ -15,7 +14,7 @@ from traenslenzor.image_renderer.mcp_server import get_device
 from traenslenzor.image_renderer.text_operations import create_mask, draw_texts, get_angle_from_bbox
 from traenslenzor.text_extractor.flatten_image import deskew_document
 from traenslenzor.text_extractor.paddleocr import run_ocr
-from traenslenzor.translator.translator import translate
+from traenslenzor.translator.translator import translate_all
 
 
 @pytest.fixture
@@ -59,7 +58,7 @@ def sample_img_fixture() -> PILImage:
 
 @pytest.fixture
 def sample_img_skewed() -> PILImage:
-    return Image.open(Path(__file__).parent / "fixtures" / "skewed_image_3.jpeg").convert("RGB")
+    return Image.open(Path(__file__).parent / "fixtures" / "skewed_image_5.png").convert("RGB")
 
 
 @pytest.fixture
@@ -448,9 +447,7 @@ async def test_transform_image_with_ocr_bbox(renderer: ImageRenderer, sample_img
     assert ocr_result is not None
 
     print("Starting translation process...")
-    translatedTexts = await asyncio.gather(
-        *[asyncio.create_task(translate(item, "en_GB")) for item in ocr_result]
-    )
+    translatedTexts = await translate_all(ocr_result, "en_GB")
     print("Translation process completed.")
     for text in [
         f"{o.extractedText} -> {t.translatedText}" for o, t in zip(ocr_result, translatedTexts)

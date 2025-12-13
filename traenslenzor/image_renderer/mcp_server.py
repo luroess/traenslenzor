@@ -1,10 +1,14 @@
 """FastMCP server for image rendering and text replacement."""
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Annotated
 
 import torch
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
+from pydantic import Field
 
 from traenslenzor.file_server.client import FileClient, SessionClient
 from traenslenzor.file_server.session_state import SessionState, TranslatedTextItem
@@ -21,6 +25,14 @@ image_renderer_mcp = FastMCP("Image Renderer")
 _renderer_instance: ImageRenderer | None = None
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class RenderResult:
+    """Result of a text replacement operation."""
+
+    success: bool
+    rendered_document_id: str
 
 
 def get_device():
@@ -41,12 +53,41 @@ def get_renderer() -> ImageRenderer:
 
 
 @image_renderer_mcp.tool
-async def replace_text(session_id: str) -> str:
+async def replace_text(
+    session_id: Annotated[
+        str,
+        Field(
+            description=(
+                "The unique identifier for the session containing extracted and translated text. "
+                "Must be a valid UUID format (e.g., 'c12f4b1e-8f47-4a92-b8c1-6e3e9d2f91a4'). "
+                "The session must have text extracted and translated before rendering."
+            )
+        ),
+    ],
+) -> RenderResult:
     """
-    Replace text in an image using inpainting.
+    Replace extracted text in an image with translated text using AI-powered inpainting.
+
+    This tool takes a session with extracted and translated text items, loads the original
+    image, and uses an AI model to intelligently replace the original text with translations
+    while preserving the image's visual style and layout.
+
+    Prerequisites:
+        - Session must exist with the given ID
+        - Image must have extracted text (via text extraction tool)
+        - All text items must be translated (via translation tool)
+        - Original document must be available in the session
 
     Args:
-        session_id (str): ID of the current session (e.g., "c12f4b1e-8f47-4a92-b8c1-6e3e9d2f91a4").
+        session_id: The unique identifier for the session containing extracted and translated text.
+
+    Returns:
+        RenderResult: Object containing:
+            - success: Boolean indicating if the rendering was successful
+            - rendered_document_id: The ID of the newly created rendered document
+
+    Raises:
+        ToolError: If session is invalid, text is not extracted/translated, or document is missing.
     """
 
     # Debug Config
@@ -58,27 +99,44 @@ async def replace_text(session_id: str) -> str:
 
     if session.text is None or len(session.text) == 0:
         logger.error("No text items found in session")
-        return "No text items found in session"
+        raise ToolError(
+            "No text items found in session. Please extract text from the document first."
+        )
 
     # Validate all text items are translated
     if not all(text.type == "translated" for text in session.text):
         untranslated = [text.extractedText for text in session.text if text.type != "translated"]
         logger.error(f"Text items are not translated yet: {untranslated}")
-        return "Text items are not translated yet"
+        raise ToolError(
+            f"All text items must be translated before rendering. "
+            f"Found {len(untranslated)} untranslated item(s). "
+            f"Please translate the text first."
+        )
 
     # Type narrowing: we know all items are translated now
     translated_texts: list[TranslatedTextItem] = [
         text for text in session.text if text.type == "translated"
     ]
     if session.rawDocumentId is None:
-        logger.error(f"No raw document available for session : {session_id}")
-        return "No raw document available for this session"
+        logger.error(f"No raw document available for session: {session_id}")
+        raise ToolError(
+            "No raw document available for this session. Please upload a document first."
+        )
+
+    if session.extractedDocument is None:
+        logger.error(f"No extracted document available for session: {session_id}")
+        raise ToolError(
+            "No extracted document available. Please extract text from the document first."
+        )
 
     # Load image from FileClient
-    image = await FileClient.get_image(session.rawDocumentId)
+    image = await FileClient.get_image(session.extractedDocument.id)
     if image is None:
-        logger.error("Invalid file id, no such document found")
-        return f"Document not found: {session.rawDocumentId}"
+        logger.error(f"Failed to load image for document: {session.extractedDocument}")
+        raise ToolError(
+            "Failed to load the extracted document image. "
+            "The document may have been deleted or is corrupted."
+        )
 
     # Process image
     renderer = get_renderer()
@@ -95,14 +153,16 @@ async def replace_text(session_id: str) -> str:
         result_image.save(debug_path / "debug-result.png")
 
     result_id = await FileClient.put_img(f"{session_id}_rendered_img", result_image)
-    assert result_id is not None, "Failed to save result image"
+    if result_id is None:
+        logger.error("Failed to save rendered image to file server")
+        raise ToolError("Failed to save the rendered image. Please try again.")
 
     def update_session(session: SessionState):
         session.renderedDocumentId = result_id
 
     await SessionClient.update(session_id, update_session)
 
-    return "Image render successful"
+    return RenderResult(success=True, rendered_document_id=result_id)
 
 
 async def run():

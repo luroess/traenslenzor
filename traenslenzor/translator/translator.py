@@ -1,3 +1,5 @@
+import asyncio
+
 from ollama import AsyncClient
 
 from traenslenzor.file_server.session_state import TextItem, TranslatedTextItem
@@ -14,7 +16,7 @@ async def translate(text: TextItem, lang: str) -> TranslatedTextItem:
         "role": "user",
         "content": f"Only Respond with the translation, or the original if you cannot translate it. Never say anything else, but the translation or the original text. Text to translate to {lang}: \n{text.extractedText}",
     }
-    response = await AsyncClient().chat(model="llama3.2:latest", messages=[system, message])
+    response = await AsyncClient().chat(model="mistral:latest", messages=[system, message])
 
     assert response.message.content is not None
 
@@ -27,3 +29,7 @@ async def translate(text: TextItem, lang: str) -> TranslatedTextItem:
         detectedFont="Arial",
         font_size="16",
     )
+
+
+async def translate_all(texts: list[TextItem], lang: str) -> list[TranslatedTextItem]:
+    return await asyncio.gather(*[asyncio.create_task(translate(item, lang)) for item in texts])

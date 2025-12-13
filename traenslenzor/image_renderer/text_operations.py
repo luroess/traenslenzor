@@ -5,7 +5,7 @@ from typing import List
 
 import numpy as np
 from numpy.typing import NDArray
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from PIL.Image import Resampling
 from PIL.ImageFont import FreeTypeFont
 from PIL.ImageFont import ImageFont as ImageFontType
@@ -50,6 +50,10 @@ def create_mask(texts: list[TranslatedTextItem], mask_shape: tuple[int, int]) ->
     draw_mask = ImageDraw.Draw(mask)
     for text in texts:
         draw_mask.polygon([(point.x, point.y) for point in text.bbox], fill=255)
+
+    # slightly dilate the mask to fill gaps between text lines etc.
+    mask = mask.filter(ImageFilter.MaxFilter(3))
+    # mask = mask.filter(ImageFilter.GaussianBlur)
 
     # Convert to numpy and normalize to [0, 1] range
     mask_array = np.array(mask).reshape((1, mask_shape[0], mask_shape[1]))
