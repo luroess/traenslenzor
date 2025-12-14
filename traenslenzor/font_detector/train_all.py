@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Script to generate datasets and train models for all fonts."""
 
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -59,19 +60,28 @@ def main():
         print(f"  Font: {font_path}")
 
         try:
-            # Generate dataset
-            print("  Generating dataset...")
-            dataset_stats = generate_dataset(
-                font_name=font_name,
-                n_train=n_train,
-                n_val=n_val,
-                n_test=n_test,
-                seed=42,
-                output_dir=data_dir,
-            )
+            font_data_dir = os.path.join(data_dir, font_name)
+
+            dataset_stats = {}  # Initialize to avoid NameError
+
+            # Check if data already exists
+            train_csv = os.path.join(font_data_dir, "train.csv")
+            if os.path.exists(train_csv):
+                print(f"Data for {font_name} already exists at {train_csv}. Skipping generation.")
+                dataset_stats = {"status": "skipped", "message": "Data already exists"}
+            else:
+                # Generate data
+                print(f"Generating data for {font_name}...")
+                dataset_stats = generate_dataset(
+                    font_name=font_name,
+                    n_train=n_train,
+                    n_val=n_val,
+                    n_test=n_test,
+                    output_dir=data_dir,
+                )
 
             # Train model
-            print("  Training model...")
+            print(f"Training model for {font_name}...")
             training_results = train_model(
                 font_name=font_name,
                 data_dir=data_dir,
@@ -134,6 +144,8 @@ def main():
 
     with open(summary_path, "w") as f:
         json.dump(results, f, indent=2, default=str)
+
+    print("\nAll done!")
 
 
 if __name__ == "__main__":
