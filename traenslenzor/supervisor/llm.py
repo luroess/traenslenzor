@@ -10,9 +10,9 @@ logger = logging.getLogger(__name__)
 SEED = 69
 TEMPERATURE = 0
 
-MODEL = "gpt-oss:latest"
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-# OLLAMA_URL = os.getenv("OLLAMA_URL", "http://wgserver.ddnss.ch:45876")
+MODEL = "gwen3:4b"
+# OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://wgserver.ddnss.ch:45876")
 
 try:
     # check ollama server
