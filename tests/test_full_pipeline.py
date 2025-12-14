@@ -13,7 +13,7 @@ from traenslenzor.text_extractor.mcp import text_extractor
 from traenslenzor.translator.mcp import translator
 
 
-def create_test_image(texts: list[tuple[str, str]]) -> PILImage:
+def create_test_image(texts: list[str]) -> PILImage:
     """
     Create a realistic test image with rotated white document on noisy background.
 
@@ -43,7 +43,7 @@ def create_test_image(texts: list[tuple[str, str]]) -> PILImage:
     for i, text in enumerate(texts):
         y = (doc_height / num_texts) * i + 10
         # Get top-left corner of bbox
-        draw.text((10, y), text[0], fill=(0, 0, 0), font=font)
+        draw.text((10, y), text, fill=(0, 0, 0), font=font)
 
     print(f"Created base document: {doc_width}x{doc_height}")
 
@@ -91,12 +91,9 @@ async def create_extracted_document(
 @pytest.mark.anyio
 async def test_full_pipeline(file_server):
     test_texts = [
-        ("Hello world, how are you doing today?", "Hola mundo, ¿cómo estás hoy?"),
-        (
-            "This is a test document for translation.",
-            "Este es un documento de prueba para traducción.",
-        ),
-        ("Machine translation works great!", "¡La traducción automática funciona genial!"),
+        "Hello world, how are you doing today?",
+        "This is a test document for translation.",
+        "Machine translation works great!",
     ]
 
     test_img = create_test_image(test_texts)

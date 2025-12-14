@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
+import numpy as np
 import torch
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
@@ -147,22 +148,38 @@ async def replace_text(
         debug_dir=debug_dir,
     )
 
+    transformation_matrix = session.extractedDocument.transformation_matrix
+    original_image = await FileClient.get_image(session.rawDocumentId)
+    if original_image is None:
+        logger.error(f"Failed to load original image for document: {session.rawDocumentId}")
+        raise ToolError(
+            "Failed to load the original document image. "
+            "The document may have been deleted or is corrupted."
+        )
+    original_size = (original_image.width, original_image.height)
+
+    final_image = renderer.transform_image(
+        result_image, np.linalg.inv(np.array(transformation_matrix)), original_size
+    )
+
+    final_image = renderer.paste_replaced_to_original(original_image, final_image)
+
     if save_debug:
         debug_path = Path(debug_dir)
         debug_path.mkdir(parents=True, exist_ok=True)
-        result_image.save(debug_path / "debug-result.png")
+        final_image.save(debug_path / "debug-result.png")
 
-    result_id = await FileClient.put_img(f"{session_id}_rendered_img", result_image)
-    if result_id is None:
+    final_id = await FileClient.put_img(f"{session_id}_rendered_img", final_image)
+    if final_id is None:
         logger.error("Failed to save rendered image to file server")
         raise ToolError("Failed to save the rendered image. Please try again.")
 
     def update_session(session: SessionState):
-        session.renderedDocumentId = result_id
+        session.renderedDocumentId = final_id
 
     await SessionClient.update(session_id, update_session)
 
-    return RenderResult(success=True, rendered_document_id=result_id)
+    return RenderResult(success=True, rendered_document_id=final_id)
 
 
 async def run():

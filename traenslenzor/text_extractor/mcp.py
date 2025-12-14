@@ -50,8 +50,10 @@ async def extract_text(session_id: str) -> str:
     flattened_img = orig_img
     transformation_matrix = np.eye(3, dtype=np.float64)
     if flattening_result is not None:
-        logger.error("Image flattening failed, fallback to original.")
+        logger.info("Image flattening successful")
         flattened_img, transformation_matrix = flattening_result
+    else:
+        logger.error("Image flattening failed, proceeding with original image")
 
     upload_image = cv2.cvtColor(flattened_img, cv2.COLOR_BGR2RGB)
     flattened_image_id = await FileClient.put_img(
@@ -63,7 +65,7 @@ async def extract_text(session_id: str) -> str:
 
     extracted_document = ExtractedDocument(
         id=flattened_image_id,
-        transformation_matrix=transformation_matrix,
+        transformation_matrix=transformation_matrix.tolist(),
     )
 
     res = run_ocr("en", flattened_img)
