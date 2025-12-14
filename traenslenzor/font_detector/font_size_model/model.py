@@ -20,13 +20,13 @@ class FontSizeRegressorMLP:
     Tiny MLP for font size regression.
 
     Architecture:
-    - Input: 30 features
+    - Input: 34 features (updated)
     - Hidden1: 64 units with ReLU
     - Hidden2: 32 units with ReLU
     - Output: 1 unit (font size in points)
     """
 
-    def __init__(self, input_dim: int = 30, hidden1: int = 64, hidden2: int = 32):
+    def __init__(self, input_dim: int = 34, hidden1: int = 64, hidden2: int = 32):
         """
         Initialize MLP with random weights.
 

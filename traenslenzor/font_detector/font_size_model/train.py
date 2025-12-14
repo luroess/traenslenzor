@@ -27,8 +27,8 @@ def load_dataset(csv_path: str) -> Tuple[np.ndarray, np.ndarray]:
     with open(csv_path, "r") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            # Extract features (last 30 columns)
-            features = np.array([float(row[f"feat_{i}"]) for i in range(30)], dtype=np.float32)
+            # Extract features (last 36 columns)
+            features = np.array([float(row[f"feat_{i}"]) for i in range(36)], dtype=np.float32)
             features_list.append(features)
 
             # Extract target
@@ -198,7 +198,7 @@ def train_model(
     if verbose:
         print("Initializing model...")
 
-    model = FontSizeRegressorMLP(input_dim=30, hidden1=64, hidden2=32)
+    model = FontSizeRegressorMLP(input_dim=36, hidden1=64, hidden2=32)
     criterion = MSELoss()
     optimizer = AdamOptimizer(model.get_parameters(), lr=lr)
 

@@ -61,6 +61,7 @@ class FontSizeEstimator:
         text_box_size: Tuple[float, float],
         text: str,
         font_name: str,
+        num_lines: int = 1,
     ) -> float:
         """
         Estimate font size.
@@ -69,15 +70,17 @@ class FontSizeEstimator:
             text_box_size: (width_px, height_px) tuple
             text: Text content
             font_name: Font name
+            num_lines: Number of lines (default: 1)
 
         Returns:
             Estimated font size in points
         """
+
         # Load model if needed
         self._load_model(font_name)
 
         # Extract and normalize features
-        features = extract_features(text_box_size, text)
+        features = extract_features(text_box_size, text, num_lines=num_lines)
         features_norm = self.normalizers[font_name].normalize(features)
 
         # Predict
@@ -116,6 +119,7 @@ def estimate_font_size(
     text: str,
     font_name: Optional[str] = None,
     checkpoints_dir: Optional[str] = None,
+    num_lines: int = 1,
 ) -> dict:
     """
     Estimate font size (MCP tool interface).
@@ -125,6 +129,7 @@ def estimate_font_size(
         text: Text content
         font_name: Optional font name hint
         checkpoints_dir: Directory containing checkpoints (uses default if None)
+        num_lines: Number of lines (default: 1)
 
     Returns:
         Dictionary with 'font_size_pt' key
@@ -141,7 +146,7 @@ def estimate_font_size(
 
     # Create estimator and run inference
     estimator = FontSizeEstimator(checkpoints_dir)
-    font_size_pt = estimator.estimate(text_box_size, text, font_name)
+    font_size_pt = estimator.estimate(text_box_size, text, font_name, num_lines=num_lines)
 
     return {"font_size_pt": font_size_pt}
 
@@ -174,6 +179,12 @@ def main():
         help="Text content",
     )
     parser.add_argument(
+        "--lines",
+        type=int,
+        default=1,
+        help="Number of lines (default: 1)",
+    )
+    parser.add_argument(
         "--checkpoints-dir",
         type=str,
         default=None,
@@ -187,6 +198,7 @@ def main():
         text=args.text,
         font_name=args.font,
         checkpoints_dir=args.checkpoints_dir,
+        num_lines=args.lines,
     )
 
     print(f"Estimated font size: {result['font_size_pt']:.2f} pt")

@@ -40,23 +40,31 @@ def extract_letter_histogram(text: str) -> np.ndarray:
 def extract_features(
     text_box_size: Tuple[float, float],
     text: str,
+    num_lines: int = 1,
 ) -> np.ndarray:
     """
     Extract features for font size estimation.
 
-    Features (28-dimensional):
+    Features (36-dimensional):
     - width_px (1)
     - height_px (1)
     - text_len (1)
+    - char_density (1)
+    - num_lines (1)
+    - log_width (1)
+    - log_height (1)
+    - log_len (1)
+    - log_density (1)
+    - log_num_lines (1)
     - letter_histogram (26)
-    - length_to_box_ratio (1) - additional derived feature
 
     Args:
         text_box_size: (width_px, height_px) tuple
         text: Text string
+        num_lines: Number of lines in the text (default: 1)
 
     Returns:
-        Feature vector as numpy array (28-dimensional)
+        Feature vector as numpy array (36-dimensional)
 
     Raises:
         ValueError: If inputs are invalid
@@ -73,6 +81,9 @@ def extract_features(
     if not isinstance(text, str):
         raise ValueError(f"text must be a string, got: {type(text)}")
 
+    if num_lines < 1:
+        num_lines = 1
+
     # Extract features
     text_len = len(text)
     letter_hist = extract_letter_histogram(text)
@@ -82,13 +93,28 @@ def extract_features(
     box_area = width_px * height_px
     char_density = text_len_float / box_area if box_area > 0 else 0.0
 
+    # Log features (add small epsilon for stability)
+    eps = 1e-6
+    log_width = np.log(width_px + eps)
+    log_height = np.log(height_px + eps)
+    log_len = np.log(text_len_float + eps)
+    log_density = np.log(char_density + eps)
+    log_num_lines = np.log(float(num_lines) + eps)
+
     # Combine features
+    # 5 raw + 5 log + 26 hist = 36 features
     features = np.array(
         [
             width_px,
             height_px,
             text_len_float,
             char_density,
+            float(num_lines),
+            log_width,
+            log_height,
+            log_len,
+            log_density,
+            log_num_lines,
         ],
         dtype=np.float32,
     )
@@ -193,7 +219,7 @@ class FeatureNormalizer:
         return cls(mean, std)
 
 
-def validate_features(features: np.ndarray, expected_dim: int = 30) -> bool:
+def validate_features(features: np.ndarray, expected_dim: int = 36) -> bool:
     """
     Validate feature vector.
 

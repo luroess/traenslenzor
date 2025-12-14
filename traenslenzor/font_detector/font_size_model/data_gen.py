@@ -54,7 +54,231 @@ SAMPLE_TEXTS = [
     "nopqrstuvwxyz",
     "0123456789",
     "Sample Text",
+    # Longer texts for multiline generation
+    "The quick brown fox jumps over the lazy dog. This is a classic pangram that contains every letter of the alphabet.",
+    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+    "Font detection is a challenging problem in computer vision. It involves identifying the typeface used in an image of text.",
+    "Machine learning models can be trained to estimate font size by analyzing the dimensions and content of a text box.",
+    "Deep learning has revolutionized the field of natural language processing and computer vision in recent years.",
+    "Python is a versatile programming language that is widely used for web development, data analysis, and artificial intelligence.",
 ]
+
+
+def generate_random_text(min_words: int = 1, max_words: int = 30) -> str:
+    """Generate random text from a simple vocabulary."""
+    vocab = [
+        "the",
+        "quick",
+        "brown",
+        "fox",
+        "jumps",
+        "over",
+        "lazy",
+        "dog",
+        "lorem",
+        "ipsum",
+        "dolor",
+        "sit",
+        "amet",
+        "consectetur",
+        "adipiscing",
+        "elit",
+        "sed",
+        "do",
+        "eiusmod",
+        "tempor",
+        "incididunt",
+        "ut",
+        "labore",
+        "et",
+        "dolore",
+        "magna",
+        "aliqua",
+        "ut",
+        "enim",
+        "ad",
+        "minim",
+        "veniam",
+        "quis",
+        "nostrud",
+        "exercitation",
+        "ullamco",
+        "laboris",
+        "nisi",
+        "ut",
+        "aliquip",
+        "ex",
+        "ea",
+        "commodo",
+        "consequat",
+        "duis",
+        "aute",
+        "irure",
+        "dolor",
+        "in",
+        "reprehenderit",
+        "in",
+        "voluptate",
+        "velit",
+        "esse",
+        "cillum",
+        "dolore",
+        "eu",
+        "fugiat",
+        "nulla",
+        "pariatur",
+        "excepteur",
+        "sint",
+        "occaecat",
+        "cupidatat",
+        "non",
+        "proident",
+        "sunt",
+        "in",
+        "culpa",
+        "qui",
+        "officia",
+        "deserunt",
+        "mollit",
+        "anim",
+        "id",
+        "est",
+        "laborum",
+        "hello",
+        "world",
+        "python",
+        "programming",
+        "code",
+        "data",
+        "science",
+        "machine",
+        "learning",
+        "artificial",
+        "intelligence",
+        "neural",
+        "network",
+        "deep",
+        "computer",
+        "vision",
+        "image",
+        "processing",
+        "text",
+        "font",
+        "size",
+        "estimation",
+        "detection",
+        "recognition",
+        "analysis",
+        "system",
+        "model",
+        "algorithm",
+        "function",
+        "variable",
+        "class",
+        "object",
+        "method",
+        "interface",
+        "implementation",
+        "design",
+        "pattern",
+        "architecture",
+        "software",
+        "engineering",
+        "development",
+        "testing",
+        "debugging",
+        "deployment",
+        "cloud",
+        "server",
+        "client",
+        "database",
+        "storage",
+        "network",
+        "security",
+        "privacy",
+        "authentication",
+        "authorization",
+        "encryption",
+        "decryption",
+        "compression",
+        "optimization",
+        "performance",
+        "scalability",
+        "reliability",
+        "availability",
+        "maintainability",
+        "usability",
+        "accessibility",
+        "internationalization",
+        "localization",
+        "documentation",
+        "support",
+        "community",
+        "open",
+        "source",
+        "license",
+        "copyright",
+        "trademark",
+        "patent",
+        "legal",
+        "ethical",
+        "social",
+        "economic",
+        "political",
+        "environmental",
+        "impact",
+        "future",
+        "trends",
+        "challenges",
+        "opportunities",
+        "risks",
+        "benefits",
+        "conclusion",
+        "summary",
+        "introduction",
+        "background",
+        "methodology",
+        "results",
+        "discussion",
+        "references",
+        "appendix",
+        "glossary",
+        "index",
+        "table",
+        "figure",
+        "chart",
+        "graph",
+        "diagram",
+        "illustration",
+        "image",
+        "picture",
+        "photo",
+        "video",
+        "audio",
+        "music",
+        "sound",
+        "voice",
+        "speech",
+        "language",
+        "translation",
+    ]
+
+    num_words = random.randint(min_words, max_words)
+    words = [random.choice(vocab) for _ in range(num_words)]
+
+    # Capitalize first word
+    words[0] = words[0].capitalize()
+
+    # Add punctuation
+    text = " ".join(words)
+    if random.random() < 0.8:
+        text += "."
+
+    # Occasionally add numbers (to match test distribution)
+    if random.random() < 0.3:
+        text += f" {random.randint(0, 999)}"
+
+    return text
 
 
 def get_font_path(font_name: str) -> str:
@@ -91,9 +315,9 @@ def render_text_box(
     text: str,
     font_path: str,
     font_size_pt: float,
-    padding: int = 10,
+    padding: int = 0,
     max_width: int = 800,
-) -> Tuple[Image.Image, Tuple[float, float]]:
+) -> Tuple[Image.Image, Tuple[float, float], int]:
     """
     Render text with line wrapping and return cropped bounding box.
 
@@ -105,7 +329,7 @@ def render_text_box(
         max_width: Maximum width before wrapping (pixels)
 
     Returns:
-        (image, (width_px, height_px)) tuple
+        (image, (width_px, height_px), num_lines) tuple
     """
     # Load font
     font = ImageFont.truetype(font_path, size=int(font_size_pt))
@@ -138,64 +362,120 @@ def render_text_box(
     if current_line:
         lines.append(" ".join(current_line))
 
-    # Calculate dimensions
-    line_height = temp_draw.textbbox((0, 0), "Ay", font=font)[3]
-    line_spacing = int(line_height * 0.2)  # 20% line spacing
+    # Calculate dimensions using tight bounding box of the whole text block
+    # First, draw everything onto a temporary canvas large enough to hold it
+    # Standard line height for spacing, but crop tightly at the end
 
-    max_line_width: float = 0
+    # Standard line height for spacing calculation
+    standard_bbox = temp_draw.textbbox((0, 0), "Ay", font=font)
+    standard_height = standard_bbox[3] - standard_bbox[1]
+    line_spacing = int(standard_height * 0.2)
+
+    # Estimate max dimensions
+    max_w = max_width + padding * 2
+    est_h = (standard_height + line_spacing) * len(lines) + padding * 2
+
+    # Create temp image with transparent background for accurate bbox
+    temp_full = Image.new("RGBA", (int(max_w), int(est_h)), color=(255, 255, 255, 0))
+    draw_full = ImageDraw.Draw(temp_full)
+
+    # Draw text
+    current_y = padding
     for line in lines:
-        bbox = temp_draw.textbbox((0, 0), line, font=font)
-        line_width = bbox[2] - bbox[0]
-        max_line_width = max(max_line_width, line_width)
+        draw_full.text((padding, current_y), line, font=font, fill="black")
+        current_y += standard_height + line_spacing
 
-    total_height: float = len(lines) * line_height + (len(lines) - 1) * line_spacing
+    # Get tight bounding box of the content (alpha channel is non-zero for text)
+    bbox = temp_full.getbbox()
+    if bbox:
+        left, top, right, bottom = bbox
+        # Calculate crop dimensions with padding
+        crop_w = (right - left) + 2 * padding
+        crop_h = (bottom - top) + 2 * padding
 
-    # Create actual image with padding
-    img_width: float = max_line_width + 2 * padding
-    img_height: float = total_height + 2 * padding
+        # Create final image with white background
+        img = Image.new("RGB", (int(crop_w), int(crop_h)), color="white")
 
-    img = Image.new("RGB", (int(img_width), int(img_height)), color="white")
-    draw = ImageDraw.Draw(img)
+        # Draw text again on the final image
+        # We need to adjust coordinates relative to the crop
+        # Or simpler: just paste the crop from temp_full onto white background?
+        # But temp_full has transparent background.
+        # Let's just redraw to be safe and clean.
 
-    # Draw each line
-    y_offset: float = padding
-    for line in lines:
-        draw.text((padding, int(y_offset)), line, font=font, fill="black")
-        y_offset += line_height + line_spacing
+        # Actually, simpler:
+        # We know the shift is `left - padding`.
+        # So new x = old x - (left - padding).
+        # But we drew at `padding`.
+        # So `left` is likely `padding` (or slightly more if first char has bearing).
 
-    # Return image and box size
-    box_size = (img_width, img_height)
+        # Let's just paste the relevant part of temp_full onto a white background.
+        # Crop from temp_full
+        text_crop = temp_full.crop((left, top, right, bottom))
 
-    return img, box_size
+        # Paste onto center of new white image
+        img.paste(text_crop, (padding, padding), mask=text_crop)
+
+        box_size = (float(img.width), float(img.height))
+    else:
+        # Empty image fallback
+        img = Image.new("RGB", (padding * 2, padding * 2), color="white")
+        box_size = (float(padding * 2), float(padding * 2))
+
+    return img, box_size, len(lines)
 
 
 def generate_sample(
     font_name: str,
     font_path: str,
-    min_size: float = 8.0,
-    max_size: float = 42.0,
+    min_size: float,
+    max_size: float,
 ) -> dict:
     """
-    Generate a single training sample.
+    Generate a single sample.
 
     Args:
-        font_name: Name of the font
-        font_path: Path to font file
-        min_size: Minimum font size in points
-        max_size: Maximum font size in points
+        font_name: Font name
+        font_path: Font file path
+        min_size: Min font size
+        max_size: Max font size
 
     Returns:
         Dictionary with sample data
     """
     # Randomly select text and font size
-    text = random.choice(SAMPLE_TEXTS)
-    font_size_pt = random.uniform(min_size, max_size)
+    # 50% chance to use predefined sample texts, 50% chance to generate random text
+    if random.random() < 0.5:
+        text = random.choice(SAMPLE_TEXTS)
+    else:
+        # Generate random text length based on whether we want multiline or not
+        # But we decide multiline later based on max_width.
+        # Let's just generate a random length string.
+        text = generate_random_text(min_words=1, max_words=30)
 
-    # Render text
-    img, box_size = render_text_box(text, font_path, font_size_pt)
+    # Use integer font size to avoid mismatch between label and rendering
+    # ImageFont.truetype truncates float sizes to int
+    font_size_pt = float(random.randint(int(min_size), int(max_size)))
+
+    # Decide whether this sample should be multiline (50% chance)
+    if random.random() < 0.5:
+        # multiline: choose a relatively small max_width to force wrapping
+        # Width should be related to font size to ensure reasonable wrapping
+        # e.g. 5-15 chars wide
+        approx_char_width = font_size_pt * 0.6
+        max_width = int(random.randint(5, 20) * approx_char_width)
+        # Ensure min width
+        max_width = max(max_width, int(font_size_pt * 2))
+    else:
+        # single line: large max_width so no wrapping occurs
+        max_width = 2000
+
+    # Render text with chosen max_width
+    img, box_size, num_lines = render_text_box(
+        text, font_path, font_size_pt, padding=0, max_width=max_width
+    )
 
     # Extract features
-    features = extract_features(box_size, text)
+    features = extract_features(box_size, text, num_lines=num_lines)
 
     return {
         "font_name": font_name,
@@ -275,7 +555,7 @@ def generate_dataset(
 
             # Header
             header = ["font_name", "text", "font_size_pt", "width_px", "height_px"]
-            feature_names = [f"feat_{i}" for i in range(30)]
+            feature_names = [f"feat_{i}" for i in range(36)]
             header.extend(feature_names)
             writer.writerow(header)
 
