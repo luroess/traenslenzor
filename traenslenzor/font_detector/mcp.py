@@ -3,7 +3,7 @@ import logging
 from fastmcp import FastMCP
 
 from traenslenzor.file_server.client import SessionClient
-from traenslenzor.file_server.session_state import SessionState
+from traenslenzor.file_server.session_state import DetectedFontTextItem, SessionState
 
 ADDRESS = "127.0.0.1"
 PORT = 8003
@@ -23,9 +23,12 @@ async def detect_font(session_id: str) -> str:
 
     def update_session(session: SessionState):
         if session.text is not None:
-            for t in session.text:
-                t.detectedFont = "Roboto"
-                t.font_size = 12
+            session.text = [
+                DetectedFontTextItem(
+                    **t.model_dump(exclude={"type"}), detectedFont="Roboto", font_size="32"
+                )
+                for t in session.text
+            ]
 
     await SessionClient.update(session_id, update_session)
 

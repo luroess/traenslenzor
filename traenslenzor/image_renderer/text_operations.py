@@ -102,7 +102,7 @@ def draw_texts(
             font = ImageFont.truetype(text.detectedFont, float(text.font_size))
         except OSError:
             logger.warning(f"Font '{text.detectedFont}' not found, falling back to default font")
-            font = ImageFont.load_default()
+            font = ImageFont.load_default(float(text.font_size))
 
         # Get text dimensions from rectified bbox
         rectified_bbox = [point.T @ matrix for point in bbox_as_array]
