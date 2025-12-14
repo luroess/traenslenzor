@@ -69,9 +69,9 @@ Detect font name from an image.
 
 #### 2. estimate_font_size
 
-Estimate font size from text box dimensions and content.
+Estimate font size from text box dimensions and content. Can automatically detect font name if image is provided.
 
-**Input:**
+**Input (with known font):**
 ```json
 {
   "text_box_size": [400, 64],
@@ -80,10 +80,20 @@ Estimate font size from text box dimensions and content.
 }
 ```
 
+**Input (with auto-detection):**
+```json
+{
+  "text_box_size": [400, 64],
+  "text": "Hello World",
+  "image_path": "/path/to/image.png"
+}
+```
+
 **Output:**
 ```json
 {
-  "font_size_pt": 12.5
+  "font_size_pt": 12.5,
+  "font_name": "Roboto-Regular"
 }
 ```
 
@@ -121,6 +131,17 @@ python -m traenslenzor.font_detector.font_size_model.infer \
   --text "Hello World"
 ```
 
+#### Test Font Name Detection
+
+Run the test script to generate sample images and test detection:
+
+```bash
+python test_font_detection.py
+
+# Run unit test
+uv run pytest traenslenzor/font_detector/tests/
+```
+
 ## Demo
 
 Quick end-to-end demo:
@@ -135,7 +156,11 @@ python -m traenslenzor.font_detector.font_size_model.infer \
   --w 400 \
   --h 64 \
   --text "Hello World"
+
+# Test font name detection
+python test_font_detection.py
 ```
+
 
 ## Architecture
 

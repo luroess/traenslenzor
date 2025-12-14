@@ -77,7 +77,21 @@ class FontSizeEstimator:
         """
 
         # Load model if needed
-        self._load_model(font_name)
+        try:
+            self._load_model(font_name)
+        except FileNotFoundError:
+            # Fallback to Roboto-Regular if available
+            fallback_font = "Roboto-Regular"
+            if font_name != fallback_font:
+                # print(f"Warning: Model for '{font_name}' not found. Falling back to '{fallback_font}'.")
+                try:
+                    self._load_model(fallback_font)
+                    font_name = fallback_font
+                except FileNotFoundError:
+                    # If fallback also fails, re-raise original error
+                    raise
+            else:
+                raise
 
         # Extract and normalize features
         features = extract_features(text_box_size, text, num_lines=num_lines)

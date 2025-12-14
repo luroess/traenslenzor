@@ -39,7 +39,7 @@ class FontNameDetector:
         if self._model is None:
             print(f"Loading font identifier model '{self.model_name}' on {self.device}...")
             self._processor = AutoImageProcessor.from_pretrained(
-                self.model_name, cache_dir=self.cache_dir
+                self.model_name, cache_dir=self.cache_dir, use_fast=False
             )
             self._model = AutoModelForImageClassification.from_pretrained(
                 self.model_name, cache_dir=self.cache_dir
@@ -54,6 +54,7 @@ class FontNameDetector:
     def _prepare_image(self, image_path: str) -> Image.Image:
         """
         Load and prepare image for inference.
+        Adds padding to ensure the text isn't touching the edges, which helps the model.
 
         Args:
             image_path: Path to image file
@@ -65,9 +66,34 @@ class FontNameDetector:
 
         # Convert to RGB if needed
         if img.mode != "RGB":
-            return img.convert("RGB")
+            img = img.convert("RGB")
 
-        return img
+        # Add padding to make it more square-ish and give context
+        # ViT models often resize to 224x224, so extreme aspect ratios are bad.
+        # We'll pad to at least a certain size and add margins.
+
+        w, h = img.size
+
+        # Add 10% padding or at least 20px
+        pad_w = max(20, int(w * 0.1))
+        pad_h = max(20, int(h * 0.1))
+
+        new_w = w + 2 * pad_w
+        new_h = h + 2 * pad_h
+
+        # Make it somewhat square if it's very wide
+        if new_w > new_h * 2:
+            new_h = max(new_h, new_w // 2)
+
+        # Create new white canvas
+        new_img = Image.new("RGB", (new_w, new_h), "white")
+
+        # Paste in center
+        offset_x = (new_w - w) // 2
+        offset_y = (new_h - h) // 2
+        new_img.paste(img, (offset_x, offset_y))
+
+        return new_img
 
     def detect(self, image_path: str) -> str:
         """
