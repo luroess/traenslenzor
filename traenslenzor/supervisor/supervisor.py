@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from typing import Callable, Optional, cast
 
@@ -36,13 +35,10 @@ async def wrap_tools(
             }
         )
     state = cast(SupervisorState, request.state)
-    history = state.get("tool_history", []) + [
-        ToolCall(request.tool_call["name"], request.tool_call["args"])
-    ]
-    result.update["tool_history"] = history  # type: ignore
+    result.update["tool_history"] = [ToolCall(request.tool_call["name"], request.tool_call["args"])]  # type: ignore
 
     logger.info("Tool history")
-    logger.info(history)
+    logger.info(state.get("tool_history", []))
 
     return result
 
@@ -68,30 +64,17 @@ class Supervisor:
         )
 
 
-async def run():
+async def run(user_input: str):  # , on_progress):
     tools = await get_tools()
     supervisor = Supervisor(tools)
 
-    # Startup greeting
-    print("Document Assistant Ready!")
-    print("I can help you with document operations. Please provide a document.")
-    print("Type 'quit', 'exit', or 'q' to exit.\n")
+    config: RunnableConfig = {"configurable": {"thread_id": "69"}}
+    result = await supervisor.agent.ainvoke(
+        {"messages": [{"role": "user", "content": user_input}]},
+        config=config,
+    )
 
-    loop = asyncio.get_event_loop()
+    messages = result.get("messages", [])
+    session_id = result.get("session_id", None)
 
-    while True:
-        user_input = await loop.run_in_executor(None, input, "User: ")
-        if user_input.lower() in ["quit", "exit", "q"]:
-            print("Goodbye!")
-            break
-
-        config: RunnableConfig = {"configurable": {"thread_id": "69"}}
-        result = await supervisor.agent.ainvoke(
-            {"messages": [{"role": "user", "content": user_input}]},
-            config=config,
-        )
-
-        messages = result.get("messages", [])
-        if messages:
-            last_message = messages[-1]
-            print("Agent: ", last_message.content)
+    return (messages[-1], session_id)

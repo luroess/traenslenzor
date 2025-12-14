@@ -21,7 +21,7 @@ def has_translated_text(session: SessionState) -> bool:
     if session.text is None:
         return False
     for text in session.text:
-        if text.translatedText is not None:
+        if text.type == "translated":
             return True
     return False
 
@@ -34,7 +34,7 @@ def has_font_been_detected(session: SessionState) -> bool:
     if session.text is None:
         return False
     for text in session.text:
-        if text.detectedFont is not None or text.font_size is not None:
+        if text.type in ("font_detected", "translated"):
             return True
     return False
 
@@ -78,17 +78,10 @@ async def context_aware_prompt(request: ModelRequest) -> str:
         You are an image translation assistant.
         Your goal is to turn an image with text in one language into an image in another language.
         Do not imitate actions or describe intended tool use.
-        Execute the steps in order as far as possible.
+        You have multiple tools available.
+        Execute all of the tools in a sensible order.
+        You must execute all of the tools available to you.
 
-    Steps:
-        1. Ask the user to provide an image or document. Do not assume any file exists.
-        2. Retrieve the target language to translate the document into FROM THE USER and save it. Do not assume any language.
-        3. Extract text from the image. Do not ask the user for a confirmation of the extracted text.
-        4. Translate the text into the target language, preserving formatting where possible.
-        5. Detect what font was used in the image.
-        6. Render the translated text on the image. Let the user review and request adjustments.
-        7. Classify the document so the user knows what class of document he is working with.
-    
     Context:
         {formatted_session}
     """

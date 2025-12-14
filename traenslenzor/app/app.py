@@ -4,7 +4,7 @@ from traenslenzor.doc_class_detector.mcp import run as run_doc_class_detector
 from traenslenzor.file_server.server import run as run_file_server
 from traenslenzor.font_detector.mcp import run as run_font_detector
 from traenslenzor.image_renderer.mcp_server import run as run_image_renderer
-from traenslenzor.supervisor.supervisor import run as run_supervisor
+from traenslenzor.streamlit.run import run as run_streamlit
 from traenslenzor.text_extractor.mcp import run as run_text_extractor
 from traenslenzor.translator.mcp import run as run_translator
 
@@ -19,7 +19,7 @@ def run():
         loop.create_task(run_translator()),
         loop.create_task(run_doc_class_detector()),
         loop.create_task(run_font_detector()),
-        loop.create_task(run_supervisor()),  # Must be last or weird error :D
+        loop.create_task(run_streamlit()),  # Must be last or weird error :D
     ]
     loop.run_until_complete(asyncio.gather(*tasks))
     loop.close()

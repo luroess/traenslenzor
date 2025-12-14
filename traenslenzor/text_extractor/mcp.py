@@ -3,6 +3,7 @@ import logging
 import cv2
 import numpy as np
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
 from PIL import Image
 
 from traenslenzor.file_server.client import FileClient, SessionClient
@@ -69,10 +70,12 @@ async def extract_text(session_id: str) -> str:
     )
 
     res = run_ocr("en", flattened_img)
-    logger.info(res)
+
+    if res is None:
+        raise ToolError("OCR text extraction failed")
 
     def update_session(session: SessionState):
-        session.text = res
+        session.text = res  # pyright: ignore[reportAttributeAccessIssue]
         session.extractedDocument = extracted_document
 
     await SessionClient.update(session_id, update_session)
