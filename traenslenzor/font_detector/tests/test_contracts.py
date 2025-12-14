@@ -8,15 +8,6 @@ class TestDetectFontNameContract:
 
     def test_input_schema(self):
         """Test input schema structure."""
-        # schema = {
-        #     "type": "object",
-        #     "properties": {
-        #         "image_path": {
-        #             "type": "string",
-        #         }
-        #     },
-        #     "required": ["image_path"],
-        # }
 
         # Valid input
         valid_input = {"image_path": "/path/to/image.png"}
@@ -51,24 +42,6 @@ class TestEstimateFontSizeContract:
 
     def test_input_schema(self):
         """Test input schema structure."""
-        # schema = {
-        #     "type": "object",
-        #     "properties": {
-        #         "text_box_size": {
-        #             "type": "array",
-        #             "items": {"type": "number"},
-        #             "minItems": 2,
-        #             "maxItems": 2,
-        #         },
-        #         "text": {
-        #             "type": "string",
-        #         },
-        #         "font_name": {
-        #             "type": "string",
-        #         },
-        #     },
-        #     "required": ["text_box_size", "text"],
-        # }
 
         # Valid input (without optional font_name)
         valid_input1 = {
