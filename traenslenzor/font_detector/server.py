@@ -1,6 +1,7 @@
 """MCP server for font detection and size estimation."""
 
 import json
+import logging
 import os
 import tempfile
 from pathlib import Path
@@ -8,7 +9,8 @@ from typing import List, Optional
 
 from fastmcp import FastMCP
 
-from traenslenzor.file_server.client import FileClient
+from traenslenzor.file_server.client import FileClient, SessionClient
+from traenslenzor.file_server.session_state import SessionState
 
 from .font_name_detector import FontNameDetector
 from .font_size_model.infer import FontSizeEstimator
@@ -16,6 +18,8 @@ from .font_size_model.infer import FontSizeEstimator
 ADDRESS = "127.0.0.1"
 PORT = 8003
 FONT_DETECTOR_BASE_PATH = f"http://{ADDRESS}:{PORT}/mcp"
+
+logger = logging.getLogger(__name__)
 
 # Initialize server
 font_detector = FastMCP("Font Detector")
@@ -54,7 +58,7 @@ def detect_font_name_logic(image_path: str) -> str:
         return json.dumps({"error": str(e)})
 
 
-@font_detector.tool
+# @font_detector.tool
 def detect_font_name(image_path: str) -> str:
     """Detect font name from an image containing text.
 
@@ -112,7 +116,7 @@ def estimate_font_size_logic(
         return json.dumps({"error": str(e)})
 
 
-@font_detector.tool
+# @font_detector.tool
 def estimate_font_size(
     text_box_size: List[float],
     text: str,
@@ -132,64 +136,102 @@ def estimate_font_size(
     return estimate_font_size_logic(text_box_size, text, image_path, font_name, num_lines)
 
 
-@font_detector.tool()
-async def detect_font(
-    image_id: str,
-    text: str,
-    bbox: list[int] = None,
-    lines: int | None = None,
-) -> str:
-    """
-    Detects the font family and estimates font size for text in an image.
+async def detect_font_logic(session_id: str) -> str:
+    """Core logic for font detection."""
+    # Get session state to access raw document ID
+    session = await SessionClient.get(session_id)
+    if not session or not session.rawDocumentId:
+        return "Error: No active session or raw document found"
 
-    Args:
-        image_id: The ID of the image file in the file server.
-        text: The text content within the bounding box.
-        bbox: The bounding box [x, y, w, h] (optional).
-        lines: Number of lines of text. If not provided, calculated from text.
-    """
-    # Logic to handle optional lines parameter
-    if lines is None:
-        # Calculate lines based on newlines in the text, defaulting to 1
-        lines = text.count("\n") + 1 if text else 1
-
+    # Download the raw document image
     image_path = None
     try:
-        # Download image from file server
-        async with FileClient() as client:
-            # Create a temporary file to store the image
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                image_path = tmp.name
+        # Create a temporary file to store the image
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            image_path = tmp.name
 
-            await client.download_file(image_id, image_path)
+        # Download image bytes and save to temp file
+        image_bytes = await FileClient.get_raw_bytes(session.rawDocumentId)
+        if not image_bytes:
+            return "Error: Could not download raw document image"
 
-        # Detect font name
+        with open(image_path, "wb") as f:
+            f.write(image_bytes)
+            f.flush()
+            os.fsync(f.fileno())  # Force write to disk
+
+        # Detect font name globally for the document
         name_detector = get_font_name_detector()
-        font_name = name_detector.detect(image_path)
+        global_font_name = name_detector.detect(image_path)
 
-        # Estimate font size
-        font_size = 0.0
-        if bbox and len(bbox) == 4:
-            width, height = bbox[2], bbox[3]
-            estimator = get_font_size_estimator()
-            font_size = estimator.estimate(
-                text_box_size=(width, height),
-                text=text,
-                font_name=font_name,
-                num_lines=lines,
-            )
+        # Get size estimator
+        size_estimator = get_font_size_estimator()
 
-        return json.dumps({"font_name": font_name, "font_size": font_size, "lines": lines})
+        def update_session(session: SessionState):
+            if session.text is not None:
+                for t in session.text:
+                    # Use global font name for all text items
+                    t.detectedFont = global_font_name
+
+                    # Estimate font size for each text item
+                    if t.bbox and len(t.bbox) == 4:
+                        # Calculate width and height from bbox points
+                        # bbox is [UL, UR, LR, LL]
+                        # Width: distance between UL and UR
+                        width = (
+                            (t.bbox[1].x - t.bbox[0].x) ** 2 + (t.bbox[1].y - t.bbox[0].y) ** 2
+                        ) ** 0.5
+                        # Height: distance between UL and LL
+                        height = (
+                            (t.bbox[3].x - t.bbox[0].x) ** 2 + (t.bbox[3].y - t.bbox[0].y) ** 2
+                        ) ** 0.5
+
+                        # Estimate size
+                        try:
+                            # Default to 1 line if not specified (could be improved by analyzing text)
+                            num_lines = t.extractedText.count("\n") + 1 if t.extractedText else 1
+
+                            font_size = size_estimator.estimate(
+                                text_box_size=(width, height),
+                                text=t.extractedText,
+                                font_name=global_font_name,
+                                num_lines=num_lines,
+                            )
+                            t.font_size = int(font_size)
+                        except Exception as e:
+                            logger.error(f"Error estimating font size: {e}")
+                            t.font_size = 12  # Fallback
+                    else:
+                        t.font_size = 12  # Fallback
+
+        await SessionClient.update(session_id, update_session)
+        return f"Font detection successful. Detected font: {global_font_name}"
 
     except Exception as e:
-        return json.dumps({"error": str(e)})
+        logger.error(f"Font detection failed: {e}")
+        return f"Error during font detection: {str(e)}"
     finally:
         # Cleanup temporary file
         if image_path and os.path.exists(image_path):
             os.unlink(image_path)
 
 
+# @font_detector.tool
+async def detect_font(session_id: str) -> str:
+    """Detect Fonts from Document.
+    Args:
+        session_id (str): ID of the current session (e.g., "c12f4b1e-8f47-4a92-b8c1-6e3e9d2f91a4").
+    """
+    return await detect_font_logic(session_id)
+
+
 async def run():
+    # Register tools
+    font_detector.tool(detect_font_name)
+    font_detector.tool(estimate_font_size)
+    # Register the session-based tool from mcp.py
+    font_detector.tool(detect_font)
+
     await font_detector.run_async(transport="streamable-http", port=PORT, host=ADDRESS)
 
 
