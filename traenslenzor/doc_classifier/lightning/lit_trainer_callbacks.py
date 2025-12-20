@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from pydantic import model_validator
 from pytorch_lightning.callbacks import (
-    BackboneFinetuning,
     Callback,
     EarlyStopping,
     LearningRateMonitor,
@@ -20,6 +19,7 @@ from traenslenzor.doc_classifier.utils.console import Console
 
 from ..configs.path_config import PathConfig
 from ..utils import BaseConfig, Metric
+from .finetune_callback import OneCycleBackboneFinetuning
 
 if TYPE_CHECKING:
     pass
@@ -58,12 +58,12 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
     """Mode for checkpoint monitor ('min' or 'max')."""
     checkpoint_dir: Path | None = None
     """Directory to save checkpoints. If None, uses PathConfig().checkpoints."""
-    checkpoint_filename: str = f"{{epoch}}-{{{Metric.VAL_LOSS}:.2f}}"
-    """Filename template for checkpoints."""
+    checkpoint_filename: str | None = None
+    """Filename template for checkpoints. If None, derives a safe template from ``checkpoint_monitor``."""
     checkpoint_save_top_k: int = 1
     """Number of best models to save."""
     checkpoint_auto_insert_metric_name: bool = False
-    """Whether Lightning should auto-prefix metric names in the filename. Disable to avoid duplicates when the template already contains labels."""
+    """Whether Lightning should auto-prefix metric names in the filename (avoid when names include '/')."""
 
     use_early_stopping: bool = False
     """Enable early stopping based on validation metrics."""
@@ -91,11 +91,11 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
     """Maximum depth for the rich model summary tree."""
 
     use_backbone_finetuning: bool = False
-    """Enable backbone finetuning callback for transfer learning."""
+    """Enable OneCycleLR-safe backbone finetuning callback for transfer learning."""
     backbone_unfreeze_at_epoch: int = 10
     """Epoch at which to unfreeze the backbone for finetuning."""
     backbone_lambda_func: str | None = None
-    """Optional lambda function for custom backbone parameter unfreezing logic."""
+    """Deprecated: unused by the OneCycleLR-safe finetuning callback."""
     backbone_train_bn: bool = True
     """Whether to train batch normalization layers during backbone finetuning."""
 
@@ -116,6 +116,17 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
             )
         return self
 
+    @staticmethod
+    def _sanitize_metric_name(metric_name: str) -> str:
+        """Return a filename-safe label for a metric key."""
+        return metric_name.replace("/", "_")
+
+    @classmethod
+    def _default_checkpoint_filename(cls, monitor_name: str) -> str:
+        """Build a safe default filename template from the monitor metric."""
+        safe_name = cls._sanitize_metric_name(monitor_name)
+        return f"epoch={{epoch}}-{safe_name}=" + "{" + monitor_name + ":.2f}"
+
     def setup_target(self, model_name: str | None = None) -> list[Callback]:
         console = Console.with_prefix(self.__class__.__name__)
         callbacks: list[Callback] = []
@@ -126,18 +137,28 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
             )
             dirpath.mkdir(parents=True, exist_ok=True)
 
-            ckpt_fn = (
-                f"{model_name}-" + self.checkpoint_filename
-                if model_name
-                else self.checkpoint_filename
+            monitor_name = str(self.checkpoint_monitor)
+            auto_insert_metric_name = self.checkpoint_auto_insert_metric_name
+            if auto_insert_metric_name and "/" in monitor_name:
+                console.warn(
+                    "checkpoint_auto_insert_metric_name=True with a '/'-delimited metric name "
+                    "creates subdirectories. Forcing auto_insert_metric_name=False."
+                )
+                auto_insert_metric_name = False
+
+            filename_template = (
+                self.checkpoint_filename
+                if self.checkpoint_filename not in (None, "")
+                else self._default_checkpoint_filename(monitor_name)
             )
+            ckpt_fn = f"{model_name}-" + filename_template if model_name else filename_template
             callbacks.append(
                 ModelCheckpoint(
-                    monitor=self.checkpoint_monitor,
+                    monitor=monitor_name,
                     mode=self.checkpoint_mode,
                     save_top_k=self.checkpoint_save_top_k,
                     filename=ckpt_fn,
-                    auto_insert_metric_name=self.checkpoint_auto_insert_metric_name,
+                    auto_insert_metric_name=auto_insert_metric_name,
                     dirpath=dirpath.as_posix(),
                 ),
             )
@@ -173,16 +194,16 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
             )
 
         if self.use_backbone_finetuning:
+            if self.backbone_lambda_func:
+                console.warn(
+                    "backbone_lambda_func is ignored by OneCycleBackboneFinetuning. "
+                    "Use OneCycleLR param-group scaling instead."
+                )
             callbacks.append(
-                BackboneFinetuning(
+                OneCycleBackboneFinetuning(
                     unfreeze_backbone_at_epoch=self.backbone_unfreeze_at_epoch,
-                    lambda_func=eval(self.backbone_lambda_func)
-                    if self.backbone_lambda_func
-                    else None,
-                    backbone_initial_ratio_lr=0.1,
-                    should_align=True,
                     train_bn=self.backbone_train_bn,
-                ),
+                )
             )
 
         if self.use_timer:

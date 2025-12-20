@@ -65,11 +65,14 @@ class OptimizerConfig(BaseConfig[Optimizer]):
     weight_decay: float = 1e-4
     """L2 regularization weight decay."""
 
-    def setup_target(self, params: Iterable[Tensor]) -> Optimizer:
+    backbone_lr_scale: float = 1.0
+    """Scale factor for backbone learning rate relative to head (1.0 = same LR)."""
+
+    def setup_target(self, params: Iterable[Tensor] | list[dict[str, Any]]) -> Optimizer:
         """Instantiate the AdamW optimizer.
 
         Args:
-            params: Iterable of model parameters to optimize.
+            params: Iterable of model parameters or param-group dicts.
 
         Returns:
             Optimizer: Configured AdamW optimizer instance.
@@ -80,8 +83,8 @@ class OptimizerConfig(BaseConfig[Optimizer]):
 class OneCycleSchedulerConfig(BaseConfig[OneCycleLR]):
     """OneCycle learning-rate scheduler configuration."""
 
-    max_lr: float = 0.01
-    """Maximum learning rate in the cycle."""
+    max_lr: float = 1e-3
+    """Maximum learning rate in the cycle (can be overridden per param group)."""
 
     base_momentum: float = 0.85
     """Lower momentum boundary in the cycle."""
@@ -106,19 +109,21 @@ class OneCycleSchedulerConfig(BaseConfig[OneCycleLR]):
         optimizer: Optimizer,
         *,
         total_steps: int,
+        max_lr: float | list[float] | None = None,
     ) -> OneCycleLR:
         """Instantiate the OneCycle scheduler.
 
         Args:
             optimizer: Optimizer instance to schedule.
             total_steps: Total number of training steps (batches).
+            max_lr: Optional override for maximum learning rate(s). Use a list for per-group values.
 
         Returns:
             OneCycleLR: Configured OneCycle scheduler instance.
         """
         return OneCycleLR(
             optimizer,
-            max_lr=self.max_lr,
+            max_lr=self.max_lr if max_lr is None else max_lr,
             total_steps=total_steps,
             pct_start=self.pct_start,
             anneal_strategy=self.anneal_strategy,
@@ -240,7 +245,7 @@ class DocClassifierModule(pl.LightningModule):
             use_pretrained=params.use_pretrained,
         )
 
-        self.model = spec.model
+        # self.model = spec.model
         self.backbone = spec.backbone
         self.head = spec.head
 
@@ -277,7 +282,9 @@ class DocClassifierModule(pl.LightningModule):
         Returns:
             Raw logits for each class with shape (B, N) where N = num_classes.
         """
-        return self.model(batch)
+        features = self.backbone(batch)
+        logits = self.head(features)
+        return logits
 
     @torch.no_grad()
     def predict_proba(self, batch: ImageBatch) -> Float[Tensor, "B N"]:
@@ -427,16 +434,9 @@ class DocClassifierModule(pl.LightningModule):
         if self.logger is None:
             return
 
-        # Compute confusion matrix
         confmat = self.confusion_matrix.compute()
-
-        # Get class names from the datamodule
         class_names = self._get_class_names()
-
-        # Log confusion matrix plot
         self._log_confusion_matrix_plot(confmat, class_names)
-
-        # Reset confusion matrix for next epoch
         self.confusion_matrix.reset()
 
     def _log_confusion_matrix_plot(
@@ -567,26 +567,40 @@ class DocClassifierModule(pl.LightningModule):
             console.plog(hparams)
 
     # ---------------------------------------------------------------- optimizers
+
     def configure_optimizers(self) -> dict[str, Any]:
         """Instantiate optimizer and scheduler using their configs.
 
         Returns:
             dict: Lightning optimizer configuration with scheduler.
         """
-        trainable_params = filter(lambda p: p.requires_grad, self.parameters())
+        backbone_params = list(self.backbone.parameters())
+        head_params = list(self.head.parameters())
+        backbone_lr = self.params.optimizer.learning_rate * self.params.optimizer.backbone_lr_scale
+        head_lr = self.params.optimizer.learning_rate
 
-        optimizer = self.params.optimizer.setup_target(trainable_params)
+        param_groups = [
+            {"params": backbone_params, "lr": backbone_lr},
+            {"params": head_params, "lr": head_lr},
+        ]
 
-        if (
-            total_steps := getattr(self.trainer, "estimated_stepping_batches", None)
-        ) is None or total_steps <= 0:
+        optimizer = self.params.optimizer.setup_target(param_groups)
+
+        if (total_steps := self.trainer.estimated_stepping_batches) <= 0:
             steps_per_epoch = len(self.trainer.datamodule.train_dataloader())
             total_steps = steps_per_epoch * getattr(self.trainer, "max_epochs", 1)
+
+        max_lr = self.params.scheduler.max_lr
+        max_lrs = [max_lr * self.params.optimizer.backbone_lr_scale, max_lr]
 
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
-                "scheduler": self.params.scheduler.setup_target(optimizer, total_steps=total_steps),
+                "scheduler": self.params.scheduler.setup_target(
+                    optimizer,
+                    total_steps=total_steps,
+                    max_lr=max_lrs,
+                ),
                 "interval": "step",
                 "monitor": Metric.VAL_LOSS,
             },
