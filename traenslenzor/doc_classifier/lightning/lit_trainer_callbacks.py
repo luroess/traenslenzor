@@ -62,6 +62,8 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
     """Filename template for checkpoints."""
     checkpoint_save_top_k: int = 1
     """Number of best models to save."""
+    checkpoint_auto_insert_metric_name: bool = False
+    """Whether Lightning should auto-prefix metric names in the filename. Disable to avoid duplicates when the template already contains labels."""
 
     use_early_stopping: bool = False
     """Enable early stopping based on validation metrics."""
@@ -134,7 +136,8 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
                     monitor=self.checkpoint_monitor,
                     mode=self.checkpoint_mode,
                     save_top_k=self.checkpoint_save_top_k,
-                    filename=ckpt_fn.replace("/", "-"),
+                    filename=ckpt_fn,
+                    auto_insert_metric_name=self.checkpoint_auto_insert_metric_name,
                     dirpath=dirpath.as_posix(),
                 ),
             )

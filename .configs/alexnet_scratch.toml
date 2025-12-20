@@ -1,3 +1,4 @@
+# https://wandb.ai/traenslenzor/doc-class-detector/runs/k6k3vq6r?nw=nwuserjanduchscherer
 seed     = 42
 is_debug = false
 verbose  = true
@@ -8,7 +9,7 @@ is_debug          = false
 fast_dev_run      = false
 accelerator       = "auto"
 strategy          = "auto"
-max_epochs        = 15
+max_epochs        = 10
 precision         = "32-true"
 log_every_n_steps = 50
 use_wandb         = true
@@ -35,22 +36,20 @@ use_wandb         = true
 backbone = "alexnet" # BackboneType.ALEXNET
 
     [module_config.optimizer]
-    # Higher LR for training from scratch
-    learning_rate = 0.000327 # tuned from LR finder (suggested ≈3.27e-4)
+    learning_rate = 0.000327 # tuned from LR finder (suggested =3.27e-4)
     weight_decay  = 0.0005   # Standard L2 regularization
 
     [module_config.scheduler]
-    # OneCycleLR with aggressive schedule for scratch training
     max_lr           = 0.000327 # Match tuner suggestion for max LR
     base_momentum    = 0.85
     max_momentum     = 0.95
-    div_factor       = 25.0     # Start at max_lr/25 ≈ 1.3e-5
-    final_div_factor = 10000.0  # End at max_lr/(25*10000) ≈ 1.3e-9
-    pct_start        = 0.3      # 30% warmup
+    div_factor       = 10.0     # lr_start = max_lr / 10  = 3.27e-5
+    final_div_factor = 20.0     # lr_final = max_lr / (10*20) = 1.635e-6
+    pct_start        = 0.15     # 15% warmup, then cosine decay
     anneal_strategy  = "cos"
 
 [datamodule_config]
-batch_size         = 48
+batch_size         = 42    # 48 barely fits onto 3090 (11.5GB VRAM) so reduced to 42
 persistent_workers = true
 is_debug           = false
 verbose            = true

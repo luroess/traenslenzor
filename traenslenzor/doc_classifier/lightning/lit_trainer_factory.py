@@ -124,28 +124,6 @@ class TrainerFactoryConfig(BaseConfig):
             )
         return self
 
-    @model_validator(mode="after")
-    def _validate_tf32_precision_compatibility(self) -> Self:
-        """Warn about TF32 settings that have no effect with mixed precision."""
-        console = Console.with_prefix(
-            self.__class__.__name__, "_validate_tf32_precision_compatibility"
-        )
-
-        # TF32 only affects FP32 operations
-        if self.tf32_matmul_precision is not None:
-            precision_str = str(self.precision)
-
-            # Check if using mixed precision (FP16 or BF16)
-            if any(p in precision_str for p in ["16", "bf16"]):
-                console.warn(
-                    f"tf32_matmul_precision='{self.tf32_matmul_precision}' has no effect with "
-                    f"precision='{self.precision}'. TF32 only affects FP32 operations, but you're "
-                    f"using mixed precision (FP16/BF16). Consider setting tf32_matmul_precision=None "
-                    f"to avoid confusion."
-                )
-
-        return self
-
     def update_wandb_config(self, experiment: "ExperimentConfig") -> None:
         """Propagate experiment metadata into the W&B logger config."""
         if not self.use_wandb:
