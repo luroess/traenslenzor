@@ -28,17 +28,23 @@ class ExperimentConfig(BaseConfig[Trainer]):
         default=42,
     )
     """Random seed applied via Lightning's `seed_everything`."""
-    is_debug: bool = Field(True)
+    is_debug: bool = Field(False)
     """Enable debug mode for nested configs. When True this may enable faster dev runs and
     more verbose diagnostics for components that honour the flag."""
 
     verbose: bool = Field(True)
     """Toggle verbose logging output across nested components and the console."""
 
+    compute_stats: bool = Field(False)
+    """Compute dataset grayscale mean/std before running the requested stage.
+    >>> uv run traenslenzor/doc_classifier/run.py --compute_stats True
+    """
+
     run_name: str = Field(
         default_factory=lambda: datetime.now().strftime("R%Y-%m-%d_%H:%M:%S"),
     )
     """Run name forwarded to experiment loggers such as Weights & Biases (W&B)."""
+
     stage: Stage = Field(
         default=Stage.TRAIN,
     )
@@ -125,7 +131,6 @@ class ExperimentConfig(BaseConfig[Trainer]):
     def _sync_wandb(self) -> Self:
         console = Console.with_prefix(self.__class__.__name__, "_sync_wandb")
         console.set_verbose(self.verbose)
-
         if hasattr(self.trainer_config, "update_wandb_config"):
             console.log("Syncing W&B configuration with experiment metadata")
             self.trainer_config.update_wandb_config(self)
@@ -151,7 +156,7 @@ class ExperimentConfig(BaseConfig[Trainer]):
             console.log(f"Loading model from checkpoint: {self.from_ckpt}")
             try:
                 lit_module = self.module_config.target.load_from_checkpoint(
-                    checkpoint_path=self.from_ckpt.as_posix(),
+                    checkpoint_path=self.from_ckpt,
                     params=self.module_config,
                 )
                 console.log(f"Successfully loaded checkpoint: {lit_module.__class__.__name__}")
@@ -201,7 +206,13 @@ class ExperimentConfig(BaseConfig[Trainer]):
             setup_stage=resolved_stage,
         )
 
-        # Run tuning BEFORE training if requested
+        if self.compute_stats:
+            console.log("Computing dataset grayscale statistics.")
+            lit_datamodule.compute_grayscale_mean_std()
+            console.log("Dataset statistics computation complete. Exiting.")
+            return trainer
+
+        # Run tuning before training if requested
         if (
             self.tuner_config.use_batch_size_tuning or self.tuner_config.use_learning_rate_tuning
         ) and resolved_stage is Stage.TRAIN:
@@ -226,6 +237,20 @@ class ExperimentConfig(BaseConfig[Trainer]):
             stage_console.log("Testing completed")
 
         return trainer
+
+    def compute_grayscale_mean_std(self) -> tuple[float, float]:
+        """Compute grayscale mean/std for the configured training split.
+
+        Returns:
+            Tuple of (mean, std) in [0, 1] for a single grayscale channel.
+        """
+        console = Console.with_prefix(self.__class__.__name__, "compute_grayscale_mean_std")
+        console.set_verbose(self.verbose).set_debug(self.is_debug)
+
+        console.log("Creating DataModule for dataset statistics.")
+        datamodule = self.datamodule_config.setup_target()
+        mean, std = datamodule.compute_grayscale_mean_std()
+        return mean, std
 
     def run_optuna_study(self) -> None:
         """Integrate Optuna for hyperparameter optimisation."""

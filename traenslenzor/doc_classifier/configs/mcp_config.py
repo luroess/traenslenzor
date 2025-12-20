@@ -12,7 +12,7 @@ from pydantic import Field, field_validator
 
 from traenslenzor.doc_classifier.configs.path_config import PathConfig
 from traenslenzor.doc_classifier.lightning import DocClassifierConfig
-from traenslenzor.doc_classifier.mcp.runtime import DocClassifierRuntime
+from traenslenzor.doc_classifier.mcp_integration.runtime import DocClassifierRuntime
 from traenslenzor.doc_classifier.utils import BaseConfig
 
 
@@ -29,7 +29,7 @@ class DocClassifierMCPConfig(BaseConfig[DocClassifierRuntime]):
         default=False, description="If True, uses a mock model that returns random predictions. "
     )
     checkpoint_path: Path | None = Field(
-        default="alexnet-scratch-epoch=epoch=1-val_loss=val/loss=0.84.ckpt",
+        default="resnet50-epoch=5-val_loss=0.52.ckpt",
         description="Optional path to a Lightning checkpoint (.ckpt). Should be relative to .logs/checkpoints/",
     )
     device: str = Field(
