@@ -197,7 +197,7 @@ class AttributionEngine:
                 target=target,
                 additional_forward_args=additional_forward_args,
                 nt_type="smoothgrad",
-                n_samples=self.config.noise_samples,
+                nt_samples=self.config.noise_samples,
                 stdevs=self.config.noise_std,
             )
             return attr
