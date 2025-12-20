@@ -6,6 +6,7 @@ pipelines optimized for grayscale document images (RVL-CDIP dataset).
 Three pipeline types are provided:
 - TrainTransformConfig: Heavy augmentation for training from scratch
 - FineTuneTransformConfig: Light augmentation for fine-tuning pretrained models
+- FineTunePlusTransformConfig: Moderate augmentation for fine-tuning with extra regularization
 - ValTransformConfig: Deterministic transforms for validation/testing
 """
 
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
     pass
 
 
+# FIXME: conversion to RGB before noramlization !?
 class TransformConfig(BaseConfig[A.Compose]):
     """Base configuration for Albumentations transforms.
 
@@ -35,11 +37,17 @@ class TransformConfig(BaseConfig[A.Compose]):
     img_size: int = Field(default=224)
     """Target image size (height and width) after transformation."""
 
-    grayscale_mean: float = Field(default=0.485)
+    grayscale_mean: float = Field(default=0.911966)
     """Mean value for grayscale normalization (single channel)."""
 
-    grayscale_std: float = Field(default=0.229)
+    grayscale_std: float = Field(default=0.241507)
     """Standard deviation for grayscale normalization (single channel)."""
+
+    apply_normalization: bool = Field(default=True)
+    """When True, apply normalization using grayscale_mean and grayscale_std; when False, skip normalization. Used for computing dataset stats."""
+
+    convert_to_rgb: bool = Field(default=True)
+    """When True, replicate grayscale to 3 channels; when False, keep single channel (uses ToGray)."""
 
     def setup_target(self) -> A.Compose:
         """Create and return an Albumentations Compose pipeline.
@@ -70,6 +78,17 @@ class TrainTransformConfig(TransformConfig):
         Returns:
             A.Compose: Training pipeline with heavy augmentation.
         """
+        mean = (
+            [self.grayscale_mean, self.grayscale_mean, self.grayscale_mean]
+            if self.convert_to_rgb
+            else [self.grayscale_mean]
+        )
+        std = (
+            [self.grayscale_std, self.grayscale_std, self.grayscale_std]
+            if self.convert_to_rgb
+            else [self.grayscale_std]
+        )
+
         return A.Compose(
             [
                 # Resize to slightly larger size for random cropping
@@ -101,12 +120,11 @@ class TrainTransformConfig(TransformConfig):
                     sigma=5,
                     p=0.2,
                 ),
-                # Convert grayscale to RGB (repeat channel 3 times for pretrained models)
-                A.ToRGB(p=1.0),
-                # Normalization and tensor conversion (ImageNet stats for RGB)
+                # Channel handling
+                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.ToGray(p=1.0, num_output_channels=1)),
                 A.Normalize(
-                    mean=[self.grayscale_mean, self.grayscale_mean, self.grayscale_mean],
-                    std=[self.grayscale_std, self.grayscale_std, self.grayscale_std],
+                    mean=mean,
+                    std=std,
                 ),
                 ToTensorV2(),
             ]
@@ -129,9 +147,20 @@ class FineTuneTransformConfig(TransformConfig):
         Returns:
             A.Compose: Fine-tuning pipeline with light augmentation.
         """
+        mean = (
+            [self.grayscale_mean, self.grayscale_mean, self.grayscale_mean]
+            if self.convert_to_rgb
+            else [self.grayscale_mean]
+        )
+        std = (
+            [self.grayscale_std, self.grayscale_std, self.grayscale_std]
+            if self.convert_to_rgb
+            else [self.grayscale_std]
+        )
+
         return A.Compose(
             [
-                # Minimal geometric augmentation
+                # Geometric augmentation
                 A.SmallestMaxSize(max_size=self.img_size),
                 A.RandomResizedCrop(
                     size=(self.img_size, self.img_size),
@@ -146,12 +175,69 @@ class FineTuneTransformConfig(TransformConfig):
                     contrast_limit=0.1,
                     p=0.3,
                 ),
-                # Convert grayscale to RGB
-                A.ToRGB(p=1.0),
+                # Convert channels
+                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.ToGray(p=1.0, num_output_channels=1)),
                 # Normalization and tensor conversion
                 A.Normalize(
-                    mean=[self.grayscale_mean, self.grayscale_mean, self.grayscale_mean],
-                    std=[self.grayscale_std, self.grayscale_std, self.grayscale_std],
+                    mean=mean,
+                    std=std,
+                ),
+                ToTensorV2(),
+            ]
+        )
+
+
+class FineTunePlusTransformConfig(TransformConfig):
+    """Moderate augmentation pipeline for fine-tuning pretrained models.
+
+    Adds mild geometric and noise augmentations to improve generalization
+    without overwhelming pretrained features.
+    """
+
+    transform_type: Literal["finetune_plus"] = Field(default="finetune_plus")
+    """Discriminator field identifying this as a moderate fine-tuning transform config."""
+
+    def setup_target(self) -> A.Compose:
+        """Create moderate fine-tuning augmentation pipeline.
+
+        Returns:
+            A.Compose: Fine-tuning pipeline with moderate augmentation.
+        """
+        mean = (
+            [self.grayscale_mean, self.grayscale_mean, self.grayscale_mean]
+            if self.convert_to_rgb
+            else [self.grayscale_mean]
+        )
+        std = (
+            [self.grayscale_std, self.grayscale_std, self.grayscale_std]
+            if self.convert_to_rgb
+            else [self.grayscale_std]
+        )
+
+        return A.Compose(
+            [
+                A.SmallestMaxSize(max_size=int(self.img_size * 1.05)),
+                A.RandomResizedCrop(
+                    size=(self.img_size, self.img_size),
+                    scale=(0.85, 1.0),
+                    ratio=(0.9, 1.1),
+                    p=1.0,
+                ),
+                A.HorizontalFlip(p=0.5),
+                A.Rotate(limit=3, border_mode=0, p=0.2),
+                A.Perspective(scale=(0.01, 0.03), p=0.2),
+                A.GaussNoise(std_range=(0.01, 0.05), p=0.2),
+                A.GaussianBlur(blur_limit=(3, 3), p=0.1),
+                A.RandomBrightnessContrast(
+                    brightness_limit=0.15,
+                    contrast_limit=0.15,
+                    p=0.4,
+                ),
+                A.RandomGamma(gamma_limit=(90, 110), p=0.2),
+                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.ToGray(p=1.0, num_output_channels=1)),
+                A.Normalize(
+                    mean=mean,
+                    std=std,
                 ),
                 ToTensorV2(),
             ]
@@ -173,15 +259,31 @@ class ValTransformConfig(TransformConfig):
         Returns:
             A.Compose: Validation pipeline with no augmentation.
         """
+        mean = (
+            [self.grayscale_mean, self.grayscale_mean, self.grayscale_mean]
+            if self.convert_to_rgb
+            else [self.grayscale_mean]
+        )
+        std = (
+            [self.grayscale_std, self.grayscale_std, self.grayscale_std]
+            if self.convert_to_rgb
+            else [self.grayscale_std]
+        )
+
         return A.Compose(
             [
                 A.SmallestMaxSize(max_size=self.img_size),
                 A.CenterCrop(height=self.img_size, width=self.img_size),
-                # Convert grayscale to RGB
-                A.ToRGB(p=1.0),
-                A.Normalize(
-                    mean=[self.grayscale_mean, self.grayscale_mean, self.grayscale_mean],
-                    std=[self.grayscale_std, self.grayscale_std, self.grayscale_std],
+                # A.Resize(height=self.img_size, width=self.img_size),
+                # Convert grayscale to desired channel count
+                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.ToGray(p=1.0, num_output_channels=1)),
+                (
+                    A.Normalize(
+                        mean=mean,
+                        std=std,
+                    )
+                    if self.apply_normalization
+                    else A.NoOp()
                 ),
                 ToTensorV2(),
             ]

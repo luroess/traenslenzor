@@ -9,6 +9,7 @@ from traenslenzor.doc_classifier.configs.path_config import PathConfig
 
 from ..utils import BaseConfig, Console, Stage
 from .transforms import (
+    FineTunePlusTransformConfig,
     FineTuneTransformConfig,
     TrainTransformConfig,
     TransformConfig,
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
 TransformConfigUnion = Annotated[
     Annotated[TrainTransformConfig, Tag("train")]
     | Annotated[FineTuneTransformConfig, Tag("finetune")]
+    | Annotated[FineTunePlusTransformConfig, Tag("finetune_plus")]
     | Annotated[ValTransformConfig, Tag("val")]
     | Annotated[TransformConfig, Tag("base")],
     Field(discriminator="transform_type"),
@@ -104,7 +106,7 @@ class RVLCDIPConfig(BaseConfig[HFDataset]):
 
 
 class _TransformApplier:
-    """Pickle-friendly Albumentations batch applier for HF datasets."""
+    """Pickle-able Albumentations batch applier for HF datasets."""
 
     def __init__(self, albumentations_transform: "Compose") -> None:
         self.albumentations_transform = albumentations_transform
