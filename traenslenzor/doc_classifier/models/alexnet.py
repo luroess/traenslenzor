@@ -10,13 +10,14 @@ class AlexNetParams(BaseConfig["AlexNet"]):
     """Parameter configuration for AlexNet."""
 
     target: type["AlexNet"] = Field(default_factory=lambda: AlexNet, exclude=True)
-    num_classes: int = 10
+    num_classes: int
     dropout: float = 0.5
+    in_channels: int = 1
+    """Number of input channels. Set to 1 for grayscale; set to 3 for RGB."""
 
 
 # B = batch, C = channels, H = height, W = width, N = num_classes
-
-ImageBatch = Float[torch.Tensor, "B 3 H W"]
+ImageBatch = Float[torch.Tensor, "B C H W"]
 Logits = Float[torch.Tensor, "B N"]
 
 
@@ -67,7 +68,7 @@ class AlexNet(nn.Module):
         self.params = params
 
         self.features = nn.Sequential(
-            nn.Conv2d(3, 96, kernel_size=11, stride=4, padding=2),
+            nn.Conv2d(self.params.in_channels, 96, kernel_size=11, stride=4, padding=2),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2),
             nn.Conv2d(96, 256, kernel_size=5, padding=2),
@@ -96,8 +97,8 @@ class AlexNet(nn.Module):
         """Forward pass through AlexNet.
 
         Args:
-            x: Input tensor with shape (B, 3, H, W) where:
-               B = batch size, H = height, W = width.
+            x: Input tensor with shape (B, C, H, W) where:
+               B = batch size, C = ``in_channels`` (default 1 for grayscale), H = height, W = width.
 
         Returns:
             Logits with shape (B, N) where N = num_classes.
