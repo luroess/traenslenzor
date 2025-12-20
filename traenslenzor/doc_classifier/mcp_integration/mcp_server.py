@@ -8,8 +8,8 @@ from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 
 from traenslenzor.doc_classifier.configs.mcp_config import DocClassifierMCPConfig
-from traenslenzor.doc_classifier.mcp.runtime import DocClassifierRuntime
-from traenslenzor.doc_classifier.mcp.schemas import DocClassifierResponse
+from traenslenzor.doc_classifier.mcp_integration.runtime import DocClassifierRuntime
+from traenslenzor.doc_classifier.mcp_integration.schemas import DocClassifierResponse
 from traenslenzor.doc_classifier.utils import Console
 
 ADDRESS = "127.0.0.1"

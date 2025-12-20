@@ -1,4 +1,4 @@
-from traenslenzor.doc_classifier.mcp import mcp_server
+from traenslenzor.doc_classifier.mcp_integration import mcp_server
 from traenslenzor.doc_classifier.utils import Console
 
 
