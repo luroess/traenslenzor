@@ -20,7 +20,19 @@ from traenslenzor.file_server.session_state import (
 )
 from traenslenzor.logger import setup_logger
 from traenslenzor.streamlit.prompt_presets import PromptPreset, get_prompt_presets
-from traenslenzor.supervisor.supervisor import run as run_supervisor
+
+# Defer supervisor import to handle LLM initialization errors gracefully
+_supervisor_import_error: str | None = None
+try:
+    from traenslenzor.supervisor.supervisor import run as run_supervisor
+except SystemExit as e:
+    _supervisor_import_error = (
+        f"Supervisor initialization failed (exit code {e.code}). Is the Ollama server running?"
+    )
+    run_supervisor = None  # type: ignore[assignment]
+except Exception as e:
+    _supervisor_import_error = f"Supervisor initialization failed: {e}"
+    run_supervisor = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from langchain_core.messages import BaseMessage
@@ -184,6 +196,14 @@ def _start_supervisor_run(llm_input: str) -> None:
     Args:
         llm_input (str): User prompt for the supervisor.
     """
+    if _supervisor_import_error or run_supervisor is None:
+        _get_history().append(
+            {
+                "role": "assistant",
+                "content": f"⚠️ Cannot start supervisor: {_supervisor_import_error}",
+            }
+        )
+        return
     if _is_supervisor_running():
         return
     session_id = _ensure_session_id()
@@ -535,6 +555,10 @@ def _render_layout(session: SessionState | None) -> None:
 
 
 def main() -> None:
+    # Show error banner if supervisor couldn't be initialized
+    if _supervisor_import_error:
+        st.error(f"⚠️ {_supervisor_import_error}")
+
     # Handle completed supervisor runs
     if _consume_pending_supervisor():
         st.rerun()
