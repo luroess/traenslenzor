@@ -6,14 +6,6 @@ from langchain_ollama import ChatOllama
 
 from traenslenzor.supervisor.config import settings
 
-MODEL = "qwen3:4b"
-
-LOCAL_MODE = os.getenv("LOCAL_MODE", "false").lower() == "true"
-
-if LOCAL_MODE:
-    OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-else:
-    OLLAMA_URL = os.getenv("OLLAMA_URL", "http://wgserver.ddnss.ch:45876")
 logger = logging.getLogger(__name__)
 
 try:
@@ -46,23 +38,25 @@ def exists_model():
 def load_model():
     """Trigger model loading into memory"""
     try:
-        response = requests.post(f"{OLLAMA_URL}/api/chat", json={"model": MODEL})
+        response = requests.post(
+            f"{settings.llm.ollama_url}/api/chat", json={"model": settings.llm.model}
+        )
         if response.status_code != 200:
             logger.error(
                 "Failed to trigger model loading for '%s'. Status code: %s, response: %s",
-                MODEL,
+                settings.llm.model,
                 response.status_code,
                 response.text,
             )
     except Exception:
-        logger.exception("Unexpected error while triggering model loading for '%s'", MODEL)
+        logger.exception("Unexpected error while triggering model loading for '%s'", settings.llm.model)
 
 
 def initialize_model():
     if not exists_model():
-        resp = input(f"This application requires {MODEL} LLM. Proceed to download model? (Y/n)\n")
+        resp = input(f"This application requires {settings.llm.model} LLM. Proceed to download model? (Y/n)\n")
         if resp.strip().lower() not in ["", "y", "yes"]:
-            print(f"{MODEL} is required for execution, exiting.")
+            print(f"{settings.llm.model} is required for execution, exiting.")
             exit(0)
         pull_model()
     load_model()

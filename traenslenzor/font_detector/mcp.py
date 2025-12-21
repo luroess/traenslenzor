@@ -13,6 +13,7 @@ from PIL import Image
 
 from traenslenzor.file_server.client import FileClient, SessionClient
 from traenslenzor.file_server.session_state import SessionState
+from traenslenzor.supervisor.config import settings
 
 from .font_name_detector import FontNameDetector
 from .font_size_model.infer import FontSizeEstimator
@@ -229,7 +230,7 @@ async def detect_font_logic(session_id: str) -> str:
                     logger.info(f"Smart crop to dense region: {best_window} with {max_count} boxes")
 
         # Save debug images
-        if os.environ.get("DEBUG_MODE") == "true":
+        if settings.llm.debug_mode:
             try:
                 debug_dir = Path("debug")
                 debug_dir.mkdir(parents=True, exist_ok=True)
@@ -243,9 +244,6 @@ async def detect_font_logic(session_id: str) -> str:
                 logger.info(f"Saved debug images to {debug_dir}")
             except Exception as e:
                 logger.error(f"Failed to save debug images: {e}")
-
-        # Save (potentially cropped) image to temp file
-        crop_image.save(image_path, format="PNG")
 
         # Detect font name globally for the document
         name_detector = get_font_name_detector()
@@ -301,7 +299,7 @@ async def detect_font_logic(session_id: str) -> str:
                     })
 
             # Save debug info to file
-            if os.environ.get("DEBUG_MODE") == "true":
+            if settings.llm.debug_mode:
                 try:
                     debug_file = Path("debug") / f"font_debug_{session_id}.json"
                     debug_file.parent.mkdir(parents=True, exist_ok=True)
