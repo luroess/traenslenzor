@@ -37,11 +37,6 @@ dependencies = [
     "uvicorn>=0.37.0",
     "streamlit>=1.52.1",
     "seaborn>=0.13.2",
-]
-
-[dependency-groups]
-
-dev = [
     "pandas-stubs>=2.3.2.250926",
     "pre-commit>=4.3.0",
     "pytest>=8.4.2",
@@ -54,32 +49,29 @@ dev = [
     "types-pysocks>=1.7.1.20251001",
     "types-pyyaml>=6.0.12.20250915",
     "types-requests>=2.32.4.20250913",
-]
-classifier = [
     "albumentations>=2.0.8",
     "tomlkit>=0.13.3",
-    "datasets>=4.4.1",                              # https://huggingface.co/datasets
+    "datasets>=4.4.1",
     "devtools>=0.12.2",
     "optuna>=4.2.0",
     "optuna-integration[pytorch-lightning]>=4.5.0",
     "pydantic>=2.12.4",
     "pydantic-settings>=2.11.0",
-    # "pytorch-lightning>=2.5.6",
     "lightning>=2.5.6",
     "rich>=13.9.4",
-    "torch>=2.5.0",
-    "torchvision>=0.24.0",
     "torchmetrics>=1.6.0",
     "torchsummary>=1.5.1",
     "captum>=0.8.0",
     "wandb>=0.22.3",
-    "seaborn>=0.13.2",
     "jaxtyping>=0.3.3",
     "typing-extensions>=4.15.0",
     "syrenka>=0.5.7",
 ]
+
+[dependency-groups]
+
 notebook = [
-    "ipympl>=0.9.0",     # %matplotlib widget
+    "ipympl>=0.9.0",
     "jupyter>=1.0.0",
     "ipykernel>=7.1.0",
     "notebook>=7.0.0",
