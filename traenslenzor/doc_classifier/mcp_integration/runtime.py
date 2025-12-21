@@ -19,6 +19,7 @@ from traenslenzor.file_server.client import FileClient
 if TYPE_CHECKING:
     from ..configs.mcp_config import DocClassifierMCPConfig
 
+# TODO: add class "unknown" for ood detection, where no class has prob > threshold
 # RVL-CDIP class names
 CLASS_NAMES: list[str] = [
     "advertisement",
@@ -53,7 +54,12 @@ class DocClassifierRuntime:
             .set_verbose(self.config.verbose)
         )
 
-        self._transform = ValTransformConfig(img_size=self.config.img_size).setup_target()
+        self._transform = ValTransformConfig(
+            img_size=self.config.img_size,
+            normalization_mode=self.config.normalization_mode,
+            convert_to_rgb=self.config.convert_to_rgb,
+            apply_normalization=self.config.apply_normalization,
+        ).setup_target()
         self._model: DocClassifierModule | None = None
         if self.config.is_mock:
             self.console.log("Using mock model for document classification.")
@@ -71,34 +77,27 @@ class DocClassifierRuntime:
         """Classify an image referenced by file id (or local path) using the FileClient."""
 
         self.console.log(f"classify_file_id: received id='{file_id}' top_k={top_k}")
-        try:
-            if (image := await FileClient.get_image(file_id)) is None:
+        if (image := await FileClient.get_image(file_id)) is None:
+            raise ToolError(f"File id not found: {file_id}")
+
+        if self._model is not None:
+            self.console.log("classify_file_id: using loaded model for prediction")
+            predictions = self._predict_with_model(image, top_k=top_k)
+        else:
+            if (raw_bytes := await FileClient.get_raw_bytes(file_id)) is None:
                 raise ToolError(f"File id not found: {file_id}")
 
-            if self._model is not None:
-                self.console.log("classify_file_id: using loaded model for prediction")
-                predictions = self._predict_with_model(image, top_k=top_k)
-            else:
-                if (raw_bytes := await FileClient.get_raw_bytes(file_id)) is None:
-                    raise ToolError(f"File id not found: {file_id}")
+            self.console.log("classify_file_id: using mock predictions (no checkpoint)")
+            predictions = self._predict_mock_from_bytes(raw_bytes, top_k=top_k)
 
-                self.console.log("classify_file_id: using mock predictions (no checkpoint)")
-                predictions = self._predict_mock_from_bytes(raw_bytes, top_k=top_k)
-
-            self.console.dbg(
-                f"classify_file_id: returning {len(predictions)} preds; "
-                f"top label={predictions[0]['label']} p={predictions[0]['probability']:.3f}"
-            )
-            return {
-                "predictions": predictions,
-                "class_names": CLASS_NAMES,
-            }
-        except ToolError as te:
-            self.console.error(f"classify_file_id: ToolError: {te}")
-            raise te
-        except Exception as exc:  # pragma: no cover - defensive guard
-            self.console.error(f"classify_file_id: unexpected error: {exc}")
-            raise ToolError(f"Unexpected classification failure: {exc}") from exc
+        self.console.dbg(
+            f"classify_file_id: returning {len(predictions)} preds; "
+            f"top label={predictions[0]['label']} p={predictions[0]['probability']:.3f}"
+        )
+        return {
+            "predictions": predictions,
+            "class_names": CLASS_NAMES,
+        }
 
     # --------------------------------------------------------- internal helpers
     def _load_model(self, checkpoint_path: Path) -> None:
@@ -128,6 +127,7 @@ class DocClassifierRuntime:
             params=params,
             strict=False,
             map_location=self.config.device,
+            weights_only=False,
         )
         module.eval()
 
@@ -173,6 +173,13 @@ class DocClassifierRuntime:
             }
             for idx in top_indices
         ]
+
+    @staticmethod
+    def predictions_to_probabilities(
+        predictions: list[dict],
+    ) -> dict[str, float]:
+        """Convert prediction list into a label -> probability mapping."""
+        return {pred["label"]: float(pred["probability"]) for pred in predictions}
 
 
 __all__ = ["DocClassifierRuntime", "CLASS_NAMES"]
