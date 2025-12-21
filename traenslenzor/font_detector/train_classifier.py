@@ -3,14 +3,13 @@ import os
 import random
 import shutil
 from pathlib import Path
-from typing import List, Tuple
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
-from torchvision import transforms, models
+from torchvision import models, transforms
 from tqdm import tqdm
 
 from traenslenzor.font_detector.font_size_model.data_gen import FONT_CONFIGS, render_text_box

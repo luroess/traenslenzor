@@ -1,7 +1,7 @@
 """Font name detector using custom ResNet18 model."""
 
 from pathlib import Path
-from typing import Any, Optional, List, Tuple
+from typing import Any, List, Optional, Tuple
 
 import torch
 import torch.nn as nn
