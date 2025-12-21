@@ -339,12 +339,10 @@ def _render_session_overview(session: SessionState | None) -> None:
             st.json(session.model_dump(), expanded=False)
 
 
-def _sidebar_poll_interval() -> int | None:
-    """Return poll interval in seconds, or None when not polling."""
-    return 2 if _is_supervisor_running() else None
+_SUPERVISOR_POLL_INTERVAL_SECONDS = 2
 
 
-@st.fragment(run_every=_sidebar_poll_interval())
+@st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
 def _render_sidebar_fragment() -> None:
     """Sidebar fragment that polls for session updates while supervisor runs."""
     # Check if supervisor finished and trigger full app rerun to process result
