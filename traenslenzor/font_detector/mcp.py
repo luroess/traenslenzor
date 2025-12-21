@@ -58,7 +58,7 @@ def detect_font_name_logic(image_path: str) -> str:
         return json.dumps({"error": str(e)})
 
 
-# @font_detector.tool
+@font_detector.tool
 def detect_font_name(image_path: str) -> str:
     """Detect font name from an image containing text.
 
@@ -116,7 +116,7 @@ def estimate_font_size_logic(
         return json.dumps({"error": str(e)})
 
 
-# @font_detector.tool
+@font_detector.tool
 def estimate_font_size(
     text_box_size: List[float],
     text: str,
@@ -216,22 +216,26 @@ async def detect_font_logic(session_id: str) -> str:
             os.unlink(image_path)
 
 
-# @font_detector.tool
+@font_detector.tool
 async def detect_font(session_id: str) -> str:
-    """Detect Fonts from Document.
+    """
+    Detect fonts and estimate font sizes for text in a document session.
+
+    This tool downloads the raw document image associated with the session,
+    detects the global font used in the document, and then estimates the
+    font size for each text element found in the session state.
+    The session state is updated with the detected font name and size.
+
     Args:
         session_id (str): ID of the current session (e.g., "c12f4b1e-8f47-4a92-b8c1-6e3e9d2f91a4").
+
+    Returns:
+        str: A message indicating success or failure, including the detected font name.
     """
     return await detect_font_logic(session_id)
 
 
 async def run():
-    # Register tools
-    font_detector.tool(detect_font_name)
-    font_detector.tool(estimate_font_size)
-    # Register the session-based tool from mcp.py
-    font_detector.tool(detect_font)
-
     await font_detector.run_async(transport="streamable-http", port=PORT, host=ADDRESS)
 
 
