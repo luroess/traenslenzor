@@ -11,8 +11,13 @@ SEED = 69
 TEMPERATURE = 0
 
 MODEL = "qwen3:4b"
-# OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://wgserver.ddnss.ch:45876")
+
+LOCAL_MODE = os.getenv("LOCAL_MODE", "false").lower() == "true"
+
+if LOCAL_MODE:
+    OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+else:
+    OLLAMA_URL = os.getenv("OLLAMA_URL", "http://wgserver.ddnss.ch:45876")
 
 try:
     # check ollama server
@@ -39,14 +44,22 @@ def exists_model():
     return MODEL in model_names
 
 
+def load_model():
+    """Trigger model loading into memory"""
+    try:
+        requests.post(f"{OLLAMA_URL}/api/chat", json={"model": MODEL})
+    except Exception:
+        pass
+
+
 def initialize_model():
-    if exists_model():
-        return
-    resp = input(f"This application requires {MODEL} LLM. Proceed to download model? (Y/n)\n")
-    if resp.strip().lower() not in ["", "y", "yes"]:
-        print(f"{MODEL} is required for execution, exiting.")
-        exit(0)
-    pull_model()
+    if not exists_model():
+        resp = input(f"This application requires {MODEL} LLM. Proceed to download model? (Y/n)\n")
+        if resp.strip().lower() not in ["", "y", "yes"]:
+            print(f"{MODEL} is required for execution, exiting.")
+            exit(0)
+        pull_model()
+    load_model()
 
 
 initialize_model()
