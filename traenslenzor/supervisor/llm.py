@@ -47,9 +47,16 @@ def exists_model():
 def load_model():
     """Trigger model loading into memory"""
     try:
-        requests.post(f"{OLLAMA_URL}/api/chat", json={"model": MODEL})
+        response = requests.post(f"{OLLAMA_URL}/api/chat", json={"model": MODEL})
+        if response.status_code != 200:
+            logger.error(
+                "Failed to trigger model loading for '%s'. Status code: %s, response: %s",
+                MODEL,
+                response.status_code,
+                response.text,
+            )
     except Exception:
-        pass
+        logger.exception("Unexpected error while triggering model loading for '%s'", MODEL)
 
 
 def initialize_model():
