@@ -24,7 +24,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def generate_test_image(
-    text: str, font_name: str, font_size_pt: int, output_path: Path, max_width: int = 800
+    text: str, font_name: str, font_size_pt: int, output_path: Path, max_width: int = 800, min_size: int = 0
 ) -> Tuple[float, float, int]:
     """
     Generate a realistic text cutout image using the same logic as training data.
@@ -43,6 +43,19 @@ def generate_test_image(
         padding=0,
         max_width=max_width,
     )
+
+    # Optional: Pad to minimum size (e.g. 224x224 for font detector)
+    if min_size > 0:
+        w, h = img.size
+        if w < min_size or h < min_size:
+            new_w = max(w, min_size)
+            new_h = max(h, min_size)
+            new_img = Image.new("RGB", (new_w, new_h), "white")
+            # Paste in center
+            new_img.paste(img, ((new_w - w) // 2, (new_h - h) // 2))
+            img = new_img
+            # Note: We return the ORIGINAL box_size for feature extraction accuracy,
+            # but save the PADDED image for the font detector.
 
     img.save(output_path)
     print(f"Generated {output_path} ({box_size[0]}x{box_size[1]}, {num_lines} lines)")
@@ -178,6 +191,52 @@ def test_font_detection_accuracy():
             print(f"  Failed to pad image: {e}")
 
         total += 1
+
+        # Call the tool (no mocking)
+        try:
+            # Use the logic function directly
+            result_json = detect_font_name_logic(str(image_path))
+            result = json.loads(result_json)
+
+            if "error" in result:
+                print(f"  [{font_name}] Error: {result['error']}")
+                continue
+
+            detected = result["font_name"]
+
+            # Check match (relaxed)
+            match = font_name.lower() in detected.lower() or detected.lower() in font_name.lower()
+
+            if match:
+                print(f"  [{font_name}] ✓ Detected: {detected}")
+                correct += 1
+            else:
+                print(f"  [{font_name}] ✗ Expected {font_name}, got {detected}")
+
+        except Exception as e:
+            print(f"  [{font_name}] Exception: {e}")
+
+    # --- Multi-line Test ---
+    print("\n--- Multi-line Images (Lorem Ipsum, Padded to 224x224) ---")
+    lorem_ipsum = (
+        "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
+        "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. "
+        "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris "
+        "nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in "
+        "reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur."
+    )
+
+    for font_name in FONT_PATHS.keys():
+        total += 1
+        image_path = OUTPUT_DIR / f"accuracy_multi_{font_name}.png"
+        
+        # Force wrapping with small max_width, and enforce min_size=224
+        width, height, _ = generate_test_image(
+            lorem_ipsum, font_name, 24, image_path, max_width=300, min_size=224
+        )
+
+        if width == 0:
+            continue
 
         # Call the tool (no mocking)
         try:
