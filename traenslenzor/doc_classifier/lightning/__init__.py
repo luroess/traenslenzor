@@ -1,6 +1,5 @@
 """Lightning components for the Document Classifier."""
 
-from ..configs.wandb_config import WandbConfig
 from .lit_datamodule import DocDataModule, DocDataModuleConfig
 from .lit_module import (
     BackboneType,

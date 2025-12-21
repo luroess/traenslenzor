@@ -81,13 +81,6 @@ def _collate_grayscale_stats(batch: list[dict[str, Any]]) -> torch.Tensor:
     return torch.stack(images)
 
 
-def _default_num_workers() -> int:
-    cpu_count = os.cpu_count()
-    torch_threads = torch.get_num_threads()
-
-    return torch_threads if cpu_count is None else max(cpu_count, torch_threads)
-
-
 def _default_train_ds() -> RVLCDIPConfig:
     return RVLCDIPConfig(
         split=Stage.TRAIN,
@@ -110,7 +103,7 @@ class DocDataModuleConfig(BaseConfig["DocDataModule"]):
     batch_size: int = 32
     """Batch size for DataLoaders."""
 
-    num_workers: int = Field(default_factory=_default_num_workers)
+    num_workers: int = Field(default_factory=lambda: os.cpu_count() or 0)
     """Number of worker processes for data loading (defaults to logical CPU count)."""
 
     persistent_workers: bool = True

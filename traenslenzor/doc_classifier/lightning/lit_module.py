@@ -29,9 +29,9 @@ from ..models.alexnet import AlexNetParams
 from ..utils import BaseConfig, Console, Metric
 
 # B = batch, C = channels, H = height, W = width, N = num_classes
-ImageBatch = Float[Tensor, "B C H W"]
-Logits = Float[Tensor, "B N"]
-Targets = Int64[Tensor, "B"]
+ImageBatch_BCHW = Float[Tensor, "B C H W"]
+Logits_BN = Float[Tensor, "B N"]
+Targets_B = Int64[Tensor, "B"]
 ScalarLoss = Float[Tensor, ""]
 
 
@@ -68,7 +68,7 @@ class OptimizerConfig(BaseConfig[Optimizer]):
     backbone_lr_scale: float = 1.0
     """Scale factor for backbone learning rate relative to head (1.0 = same LR)."""
 
-    def setup_target(self, params: Iterable[Tensor] | list[dict[str, Any]]) -> Optimizer:
+    def setup_target(self, params: Iterable[Tensor] | list[dict[str, Any]]) -> Optimizer:  # type: ignore[override]
         """Instantiate the AdamW optimizer.
 
         Args:
@@ -104,7 +104,7 @@ class OneCycleSchedulerConfig(BaseConfig[OneCycleLR]):
     anneal_strategy: Literal["cos", "linear"] = "cos"
     """Annealing strategy: 'cos' or 'linear'."""
 
-    def setup_target(
+    def setup_target(  # type: ignore[override]
         self,
         optimizer: Optimizer,
         *,
@@ -272,7 +272,7 @@ class DocClassifierModule(pl.LightningModule):
             self.attribution_engine = params.interpretability.setup_target(self)
 
     # ---------------------------------------------------------------------- steps
-    def forward(self, batch: ImageBatch) -> Logits:
+    def forward(self, batch: ImageBatch_BCHW) -> Logits_BN:
         """Run a forward pass through the backbone.
 
         Args:
@@ -287,7 +287,7 @@ class DocClassifierModule(pl.LightningModule):
         return logits
 
     @torch.no_grad()
-    def predict_proba(self, batch: ImageBatch) -> Float[Tensor, "B N"]:
+    def predict_proba(self, batch: ImageBatch_BCHW) -> Float[Tensor, "B N"]:
         """Inference helper that returns softmax probabilities.
 
         Keeps the module in eval mode and avoids gradient tracking so it can be
@@ -305,7 +305,7 @@ class DocClassifierModule(pl.LightningModule):
     @torch.no_grad()
     def classify_batch(
         self,
-        batch: ImageBatch,
+        batch: ImageBatch_BCHW,
         *,
         class_names: Sequence[str] | None = None,
         top_k: int = 3,
@@ -344,9 +344,9 @@ class DocClassifierModule(pl.LightningModule):
 
     def attribute_batch(
         self,
-        batch: ImageBatch,
+        batch: ImageBatch_BCHW,
         *,
-        target: Targets | int | None = None,
+        target: Targets_B | int | None = None,
         additional_forward_args: Sequence[Tensor] | Tensor | None = None,
     ) -> dict[str, Tensor]:
         """Compute interpretability heatmaps for a batch using the configured engine.
@@ -375,7 +375,7 @@ class DocClassifierModule(pl.LightningModule):
             "raw": result.raw_attribution,
         }
 
-    def training_step(self, batch: tuple[ImageBatch, Targets], batch_idx: int) -> ScalarLoss:
+    def training_step(self, batch: tuple[ImageBatch_BCHW, Targets_B], batch_idx: int) -> ScalarLoss:
         """Compute the training loss and log metrics.
 
         Args:
@@ -404,7 +404,7 @@ class DocClassifierModule(pl.LightningModule):
 
         return loss
 
-    def validation_step(self, batch: tuple[ImageBatch, Targets], batch_idx: int) -> None:
+    def validation_step(self, batch: tuple[ImageBatch_BCHW, Targets_B], batch_idx: int) -> None:
         """Log validation loss and accuracy.
 
         Args:
@@ -526,7 +526,7 @@ class DocClassifierModule(pl.LightningModule):
 
         return None
 
-    def test_step(self, batch: tuple[ImageBatch, Targets], batch_idx: int) -> None:
+    def test_step(self, batch: tuple[ImageBatch_BCHW, Targets_B], batch_idx: int) -> None:
         """Log test metrics.
 
         Args:
