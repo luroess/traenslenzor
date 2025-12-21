@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   ollama:
-    image: ollama/ollama:0.12.6
+    image: ollama/ollama:0.13.5
     container_name: ollama
     ports:
       - "11434:11434"
