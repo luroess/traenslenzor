@@ -1,38 +1,33 @@
-import asyncio
+import logging
 
-from ollama import AsyncClient
+from ollama import Client
 
-from traenslenzor.file_server.session_state import TextItem, TranslatedTextItem
+from traenslenzor.file_server.session_state import TextItem
 from traenslenzor.supervisor.config import settings
 
+logger = logging.getLogger(__name__)
 
-async def translate(text: TextItem, lang: str) -> TranslatedTextItem:
+
+def translate(text: TextItem, lang: str) -> TextItem:
     system = {
         "role": "system",
-        "content": "You are an expert translator. Translate the user's question into "
-        + lang
-        + " in a concise manner. Keep the word count the same as the input text. If you cannot make sense of the input, just give it back without changing anything",
+        "content": f"You are an expert translator. Translate the user's question into {lang} in a concise manner. Keep the word count the same as the input text. If you cannot make sense of the input, just give it back without changing anything",
     }
     message = {
         "role": "user",
         "content": f"Only Respond with the translation, or the original if you cannot translate it. Never say anything else, but the translation or the original text. Text to translate to {lang}: \n{text.extractedText}",
     }
-    response = await AsyncClient(host=settings.llm.ollama_url).chat(
-        model=settings.llm.model, messages=[system, message]
-    )
+    response = Client().chat(model=settings.llm.model, messages=[system, message])
 
     assert response.message.content is not None
 
-    return TranslatedTextItem(
-        translatedText=response.message.content,
-        extractedText=text.extractedText,
-        confidence=text.confidence,
-        bbox=text.bbox,
-        color=text.color,
-        detectedFont=getattr(text, "detectedFont", "Arial"),
-        font_size=getattr(text, "font_size", "16"),
-    )
+    new_item = text.model_copy()
+    new_item.translatedText = response.message.content
+    return new_item
 
 
-async def translate_all(texts: list[TextItem], lang: str) -> list[TranslatedTextItem]:
-    return await asyncio.gather(*[translate(item, lang) for item in texts])
+def translate_all(texts: list[TextItem], lang: str) -> list[TextItem]:
+    results = []
+    for item in texts:
+        results.append(translate(item, lang))
+    return results
