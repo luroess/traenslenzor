@@ -212,7 +212,7 @@ def main():
         text=args.text,
         font_name=args.font,
         checkpoints_dir=args.checkpoints_dir,
-        num_lines=args.lines,
+        # num_lines=args.lines, <-- DISABLED
     )
 
     print(f"Estimated font size: {result['font_size_pt']:.2f} pt")
