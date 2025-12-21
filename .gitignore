@@ -236,3 +236,7 @@ trash.txt
 debug/
 .data
 .logs
+
+# Generated test images
+**/test_images/
+
