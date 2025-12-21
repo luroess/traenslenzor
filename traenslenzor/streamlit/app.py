@@ -239,9 +239,10 @@ def fetch_image(session_id: str | None) -> Image | None:
         return None
     sess = _run_async(SessionClient.get(session_id))
     file_ref = sess.extractedDocument
-    if not file_ref:
+    file_id = file_ref.id if file_ref else sess.rawDocumentId
+    if not file_id:
         return None
-    return _run_async(FileClient.get_image(file_ref.id))
+    return _run_async(FileClient.get_image(file_id))
 
 
 # TODO: make explicit type for session id to avoid str
@@ -297,12 +298,13 @@ def _handle_prompt(prompt: str | ChatInputValue) -> None:
 
     uploaded_names: list[str] = []
     if uploaded_files:
+        if len(uploaded_files) > 1:
+            st.warning("Multiple files detected. Only the first file will be processed for now.")
+        uploaded_file = uploaded_files[0]
         session_id = _ensure_session_id()
-        for uploaded_file in uploaded_files:
-            data = uploaded_file.getvalue()
-            file_id = _run_async(FileClient.put_bytes(uploaded_file.name, data))
-            if not file_id:
-                continue
+        data = uploaded_file.getvalue()
+        file_id = _run_async(FileClient.put_bytes(uploaded_file.name, data))
+        if file_id:
             uploaded_names.append(uploaded_file.name)
             existing_session = _run_async(SessionClient.get(session_id))
             session = initialize_session()
@@ -320,16 +322,14 @@ def _handle_prompt(prompt: str | ChatInputValue) -> None:
         state.history.append({"role": "user", "content": user_text})
         llm_input = user_text
     elif uploaded_names:
-        state.history.append(
-            {
-                "role": "assistant",
-                "content": "Image received. Tell me what you want to do with it.",
-            }
+        llm_input = (
+            "I just uploaded an image. Please acknowledge receipt and ask me what I want to do next. "
+            "Do not call any tools yet."
         )
 
     if llm_input is not None:
         # TODO: always log the direct I / O of the model
-        msg, session_id = _run_async(run_supervisor(llm_input))
+        msg, session_id = _run_async(run_supervisor(llm_input, session_id=state.last_session_id))
         state.last_session_id = session_id
         state.history.append({"role": "assistant", "content": msg.content})
 
