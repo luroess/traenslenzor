@@ -10,12 +10,13 @@ from traenslenzor.font_detector.font_size_model.data_gen import extract_features
 from traenslenzor.font_detector.server import detect_font_name_logic, estimate_font_size_logic
 
 # Font paths (adjust based on your system or use the ones from data_gen.py)
+FONT_DIR = Path(__file__).parent / "fonts"
 FONT_PATHS = {
-    "Roboto-Regular": "/usr/share/fonts/TTF/Roboto-Regular.ttf",
-    "RobotoMono-Regular": "/usr/share/fonts/TTF/RobotoMono-Regular.ttf",
-    "Inter-Regular": "/usr/share/fonts/inter/Inter.ttc",
-    "Lato-Regular": "/usr/share/fonts/TTF/Lato-Regular.ttf",
-    "IBMPlexSans-Regular": "/usr/share/fonts/TTF/IBMPlexSans-Regular.ttf",
+    "Roboto-Regular": str(FONT_DIR / "Roboto-Regular.ttf"),
+    "RobotoMono-Regular": str(FONT_DIR / "RobotoMono-Regular.otf"),
+    "Inter-Regular": str(FONT_DIR / "Inter-Regular.otf"),
+    "Lato-Regular": str(FONT_DIR / "Lato-Regular.ttf"),
+    "IBMPlexSans-Regular": str(FONT_DIR / "IBMPlexSans-Regular.ttf"),
 }
 
 OUTPUT_DIR = Path(__file__).parent / "test_images"

@@ -12,9 +12,6 @@ An MCP (Model Context Protocol) server for font detection and size estimation.
 ### Prerequisites
 
 ```bash
-# Install fonts
-sudo pacman -S ttf-roboto ttf-roboto-mono inter-font ttf-lato ttf-ibm-plex
-
 # Install Python dependencies using uv
 uv sync
 

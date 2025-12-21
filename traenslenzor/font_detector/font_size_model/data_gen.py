@@ -14,21 +14,22 @@ from .features import extract_features
 # Font configurations by following criteria:
 # 1. Detectabale by bygaborcselle/font-identifier model
 # 2. Available on Linux
+FONT_DIR = Path(__file__).parent.parent / "fonts"
 FONT_CONFIGS = {
     "Roboto-Regular": [
-        "/usr/share/fonts/TTF/Roboto-Regular.ttf",
+        str(FONT_DIR / "Roboto-Regular.ttf"),
     ],
     "RobotoMono-Regular": [
-        "/usr/share/fonts/TTF/RobotoMono-Regular.ttf",
+        str(FONT_DIR / "RobotoMono-Regular.otf"),
     ],
     "Inter-Regular": [
-        "/usr/share/fonts/inter/Inter.ttc",
+        str(FONT_DIR / "Inter-Regular.otf"),
     ],
     "Lato-Regular": [
-        "/usr/share/fonts/TTF/Lato-Regular.ttf",
+        str(FONT_DIR / "Lato-Regular.ttf"),
     ],
     "IBMPlexSans-Regular": [
-        "/usr/share/fonts/TTF/IBMPlexSans-Regular.ttf",
+        str(FONT_DIR / "IBMPlexSans-Regular.ttf"),
     ],
 }
 
