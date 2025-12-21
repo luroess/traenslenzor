@@ -35,10 +35,6 @@ def get_prompt_presets() -> list[PromptPreset]:
             prompt="Translate the extracted text into the target language.",
         ),
         PromptPreset(
-            label="Render translated image",
-            prompt="Replace the text in the document image using the translated text.",
-        ),
-        PromptPreset(
             label="Classify document",
             prompt="Classify this document and return the top 3 classes with probabilities.",
         ),
