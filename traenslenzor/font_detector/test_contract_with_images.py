@@ -24,7 +24,12 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def generate_test_image(
-    text: str, font_name: str, font_size_pt: int, output_path: Path, max_width: int = 800, min_size: int = 0
+    text: str,
+    font_name: str,
+    font_size_pt: int,
+    output_path: Path,
+    max_width: int = 800,
+    min_size: int = 0,
 ) -> Tuple[float, float, int]:
     """
     Generate a realistic text cutout image using the same logic as training data.
@@ -229,7 +234,7 @@ def test_font_detection_accuracy():
     for font_name in FONT_PATHS.keys():
         total += 1
         image_path = OUTPUT_DIR / f"accuracy_multi_{font_name}.png"
-        
+
         # Force wrapping with small max_width, and enforce min_size=224
         width, height, _ = generate_test_image(
             lorem_ipsum, font_name, 24, image_path, max_width=300, min_size=224

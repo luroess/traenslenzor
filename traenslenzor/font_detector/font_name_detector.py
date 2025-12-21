@@ -23,7 +23,9 @@ class FontNameDetector:
             device: Device to run model on ('cuda', 'cpu', or None for auto)
         """
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.checkpoint_path = Path(__file__).parent / "checkpoints" / "classifier" / "resnet18_fonts.pth"
+        self.checkpoint_path = (
+            Path(__file__).parent / "checkpoints" / "classifier" / "resnet18_fonts.pth"
+        )
 
         # Lazy loading - only load when first needed
         self._model: Optional[Any] = None
@@ -36,31 +38,35 @@ class FontNameDetector:
             return
 
         if not self.checkpoint_path.exists():
-            raise FileNotFoundError(f"Model checkpoint not found at {self.checkpoint_path}. Please run train_classifier.py first.")
+            raise FileNotFoundError(
+                f"Model checkpoint not found at {self.checkpoint_path}. Please run train_classifier.py first."
+            )
 
         print(f"Loading custom font classifier from {self.checkpoint_path} on {self.device}...")
-        
+
         # Load checkpoint
         checkpoint = torch.load(self.checkpoint_path, map_location=self.device)
-        self._classes = checkpoint['classes']
+        self._classes = checkpoint["classes"]
         num_classes = len(self._classes)
-        
+
         # Recreate model structure
         model = models.resnet18(weights=None)
         num_ftrs = model.fc.in_features
         model.fc = nn.Linear(num_ftrs, num_classes)
-        
-        model.load_state_dict(checkpoint['model_state_dict'])
+
+        model.load_state_dict(checkpoint["model_state_dict"])
         model.to(self.device)
         model.eval()
         self._model = model
-        
+
         # Define transform (matches training)
-        self._transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
-        
+        self._transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            ]
+        )
+
         print(f"Model loaded successfully! Classes: {self._classes}")
 
     def _prepare_image(self, image_path: str) -> Image.Image:
@@ -77,16 +83,16 @@ class FontNameDetector:
 
         # Calculate scale to fit within target_size x target_size
         scale = min(target_size / w, target_size / h)
-        
+
         new_w = int(w * scale)
         new_h = int(h * scale)
-        
+
         # Resize
         img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-        
+
         # Create white canvas
         new_img = Image.new("RGB", (target_size, target_size), "white")
-        
+
         # Paste in center
         offset_x = (target_size - new_w) // 2
         offset_y = (target_size - new_h) // 2
@@ -116,7 +122,7 @@ class FontNameDetector:
 
         # Prepare image
         img = self._prepare_image(image_path)
-        
+
         # Transform to tensor
         input_tensor = self._transform(img).unsqueeze(0).to(self.device)
 
@@ -125,7 +131,7 @@ class FontNameDetector:
             outputs = self._model(input_tensor)
             probs = torch.softmax(outputs, dim=1)
             confidence, predicted_idx = torch.max(probs, 1)
-            
+
             predicted_class = predicted_idx.item()
             conf_val = confidence.item()
 
@@ -156,7 +162,7 @@ class FontNameDetector:
 
         # Prepare image
         img = self._prepare_image(image_path)
-        
+
         # Transform to tensor
         input_tensor = self._transform(img).unsqueeze(0).to(self.device)
 
@@ -164,7 +170,7 @@ class FontNameDetector:
         with torch.no_grad():
             outputs = self._model(input_tensor)
             probs = torch.softmax(outputs, dim=1)[0]
-            
+
             # Get top-k predictions
             top_k_probs, top_k_indices = torch.topk(probs, k=min(k, len(probs)))
 
