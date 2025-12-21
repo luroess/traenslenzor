@@ -20,19 +20,7 @@ from traenslenzor.file_server.session_state import (
 )
 from traenslenzor.logger import setup_logger
 from traenslenzor.streamlit.prompt_presets import PromptPreset, get_prompt_presets
-
-# Defer supervisor import to handle LLM initialization errors gracefully
-_supervisor_import_error: str | None = None
-try:
-    from traenslenzor.supervisor.supervisor import run as run_supervisor
-except SystemExit as e:
-    _supervisor_import_error = (
-        f"Supervisor initialization failed (exit code {e.code}). Is the Ollama server running?"
-    )
-    run_supervisor = None  # type: ignore[assignment]
-except Exception as e:
-    _supervisor_import_error = f"Supervisor initialization failed: {e}"
-    run_supervisor = None  # type: ignore[assignment]
+from traenslenzor.supervisor.supervisor import run as run_supervisor
 
 if TYPE_CHECKING:
     from langchain_core.messages import BaseMessage
@@ -73,7 +61,6 @@ st.set_page_config(layout="wide")
 
 T = TypeVar("T")
 
-# TODO: make this a single list, we can use .title() when rendering
 _STAGES = ["raw", "extracted", "rendered"]
 
 
@@ -196,14 +183,6 @@ def _start_supervisor_run(llm_input: str) -> None:
     Args:
         llm_input (str): User prompt for the supervisor.
     """
-    if _supervisor_import_error or run_supervisor is None:
-        _get_history().append(
-            {
-                "role": "assistant",
-                "content": f"⚠️ Cannot start supervisor: {_supervisor_import_error}",
-            }
-        )
-        return
     if _is_supervisor_running():
         return
     session_id = _ensure_session_id()
@@ -276,6 +255,7 @@ def _render_session_overview(session: SessionState | None) -> None:
     has_document = bool(session.rawDocumentId or session.extractedDocument)
     has_text = text_count > 0
     has_render = bool(session.renderedDocumentId)
+    has_language = bool(session.language)
 
     translation_done, translation_detail = _progress_summary(translated_count, text_count)
     font_done, font_detail = _progress_summary(font_count, text_count)
@@ -283,6 +263,7 @@ def _render_session_overview(session: SessionState | None) -> None:
 
     steps = [
         ("Document loaded", has_document, None),
+        ("Language detected", has_language, session.language if has_language else None),
         ("Text extracted", has_text, f"{text_count} items" if has_text else None),
         ("Translated", translation_done, translation_detail),
         ("Font detected", font_done, font_detail),
@@ -293,11 +274,9 @@ def _render_session_overview(session: SessionState | None) -> None:
     done_count = sum(1 for _, done, _ in steps if done)
     total_steps = len(steps)
 
-    # Header with session ID and language
+    # Header with session ID only
     with st.container(border=True):
-        meta_left, meta_right = st.columns(2, gap="small")
-        meta_left.metric("Session", _short_session_id(session_id))
-        meta_right.metric("Language", session.language or "Not set")
+        st.metric("Session", _short_session_id(session_id))
 
     # Progress bar and step checklist
     st.progress(done_count / total_steps, text=f"{done_count}/{total_steps} complete")
@@ -555,10 +534,6 @@ def _render_layout(session: SessionState | None) -> None:
 
 
 def main() -> None:
-    # Show error banner if supervisor couldn't be initialized
-    if _supervisor_import_error:
-        st.error(f"⚠️ {_supervisor_import_error}")
-
     # Handle completed supervisor runs
     if _consume_pending_supervisor():
         st.rerun()
