@@ -8,17 +8,37 @@ from traenslenzor.supervisor.config import settings
 
 logger = logging.getLogger(__name__)
 
+client = Client(host=settings.llm.ollama_url)
+
 
 def translate(text: TextItem, lang: str) -> TextItem:
+    """Translate a single text item into the target language.
+    This uses the configured LLM to translate the ``extractedText`` field of the
+    provided :class:`TextItem` into the specified language. If the model cannot
+    sensibly translate the input, it should return the original text unchanged.
+    Args:
+        text: The text item containing the source text in ``extractedText``.
+        lang: The target language code or name to translate the text into.
+    Returns:
+        A new :class:`TextItem` copied from the input, with ``translatedText``
+        set to the translation (or the original text if translation is not
+        possible).
+    """
     system = {
         "role": "system",
-        "content": f"You are an expert translator. Translate the user's question into {lang} in a concise manner. Keep the word count the same as the input text. If you cannot make sense of the input, just give it back without changing anything",
+        "content": (
+            f"You are an expert translator. Translate the user's question into {lang} "
+            f"in a concise manner. Keep the translation concise and roughly similar in "
+            f"length to the input text when natural, but prioritize accuracy and "
+            f"clarity over matching length exactly. If you cannot make sense of the "
+            f"input, just give it back without changing anything"
+        ),
     }
     message = {
         "role": "user",
         "content": f"Only Respond with the translation, or the original if you cannot translate it. Never say anything else, but the translation or the original text. Text to translate to {lang}: \n{text.extractedText}",
     }
-    response = Client().chat(model=settings.llm.model, messages=[system, message])
+    response = client.chat(model=settings.llm.model, messages=[system, message])
 
     assert response.message.content is not None
 
@@ -44,7 +64,7 @@ def translate_all(texts: list[TextItem], lang: str) -> list[TextItem]:
     }
 
     try:
-        response = Client().chat(model=settings.llm.model, messages=[system, message])
+        response = client.chat(model=settings.llm.model, messages=[system, message])
         content = response.message.content
 
         if content:
