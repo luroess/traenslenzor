@@ -1,3 +1,4 @@
+import json
 import logging
 
 from ollama import Client
@@ -27,6 +28,52 @@ def translate(text: TextItem, lang: str) -> TextItem:
 
 
 def translate_all(texts: list[TextItem], lang: str) -> list[TextItem]:
+    if not texts:
+        return []
+
+    input_texts = [t.extractedText for t in texts]
+
+    system = {
+        "role": "system",
+        "content": f"You are an expert translator. Translate the following list of texts into {lang}. Return ONLY a JSON array of strings, where each string is the translation of the corresponding input text. Maintain the order exactly. Do not include any other text or markdown formatting.",
+    }
+
+    message = {
+        "role": "user",
+        "content": json.dumps(input_texts),
+    }
+
+    try:
+        response = Client().chat(model=settings.llm.model, messages=[system, message])
+        content = response.message.content
+
+        if content:
+            # Clean up potential markdown code blocks
+            if content.startswith("```json"):
+                content = content[7:]
+            elif content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+
+            translated_texts = json.loads(content.strip())
+
+            if isinstance(translated_texts, list) and len(translated_texts) == len(texts):
+                results = []
+                for i, item in enumerate(texts):
+                    new_item = item.model_copy()
+                    new_item.translatedText = translated_texts[i]
+                    results.append(new_item)
+                return results
+            else:
+                logger.warning(
+                    "Batch translation returned invalid format or length. Falling back to sequential."
+                )
+
+    except Exception as e:
+        logger.error(f"Batch translation failed: {e}. Falling back to sequential.")
+
+    # Fallback to sequential
     results = []
     for item in texts:
         results.append(translate(item, lang))
