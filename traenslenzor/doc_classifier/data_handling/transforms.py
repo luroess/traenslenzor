@@ -22,7 +22,6 @@ if TYPE_CHECKING:
     pass
 
 
-# FIXME: conversion to RGB before noramlization !?
 class TransformConfig(BaseConfig[A.Compose]):
     """Base configuration for Albumentations transforms.
 
@@ -31,7 +30,7 @@ class TransformConfig(BaseConfig[A.Compose]):
 
     target: type[A.Compose] = Field(default=A.Compose, exclude=True)
 
-    transform_type: Literal["base"] = Field(default="base")
+    transform_type: str = Field(default="base")
     """Discriminator field for identifying transform type in serialized configs."""
 
     img_size: int = Field(default=224)
@@ -49,7 +48,58 @@ class TransformConfig(BaseConfig[A.Compose]):
     convert_to_rgb: bool = Field(default=True)
     """When True, replicate grayscale to 3 channels; when False, keep single channel (uses ToGray)."""
 
-    def setup_target(self) -> A.Compose:
+    normalization_mode: Literal["dataset", "imagenet"] = "dataset"
+    """Normalization statistics to use when apply_normalization is True."""
+
+    imagenet_mean: tuple[float, float, float] = (0.485, 0.456, 0.406)
+    """ImageNet mean values for RGB normalization."""
+
+    imagenet_std: tuple[float, float, float] = (0.229, 0.224, 0.225)
+    """ImageNet standard deviation values for RGB normalization."""
+
+    def _resolve_mean_std(self) -> tuple[list[float], list[float]]:
+        """Resolve normalization mean/std for the current config."""
+        if self.normalization_mode == "imagenet":
+            mean = list(self.imagenet_mean)
+            std = list(self.imagenet_std)
+        else:
+            mean = [self.grayscale_mean]
+            std = [self.grayscale_std]
+
+        if self.convert_to_rgb:
+            if len(mean) == 1:
+                mean = mean * 3
+                std = std * 3
+        else:
+            mean = [mean[0]]
+            std = [std[0]]
+
+        return mean, std
+
+    def _normalization_transform(self) -> A.Normalize | A.NoOp:
+        """Return normalization transform or a no-op based on apply_normalization."""
+        if not self.apply_normalization:
+            return A.NoOp()
+        mean, std = self._resolve_mean_std()
+        return A.Normalize(mean=mean, std=std)
+
+    def _pad_to_square(self) -> A.PadIfNeeded:
+        """Pad to a square canvas while preserving full-page layout."""
+        return A.PadIfNeeded(
+            min_height=self.img_size,
+            min_width=self.img_size,
+            border_mode=0,
+            value=255,
+        )
+
+    def _resize_and_pad(self) -> list[A.BasicTransform]:
+        """Resize by longest side and pad to a fixed square canvas."""
+        return [
+            A.LongestMaxSize(max_size=self.img_size),
+            self._pad_to_square(),
+        ]
+
+    def setup_target(self) -> A.Compose:  # type: ignore[override]
         """Create and return an Albumentations Compose pipeline.
 
         Subclasses must override this method to provide their specific transform pipeline.
@@ -72,36 +122,23 @@ class TrainTransformConfig(TransformConfig):
     transform_type: Literal["train"] = Field(default="train")
     """Discriminator field identifying this as a training transform config."""
 
-    def setup_target(self) -> A.Compose:
+    def setup_target(self) -> A.Compose:  # type: ignore[override]
         """Create training augmentation pipeline.
 
         Returns:
             A.Compose: Training pipeline with heavy augmentation.
         """
-        mean = (
-            [self.grayscale_mean, self.grayscale_mean, self.grayscale_mean]
-            if self.convert_to_rgb
-            else [self.grayscale_mean]
-        )
-        std = (
-            [self.grayscale_std, self.grayscale_std, self.grayscale_std]
-            if self.convert_to_rgb
-            else [self.grayscale_std]
-        )
-
         return A.Compose(
             [
-                # Resize to slightly larger size for random cropping
-                A.SmallestMaxSize(max_size=int(self.img_size * 1.1)),
+                *self._resize_and_pad(),
                 # Geometric augmentations (document-friendly)
-                A.RandomResizedCrop(
-                    size=(self.img_size, self.img_size),
-                    scale=(0.8, 1.0),  # Moderate cropping
-                    ratio=(0.9, 1.1),  # Keep aspect ratio close to square
-                    p=1.0,
+                A.ShiftScaleRotate(
+                    shift_limit=0.02,
+                    scale_limit=0.05,
+                    rotate_limit=5,
+                    border_mode=0,
+                    p=0.4,
                 ),
-                A.HorizontalFlip(p=0.5),
-                A.Rotate(limit=5, border_mode=0, p=0.3),  # Small rotation for scanned docs
                 A.Perspective(scale=(0.02, 0.05), p=0.3),  # Simulate camera perspective
                 # Document-specific degradations
                 A.GaussNoise(std_range=(0.02, 0.08), p=0.3),  # Scanner noise
@@ -114,18 +151,9 @@ class TrainTransformConfig(TransformConfig):
                     p=0.5,
                 ),
                 A.RandomGamma(gamma_limit=(80, 120), p=0.3),
-                # Elastic deformation (subtle document warping)
-                A.ElasticTransform(
-                    alpha=30,
-                    sigma=5,
-                    p=0.2,
-                ),
                 # Channel handling
                 (A.ToRGB(p=1.0) if self.convert_to_rgb else A.ToGray(p=1.0, num_output_channels=1)),
-                A.Normalize(
-                    mean=mean,
-                    std=std,
-                ),
+                self._normalization_transform(),
                 ToTensorV2(),
             ]
         )
@@ -141,34 +169,15 @@ class FineTuneTransformConfig(TransformConfig):
     transform_type: Literal["finetune"] = Field(default="finetune")
     """Discriminator field identifying this as a fine-tuning transform config."""
 
-    def setup_target(self) -> A.Compose:
+    def setup_target(self) -> A.Compose:  # type: ignore[override]
         """Create fine-tuning augmentation pipeline.
 
         Returns:
             A.Compose: Fine-tuning pipeline with light augmentation.
         """
-        mean = (
-            [self.grayscale_mean, self.grayscale_mean, self.grayscale_mean]
-            if self.convert_to_rgb
-            else [self.grayscale_mean]
-        )
-        std = (
-            [self.grayscale_std, self.grayscale_std, self.grayscale_std]
-            if self.convert_to_rgb
-            else [self.grayscale_std]
-        )
-
         return A.Compose(
             [
-                # Geometric augmentation
-                A.SmallestMaxSize(max_size=self.img_size),
-                A.RandomResizedCrop(
-                    size=(self.img_size, self.img_size),
-                    scale=(0.9, 1.0),  # Gentle cropping
-                    ratio=(0.95, 1.05),  # Nearly square
-                    p=1.0,
-                ),
-                A.HorizontalFlip(p=0.5),
+                *self._resize_and_pad(),
                 # Light quality adjustments
                 A.RandomBrightnessContrast(
                     brightness_limit=0.1,
@@ -178,10 +187,7 @@ class FineTuneTransformConfig(TransformConfig):
                 # Convert channels
                 (A.ToRGB(p=1.0) if self.convert_to_rgb else A.ToGray(p=1.0, num_output_channels=1)),
                 # Normalization and tensor conversion
-                A.Normalize(
-                    mean=mean,
-                    std=std,
-                ),
+                self._normalization_transform(),
                 ToTensorV2(),
             ]
         )
@@ -197,34 +203,16 @@ class FineTunePlusTransformConfig(TransformConfig):
     transform_type: Literal["finetune_plus"] = Field(default="finetune_plus")
     """Discriminator field identifying this as a moderate fine-tuning transform config."""
 
-    def setup_target(self) -> A.Compose:
+    def setup_target(self) -> A.Compose:  # type: ignore[override]
         """Create moderate fine-tuning augmentation pipeline.
 
         Returns:
             A.Compose: Fine-tuning pipeline with moderate augmentation.
         """
-        mean = (
-            [self.grayscale_mean, self.grayscale_mean, self.grayscale_mean]
-            if self.convert_to_rgb
-            else [self.grayscale_mean]
-        )
-        std = (
-            [self.grayscale_std, self.grayscale_std, self.grayscale_std]
-            if self.convert_to_rgb
-            else [self.grayscale_std]
-        )
-
         return A.Compose(
             [
-                A.SmallestMaxSize(max_size=int(self.img_size * 1.05)),
-                A.RandomResizedCrop(
-                    size=(self.img_size, self.img_size),
-                    scale=(0.85, 1.0),
-                    ratio=(0.9, 1.1),
-                    p=1.0,
-                ),
-                A.HorizontalFlip(p=0.5),
-                A.Rotate(limit=3, border_mode=0, p=0.2),
+                *self._resize_and_pad(),
+                A.Rotate(limit=10, border_mode=0, p=0.2),
                 A.Perspective(scale=(0.01, 0.03), p=0.2),
                 A.GaussNoise(std_range=(0.01, 0.05), p=0.2),
                 A.GaussianBlur(blur_limit=(3, 3), p=0.1),
@@ -235,10 +223,7 @@ class FineTunePlusTransformConfig(TransformConfig):
                 ),
                 A.RandomGamma(gamma_limit=(90, 110), p=0.2),
                 (A.ToRGB(p=1.0) if self.convert_to_rgb else A.ToGray(p=1.0, num_output_channels=1)),
-                A.Normalize(
-                    mean=mean,
-                    std=std,
-                ),
+                self._normalization_transform(),
                 ToTensorV2(),
             ]
         )
@@ -247,44 +232,24 @@ class FineTunePlusTransformConfig(TransformConfig):
 class ValTransformConfig(TransformConfig):
     """Deterministic transforms for validation and testing.
 
-    No augmentation - only resize, center crop, normalize, and tensorize.
+    No augmentation - only resize, pad, normalize, and tensorize.
     """
 
     transform_type: Literal["val"] = Field(default="val")
     """Discriminator field identifying this as a validation/test transform config."""
 
-    def setup_target(self) -> A.Compose:
+    def setup_target(self) -> A.Compose:  # type: ignore[override]
         """Create validation/test transformation pipeline.
 
         Returns:
             A.Compose: Validation pipeline with no augmentation.
         """
-        mean = (
-            [self.grayscale_mean, self.grayscale_mean, self.grayscale_mean]
-            if self.convert_to_rgb
-            else [self.grayscale_mean]
-        )
-        std = (
-            [self.grayscale_std, self.grayscale_std, self.grayscale_std]
-            if self.convert_to_rgb
-            else [self.grayscale_std]
-        )
-
         return A.Compose(
             [
-                A.SmallestMaxSize(max_size=self.img_size),
-                A.CenterCrop(height=self.img_size, width=self.img_size),
-                # A.Resize(height=self.img_size, width=self.img_size),
+                *self._resize_and_pad(),
                 # Convert grayscale to desired channel count
                 (A.ToRGB(p=1.0) if self.convert_to_rgb else A.ToGray(p=1.0, num_output_channels=1)),
-                (
-                    A.Normalize(
-                        mean=mean,
-                        std=std,
-                    )
-                    if self.apply_normalization
-                    else A.NoOp()
-                ),
+                self._normalization_transform(),
                 ToTensorV2(),
             ]
         )

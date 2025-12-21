@@ -12,7 +12,6 @@ from .transforms import (
     FineTunePlusTransformConfig,
     FineTuneTransformConfig,
     TrainTransformConfig,
-    TransformConfig,
     ValTransformConfig,
 )
 
@@ -24,8 +23,7 @@ TransformConfigUnion = Annotated[
     Annotated[TrainTransformConfig, Tag("train")]
     | Annotated[FineTuneTransformConfig, Tag("finetune")]
     | Annotated[FineTunePlusTransformConfig, Tag("finetune_plus")]
-    | Annotated[ValTransformConfig, Tag("val")]
-    | Annotated[TransformConfig, Tag("base")],
+    | Annotated[ValTransformConfig, Tag("val")],
     Field(discriminator="transform_type"),
 ]
 
