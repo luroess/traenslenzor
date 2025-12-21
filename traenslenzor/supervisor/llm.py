@@ -49,12 +49,16 @@ def load_model():
                 response.text,
             )
     except Exception:
-        logger.exception("Unexpected error while triggering model loading for '%s'", settings.llm.model)
+        logger.exception(
+            "Unexpected error while triggering model loading for '%s'", settings.llm.model
+        )
 
 
 def initialize_model():
     if not exists_model():
-        resp = input(f"This application requires {settings.llm.model} LLM. Proceed to download model? (Y/n)\n")
+        resp = input(
+            f"This application requires {settings.llm.model} LLM. Proceed to download model? (Y/n)\n"
+        )
         if resp.strip().lower() not in ["", "y", "yes"]:
             print(f"{settings.llm.model} is required for execution, exiting.")
             exit(0)

@@ -217,8 +217,12 @@ async def detect_font_logic(session_id: str) -> str:
                         count = 0
                         for r in text_rects:
                             # Check intersection
-                            if (r[0] < w_max_x and r[2] > w_min_x and
-                                r[1] < w_max_y and r[3] > w_min_y):
+                            if (
+                                r[0] < w_max_x
+                                and r[2] > w_min_x
+                                and r[1] < w_max_y
+                                and r[3] > w_min_y
+                            ):
                                 count += 1
 
                         if count > max_count:
@@ -291,12 +295,14 @@ async def detect_font_logic(session_id: str) -> str:
                         t.font_size = 12  # Fallback
 
                     # Collect debug info
-                    debug_info.append({
-                        "text": t.extractedText,
-                        "bbox": [{"x": p.x, "y": p.y} for p in t.bbox] if t.bbox else None,
-                        "detectedFont": t.detectedFont,
-                        "font_size": t.font_size
-                    })
+                    debug_info.append(
+                        {
+                            "text": t.extractedText,
+                            "bbox": [{"x": p.x, "y": p.y} for p in t.bbox] if t.bbox else None,
+                            "detectedFont": t.detectedFont,
+                            "font_size": t.font_size,
+                        }
+                    )
 
             # Save debug info to file
             if settings.llm.debug_mode:
