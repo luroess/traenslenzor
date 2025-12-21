@@ -140,10 +140,11 @@ class SessionClient:
             raise Exception(f"Failed to delete session with id '{session_id}'.")
 
     @staticmethod
-    async def update(session_id: str, updater: Callable[[SessionState], None]):
+    async def update(session_id: str, updater: Callable[[SessionState], None]) -> SessionState:
         session = await SessionClient.get(session_id)
         updater(session)
         await SessionClient.put(session_id, session)
+        return session
 
     @staticmethod
     async def get_progress(session_id: str) -> SessionProgress:

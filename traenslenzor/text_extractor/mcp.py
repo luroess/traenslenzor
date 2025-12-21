@@ -84,7 +84,11 @@ async def extract_text(session_id: str) -> str:
         session.extractedDocument = extracted_document
 
     await SessionClient.update(session_id, update_session)
-    return "Text extraction successful"
+
+    if res is None:
+        return "Extracted no text from image"
+
+    return "\n".join([f"{index}: {text.extractedText}" for index, text in enumerate(res)])
 
 
 async def run():
