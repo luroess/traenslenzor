@@ -24,14 +24,6 @@ from traenslenzor.supervisor.tools.tools import get_tools
 
 logger = logging.getLogger(__name__)
 
-_SESSION_TOOLS = {
-    "classify_document",
-    "detect_font",
-    "extract_text",
-    "render_image",
-    "translate",
-}
-
 
 class LLMIOLogger(BaseCallbackHandler):
     """Log model input/output for debugging purposes."""
@@ -62,13 +54,6 @@ class LLMIOLogger(BaseCallbackHandler):
 async def wrap_tools(
     request: ToolCallRequest, handler: Callable[[ToolCallRequest], ToolMessage | Command]
 ) -> Command:
-    state = cast(SupervisorState, request.state)
-    session_id = state.get("session_id")
-    if session_id:
-        tool_args = request.tool_call.get("args", {})
-        if request.tool_call.get("name") in _SESSION_TOOLS:
-            tool_args["session_id"] = session_id
-
     result = await handler(request)  # type: ignore
     if isinstance(result, ToolMessage):
         result = Command(
@@ -120,6 +105,6 @@ async def run(user_input: str, session_id: str | None = None) -> tuple[BaseMessa
     result = await supervisor.agent.ainvoke(payload, config=config)
 
     messages = result.get("messages", [])
-    resolved_session_id = result.get("session_id", session_id)
+    session_id = result.get("session_id", None)
 
-    return (messages[-1], resolved_session_id)
+    return (messages[-1], session_id)
