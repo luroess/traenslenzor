@@ -61,7 +61,7 @@ class FontSizeEstimator:
         text_box_size: Tuple[float, float],
         text: str,
         font_name: str,
-        num_lines: int = 1,
+        # num_lines: int = 1, <-- DISABLED
     ) -> float:
         """
         Estimate font size.
@@ -70,7 +70,7 @@ class FontSizeEstimator:
             text_box_size: (width_px, height_px) tuple
             text: Text content
             font_name: Font name
-            num_lines: Number of lines (default: 1)
+            # num_lines: Number of lines (default: 1) <-- DISABLED
 
         Returns:
             Estimated font size in points
@@ -94,7 +94,7 @@ class FontSizeEstimator:
                 raise
 
         # Extract and normalize features
-        features = extract_features(text_box_size, text, num_lines=num_lines)
+        features = extract_features(text_box_size, text)  # Removed num_lines
         features_norm = self.normalizers[font_name].normalize(features)
 
         # Predict
@@ -133,7 +133,7 @@ def estimate_font_size(
     text: str,
     font_name: Optional[str] = None,
     checkpoints_dir: Optional[str] = None,
-    num_lines: int = 1,
+    # num_lines: int = 1,  <-- DISABLED
 ) -> dict:
     """
     Estimate font size (MCP tool interface).
@@ -143,7 +143,7 @@ def estimate_font_size(
         text: Text content
         font_name: Optional font name hint
         checkpoints_dir: Directory containing checkpoints (uses default if None)
-        num_lines: Number of lines (default: 1)
+        # num_lines: Number of lines (default: 1) <-- DISABLED
 
     Returns:
         Dictionary with 'font_size_pt' key
@@ -160,7 +160,7 @@ def estimate_font_size(
 
     # Create estimator and run inference
     estimator = FontSizeEstimator(checkpoints_dir)
-    font_size_pt = estimator.estimate(text_box_size, text, font_name, num_lines=num_lines)
+    font_size_pt = estimator.estimate(text_box_size, text, font_name)  # Removed num_lines
 
     return {"font_size_pt": font_size_pt}
 

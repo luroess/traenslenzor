@@ -74,7 +74,7 @@ def test_contract_with_auto_detection():
                 continue
 
             # Extract and print features
-            features = extract_features((width, height), text, num_lines=num_lines)
+            features = extract_features((width, height), text)  # Removed num_lines
             print(
                 f"  [{label}] Features: W={width:.1f}, H={height:.1f}, Lines={num_lines}, Density={features[3]:.4f}"
             )
@@ -131,7 +131,7 @@ def test_contract_with_auto_detection():
                 text=text_multi,
                 image_path=str(image_path_multi),
                 font_name="",
-                num_lines=num_lines_m,  # Pass the correct number of lines
+                # num_lines=num_lines_m,  # Removed num_lines
             )
 
             print(f"Result (multi): {result_json}")
@@ -239,7 +239,7 @@ def test_full_pipeline():
             text=text,
             image_path=str(image_path),
             font_name="",  # Force detection
-            num_lines=num_lines,
+            # num_lines=num_lines,  # Removed num_lines
         )
 
         result = json.loads(result_json)

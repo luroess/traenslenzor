@@ -45,26 +45,26 @@ def extract_features(
     """
     Extract features for font size estimation.
 
-    Features (36-dimensional):
+    Features (34-dimensional):
     - width_px (1)
     - height_px (1)
     - text_len (1)
     - char_density (1)
-    - num_lines (1)
+    # - num_lines (1)  <-- DISABLED
     - log_width (1)
     - log_height (1)
     - log_len (1)
     - log_density (1)
-    - log_num_lines (1)
+    # - log_num_lines (1) <-- DISABLED
     - letter_histogram (26)
 
     Args:
         text_box_size: (width_px, height_px) tuple
         text: Text string
-        num_lines: Number of lines in the text (default: 1)
+        num_lines: Unused (kept for API compatibility)
 
     Returns:
-        Feature vector as numpy array (36-dimensional)
+        Feature vector as numpy array (34-dimensional)
 
     Raises:
         ValueError: If inputs are invalid
@@ -81,8 +81,9 @@ def extract_features(
     if not isinstance(text, str):
         raise ValueError(f"text must be a string, got: {type(text)}")
 
-    if num_lines < 1:
-        num_lines = 1
+    # num_lines is disabled
+    # if num_lines < 1:
+    #     num_lines = 1
 
     # Extract features
     text_len = len(text)
@@ -99,22 +100,22 @@ def extract_features(
     log_height = np.log(height_px + eps)
     log_len = np.log(text_len_float + eps)
     log_density = np.log(char_density + eps)
-    log_num_lines = np.log(float(num_lines) + eps)
+    # log_num_lines = np.log(float(num_lines) + eps)
 
     # Combine features
-    # 5 raw + 5 log + 26 hist = 36 features
+    # 4 raw + 4 log + 26 hist = 34 features
     features = np.array(
         [
             width_px,
             height_px,
             text_len_float,
             char_density,
-            float(num_lines),
+            # float(num_lines),
             log_width,
             log_height,
             log_len,
             log_density,
-            log_num_lines,
+            # log_num_lines,
         ],
         dtype=np.float32,
     )
@@ -219,7 +220,7 @@ class FeatureNormalizer:
         return cls(mean, std)
 
 
-def validate_features(features: np.ndarray, expected_dim: int = 36) -> bool:
+def validate_features(features: np.ndarray, expected_dim: int = 34) -> bool:
     """
     Validate feature vector.
 

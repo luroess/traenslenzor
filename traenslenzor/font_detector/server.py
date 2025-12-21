@@ -73,7 +73,7 @@ def estimate_font_size_logic(
     text: str,
     image_path: str = "",
     font_name: str = "",
-    num_lines: int | None = None,
+    # num_lines: int | None = None, <-- DISABLED
 ) -> str:
     """Core logic for font size estimation."""
     if not text_box_size or len(text_box_size) != 2:
@@ -83,8 +83,8 @@ def estimate_font_size_logic(
         return json.dumps({"error": "text is required"})
 
     # Calculate lines if not provided
-    if num_lines is None:
-        num_lines = text.count("\n") + 1 if text else 1
+    # if num_lines is None:
+    #     num_lines = text.count("\n") + 1 if text else 1
 
     try:
         # If no font name provided, detect it
@@ -105,11 +105,11 @@ def estimate_font_size_logic(
             text_box_size=tuple(text_box_size),
             text=text,
             font_name=font_name,
-            num_lines=num_lines,
+            # num_lines=num_lines,
         )
 
         return json.dumps(
-            {"font_size_pt": font_size_pt, "font_name": font_name, "num_lines": num_lines}
+            {"font_size_pt": font_size_pt, "font_name": font_name}  # Removed num_lines
         )
 
     except Exception as e:
@@ -122,7 +122,7 @@ def estimate_font_size(
     text: str,
     image_path: str = "",
     font_name: str = "",
-    num_lines: int | None = None,
+    # num_lines: int | None = None, <-- DISABLED
 ) -> str:
     """Estimate font size in points from text box dimensions and content.
 
@@ -131,9 +131,9 @@ def estimate_font_size(
         text: Text content in the box
         image_path: Optional path to image file (used to detect font if font_name not provided)
         font_name: Optional font name hint (if known)
-        num_lines: Number of lines in the text (optional, calculated from text if not provided)
+        # num_lines: Number of lines in the text (optional, calculated from text if not provided) <-- DISABLED
     """
-    return estimate_font_size_logic(text_box_size, text, image_path, font_name, num_lines)
+    return estimate_font_size_logic(text_box_size, text, image_path, font_name)
 
 
 async def detect_font_logic(session_id: str) -> str:
@@ -189,13 +189,13 @@ async def detect_font_logic(session_id: str) -> str:
                         # Estimate size
                         try:
                             # Default to 1 line if not specified (could be improved by analyzing text)
-                            num_lines = t.extractedText.count("\n") + 1 if t.extractedText else 1
+                            # num_lines = t.extractedText.count("\n") + 1 if t.extractedText else 1
 
                             font_size = size_estimator.estimate(
                                 text_box_size=(width, height),
                                 text=t.extractedText,
                                 font_name=global_font_name,
-                                num_lines=num_lines,
+                                # num_lines=num_lines,
                             )
                             t.font_size = int(font_size)
                         except Exception as e:

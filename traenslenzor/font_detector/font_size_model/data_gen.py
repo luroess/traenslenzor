@@ -476,7 +476,7 @@ def generate_sample(
     )
 
     # Extract features
-    features = extract_features(box_size, text, num_lines=num_lines)
+    features = extract_features(box_size, text)  # Removed num_lines
 
     return {
         "font_name": font_name,
@@ -556,7 +556,7 @@ def generate_dataset(
 
             # Header
             header = ["font_name", "text", "font_size_pt", "width_px", "height_px"]
-            feature_names = [f"feat_{i}" for i in range(36)]
+            feature_names = [f"feat_{i}" for i in range(34)]
             header.extend(feature_names)
             writer.writerow(header)
 
