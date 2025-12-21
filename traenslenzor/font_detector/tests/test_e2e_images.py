@@ -126,7 +126,7 @@ def test_multiline_handling(font_name, test_image_dir):
             text=text_multi,
             image_path=str(image_path_multi),
             font_name="",
-            num_lines=num_lines_m,  # Pass the correct number of lines
+            # num_lines=num_lines_m,  # Pass the correct number of lines
         )
 
         result = json.loads(result_json)
@@ -162,7 +162,7 @@ def test_full_pipeline(font_name, test_image_dir):
         text=text,
         image_path=str(image_path),
         font_name="",  # Force detection
-        num_lines=num_lines,
+        # num_lines=num_lines,
     )
 
     result = json.loads(result_json)

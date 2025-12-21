@@ -34,7 +34,7 @@ def test_end_to_end_workflow(tmp_path):
     X_norm = np.array([normalizer.normalize(x) for x in X])
 
     # Step 4: Train a tiny model
-    model = FontSizeRegressorMLP(input_dim=36, hidden1=16, hidden2=8)
+    model = FontSizeRegressorMLP(input_dim=34, hidden1=16, hidden2=8)
 
     from traenslenzor.font_detector.font_size_model.model import AdamOptimizer, MSELoss
 
@@ -83,7 +83,7 @@ def test_json_serialization():
     import numpy as np
 
     # Test model serialization
-    model = FontSizeRegressorMLP(input_dim=36, hidden1=64, hidden2=32)
+    model = FontSizeRegressorMLP(input_dim=34, hidden1=64, hidden2=32)
     state = {
         "W1": model.W1.data.tolist(),
         "b1": model.b1.data.tolist(),
@@ -95,8 +95,8 @@ def test_json_serialization():
     assert isinstance(parsed, dict)
 
     # Test normalizer serialization
-    mean = np.random.randn(36).astype(np.float32)
-    std = np.ones(36, dtype=np.float32)
+    mean = np.random.randn(34).astype(np.float32)
+    std = np.ones(34, dtype=np.float32)
     normalizer = FeatureNormalizer(mean, std)
 
     norm_dict = {

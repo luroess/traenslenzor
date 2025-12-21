@@ -18,12 +18,12 @@ def dummy_checkpoint(tmp_path):
     checkpoint_dir.mkdir(parents=True)
 
     # Create dummy model
-    model = FontSizeRegressorMLP(input_dim=36, hidden1=64, hidden2=32)
+    model = FontSizeRegressorMLP(input_dim=34, hidden1=64, hidden2=32)
     model.save(str(checkpoint_dir / "best.json"))
 
     # Create dummy normalizer
-    mean = np.random.randn(36).astype(np.float32)
-    std = np.ones(36, dtype=np.float32)
+    mean = np.random.randn(34).astype(np.float32)
+    std = np.ones(34, dtype=np.float32)
     normalizer = FeatureNormalizer(mean, std)
     normalizer.save(str(checkpoint_dir / "norm.json"))
 
@@ -94,11 +94,11 @@ class TestFontSizeEstimator:
             checkpoint_dir = tmp_path / "checkpoints" / font_name
             checkpoint_dir.mkdir(parents=True)
 
-            model = FontSizeRegressorMLP(input_dim=36, hidden1=64, hidden2=32)
+            model = FontSizeRegressorMLP(input_dim=34, hidden1=64, hidden2=32)
             model.save(str(checkpoint_dir / "best.json"))
 
-            mean = np.random.randn(36).astype(np.float32)
-            std = np.ones(36, dtype=np.float32)
+            mean = np.random.randn(34).astype(np.float32)
+            std = np.ones(34, dtype=np.float32)
             normalizer = FeatureNormalizer(mean, std)
             normalizer.save(str(checkpoint_dir / "norm.json"))
 

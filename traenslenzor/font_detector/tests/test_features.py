@@ -77,8 +77,8 @@ class TestExtractFeatures:
         """Test basic feature extraction."""
         features = extract_features((100, 50), "Hello World")
 
-        # Check shape (36 features: 10 basic + 26 letter hist)
-        assert features.shape == (36,)
+        # Check shape (34 features: 8 basic + 26 letter hist)
+        assert features.shape == (34,)
 
         # Check basic features
         assert features[0] == 100  # width
@@ -211,7 +211,7 @@ class TestValidateFeatures:
 
     def test_nan_values(self):
         """Test with NaN values."""
-        features = np.ones(36)
+        features = np.ones(34)
         features[0] = np.nan
 
         with pytest.raises(ValueError, match="NaN or Inf"):
@@ -219,7 +219,7 @@ class TestValidateFeatures:
 
     def test_inf_values(self):
         """Test with Inf values."""
-        features = np.ones(36)
+        features = np.ones(34)
         features[0] = np.inf
 
         with pytest.raises(ValueError, match="NaN or Inf"):
