@@ -1,6 +1,5 @@
 import asyncio
 
-
 from traenslenzor.doc_class_detector.mcp import run as run_doc_class_detector
 from traenslenzor.file_server.server import run as run_file_server
 from traenslenzor.font_detector.mcp import run as run_font_detector

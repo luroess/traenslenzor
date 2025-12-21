@@ -5,9 +5,9 @@ from typing import Tuple
 from unittest.mock import MagicMock, patch
 
 from PIL import Image
+from traenslenzor.font_detector.server import detect_font_name_logic, estimate_font_size_logic
 
 from traenslenzor.font_detector.font_size_model.data_gen import extract_features, render_text_box
-from traenslenzor.font_detector.server import detect_font_name_logic, estimate_font_size_logic
 
 # Font paths (adjust based on your system or use the ones from data_gen.py)
 FONT_DIR = Path(__file__).parent / "fonts"
