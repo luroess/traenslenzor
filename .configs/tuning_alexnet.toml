@@ -1,0 +1,56 @@
+seed     = 42
+is_debug = false
+verbose  = true
+run_name = "tuning-vitb16"
+stage    = "train"
+
+[trainer_config]
+fast_dev_run      = false
+accelerator       = "auto"
+devices           = 1
+max_epochs        = 5
+precision         = "32-true"
+log_every_n_steps = 10
+use_wandb         = true
+
+    [trainer_config.callbacks]
+    use_model_checkpoint   = false
+    use_lr_monitor         = false
+    use_rich_progress_bar  = false
+    use_rich_model_summary = false
+
+# TUNER CONFIGURATION - Enable automatic hyperparameter optimization
+[tuner_config]
+use_batch_size_tuning      = false
+batch_size_mode            = "binsearch"  # Binary search if you enable it
+batch_size_init_val        = 16           # Must be < dataset_size / 10
+batch_size_steps_per_trial = 30           # High value required (20-30) for proper allocation
+batch_size_max_trials      = 15           # Limit trials to prevent exceeding dataset
+
+
+# Learning rate tuning runs LR Range Test (Leslie Smith method)
+use_learning_rate_tuning = true
+lr_min                   = 5.0e-5 # Minimum LR to test
+lr_max                   = 7.0e-3 # Maximum LR to test (0.1)
+lr_num_training          = 100    # Train for 100 iterations during LR finder
+update_model_lr          = true   # Automatically update model with suggested LR
+verbose                  = true
+
+[module_config]
+num_classes    = 16
+use_pretrained = false
+
+    [module_config.optimizer]
+    learning_rate = 0.001  # Initial LR (will be replaced by tuner if enabled)
+    weight_decay  = 0.0005
+
+    [module_config.scheduler]
+    max_lr          = 0.003
+    pct_start       = 0.3
+    anneal_strategy = "cos"
+
+[datamodule_config]
+batch_size  = 32   # Initial batch_size (will be replaced by tuner if enabled)
+num_workers = 4
+pin_memory  = true
+verbose     = true

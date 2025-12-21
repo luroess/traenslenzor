@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires      = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -17,7 +17,6 @@ dependencies = [
     "fastapi>=0.120.4",
     "fastmcp>=2.12.4",
     "matplotlib>=3.10.7",
-    "numpy>=2.3.4",
     "onnxruntime>=1.23.2",
     "pillow>=12.0.0",
     "torch>=2.9.0",
@@ -28,17 +27,20 @@ dependencies = [
     "langchain-ollama>=1.0.0",
     "langchain-text-splitters>=1.0.0",
     "langgraph>=1.0.0",
+    "numpy>=1.26.4,<2.3.0",
     "opencv-python>=4.11.0.86",
     "paddleocr>=3.3.1",
     "paddlepaddle>=3.2.1",
+    "types-aiofiles>=25.1.0.20251011",
     "requests>=2.31.0",
     "transformers>=4.30.0",
-    "types-aiofiles>=25.1.0.20251011",
     "uvicorn>=0.37.0",
     "streamlit>=1.52.1",
+    "seaborn>=0.13.2",
 ]
 
 [dependency-groups]
+
 dev = [
     "pandas-stubs>=2.3.2.250926",
     "pre-commit>=4.3.0",
@@ -53,18 +55,50 @@ dev = [
     "types-pyyaml>=6.0.12.20250915",
     "types-requests>=2.32.4.20250913",
 ]
+classifier = [
+    "albumentations>=2.0.8",
+    "tomlkit>=0.13.3",
+    "datasets>=4.4.1",                              # https://huggingface.co/datasets
+    "devtools>=0.12.2",
+    "optuna>=4.2.0",
+    "optuna-integration[pytorch-lightning]>=4.5.0",
+    "pydantic>=2.12.4",
+    "pydantic-settings>=2.11.0",
+    # "pytorch-lightning>=2.5.6",
+    "lightning>=2.5.6",
+    "rich>=13.9.4",
+    "torch>=2.5.0",
+    "torchvision>=0.24.0",
+    "torchmetrics>=1.6.0",
+    "torchsummary>=1.5.1",
+    "captum>=0.8.0",
+    "wandb>=0.22.3",
+    "seaborn>=0.13.2",
+    "jaxtyping>=0.3.3",
+    "typing-extensions>=4.15.0",
+    "syrenka>=0.5.7",
+]
+notebook = [
+    "ipympl>=0.9.0",     # %matplotlib widget
+    "jupyter>=1.0.0",
+    "ipykernel>=7.1.0",
+    "notebook>=7.0.0",
+    "jupyterlab>=4.5.0",
+]
+
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths  = ["tests"]
 pythonpath = ["traenslenzor"]
-addopts = "-q"
+addopts    = "-q"
 
 [tool.ruff]
-line-length = 100
+line-length    = 100
 target-version = "py313"
 
-[tool.ruff.lint]
-extend-select = ["I"]  # import sorting
+    [tool.ruff.lint]
+    extend-select = ["I"]    # import sorting
+    ignore        = ["F722"] # allow jaxtyping
 
-[tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]
+        [tool.ruff.lint.per-file-ignores]
+        "tests/*" = ["S101"]

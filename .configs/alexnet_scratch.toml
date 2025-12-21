@@ -1,0 +1,65 @@
+# https://wandb.ai/traenslenzor/doc-class-detector/runs/k6k3vq6r?nw=nwuserjanduchscherer
+seed     = 42
+is_debug = false
+verbose  = true
+stage    = "train"
+
+[trainer_config]
+is_debug          = false
+fast_dev_run      = false
+accelerator       = "auto"
+strategy          = "auto"
+max_epochs        = 10
+precision         = "32-true"
+log_every_n_steps = 50
+use_wandb         = true
+
+    [trainer_config.callbacks]
+    use_model_checkpoint    = true
+    checkpoint_save_top_k   = 1
+    use_early_stopping      = true
+    early_stopping_patience = 3
+    use_lr_monitor          = true
+    use_rich_progress_bar   = false
+    use_tqdm_progress_bar   = true
+    use_rich_model_summary  = true
+    use_backbone_finetuning = false
+    use_timer               = false
+
+    [trainer_config.wandb_config]
+    project = "doc-class-detector"
+    entity  = "traenslenzor"
+    tags    = ["alexnet", "scratch"]
+    notes   = "Training AlexNet from scratch on RVL-CDIP document classification"
+
+[module_config]
+backbone = "alexnet" # BackboneType.ALEXNET
+
+    [module_config.optimizer]
+    learning_rate = 0.000327 # tuned from LR finder (suggested =3.27e-4)
+    weight_decay  = 0.0005   # Standard L2 regularization
+
+    [module_config.scheduler]
+    max_lr           = 0.000327 # Match tuner suggestion for max LR
+    base_momentum    = 0.85
+    max_momentum     = 0.95
+    div_factor       = 10.0     # lr_start = max_lr / 10  = 3.27e-5
+    final_div_factor = 20.0     # lr_final = max_lr / (10*20) = 1.635e-6
+    pct_start        = 0.15     # 15% warmup, then cosine decay
+    anneal_strategy  = "cos"
+
+[datamodule_config]
+batch_size         = 42    # 48 barely fits onto 3090 (11.5GB VRAM) so reduced to 42
+persistent_workers = true
+is_debug           = false
+verbose            = true
+# limit_num_samples  = 1024
+
+    [datamodule_config.train_ds]
+        [datamodule_config.train_ds.transform_config]
+        # Aggressive augmentation for scratch training
+        transform_type    = "train"
+        p_color_jitter    = 0.5
+        p_perspective     = 0.3
+        p_affine          = 0.3
+        p_horizontal_flip = 0.5
