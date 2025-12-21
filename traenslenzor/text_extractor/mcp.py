@@ -67,6 +67,10 @@ async def extract_text(session_id: str) -> str:
     res = run_ocr("en", flattened_img)
     logger.info(res)
 
+    if res is None:
+        logger.error("OCR failed to extract text")
+        return "OCR failed to extract text"
+
     def update_session(session: SessionState):
         session.text = res
         session.extractedDocument = extracted_document

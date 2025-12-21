@@ -14,6 +14,7 @@ class LLMConfig(BaseModel):
     temperature: int = 0
     ollama_url: str = "http://localhost:11434"
     model: str = "qwen3:4b"
+    debug_mode: bool = False
 
 
 class SupervisorConfig(BaseSettings):
