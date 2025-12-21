@@ -3,8 +3,6 @@
 import io
 import json
 import logging
-import os
-import tempfile
 from pathlib import Path
 from typing import List, Optional
 
@@ -55,7 +53,8 @@ def detect_font_name_logic(image_path: str) -> str:
     try:
         # Detect font name
         detector = get_font_name_detector()
-        font_name = detector.detect(image_path)
+        with Image.open(image_path) as img:
+            font_name = detector.detect(img)
         return json.dumps({"font_name": font_name})
     except Exception as e:
         return json.dumps({"error": str(e)})
@@ -94,7 +93,8 @@ def estimate_font_size_logic(
         if not font_name:
             if image_path:
                 detector = get_font_name_detector()
-                font_name = detector.detect(image_path)
+                with Image.open(image_path) as img:
+                    font_name = detector.detect(img)
             else:
                 return json.dumps(
                     {
@@ -155,12 +155,7 @@ async def detect_font_logic(session_id: str) -> str:
     logger.info(f"Using flattened document image: {image_id_to_use}")
 
     # Download the raw document image
-    image_path = None
     try:
-        # Create a temporary file to store the image
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-            image_path = tmp.name
-
         # Download image bytes
         image_bytes = await FileClient.get_raw_bytes(image_id_to_use)
         if not image_bytes:
@@ -251,7 +246,7 @@ async def detect_font_logic(session_id: str) -> str:
 
         # Detect font name globally for the document
         name_detector = get_font_name_detector()
-        global_font_name = name_detector.detect(image_path)
+        global_font_name = name_detector.detect(crop_image)
 
         # Get size estimator
         size_estimator = get_font_size_estimator()
@@ -321,10 +316,6 @@ async def detect_font_logic(session_id: str) -> str:
     except Exception as e:
         logger.error(f"Font detection failed: {e}")
         return f"Error during font detection: {str(e)}"
-    finally:
-        # Cleanup temporary file
-        if image_path and os.path.exists(image_path):
-            os.unlink(image_path)
 
 
 @font_detector.tool

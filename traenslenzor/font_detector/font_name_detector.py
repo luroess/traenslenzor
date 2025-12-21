@@ -69,12 +69,11 @@ class FontNameDetector:
 
         print(f"Model loaded successfully! Classes: {self._classes}")
 
-    def _prepare_image(self, image_path: str) -> Image.Image:
+    def _prepare_image(self, img: Image.Image) -> Image.Image:
         """
         Load and prepare image for inference.
         Strategy: Center crop 224x224 if larger, pad if smaller. No resizing/scaling.
         """
-        img = Image.open(image_path)
         if img.mode != "RGB":
             img = img.convert("RGB")
 
@@ -102,28 +101,22 @@ class FontNameDetector:
 
         return new_img
 
-    def detect(self, image_path: str) -> str:
+    def detect(self, img: Image.Image) -> str:
         """
         Detect font name from image.
 
         Args:
-            image_path: Path to image file containing text
+            img: PIL Image object
 
         Returns:
             Detected font name as string
-
-        Raises:
-            FileNotFoundError: If image file does not exist
         """
-        if not Path(image_path).exists():
-            raise FileNotFoundError(f"Image not found: {image_path}")
-
         # Load model if not already loaded
         self._load_model()
         assert self._model is not None and self._transform is not None and self._classes is not None
 
         # Prepare image
-        img = self._prepare_image(image_path)
+        img = self._prepare_image(img)
 
         # Transform to tensor
         input_tensor = self._transform(img).unsqueeze(0).to(self.device)
@@ -144,26 +137,23 @@ class FontNameDetector:
 
         return font_name
 
-    def detect_top_k(self, image_path: str, k: int = 5) -> List[Tuple[str, float]]:
+    def detect_top_k(self, img: Image.Image, k: int = 5) -> List[Tuple[str, float]]:
         """
         Detect top-k most likely font names from image.
 
         Args:
-            image_path: Path to image file containing text
+            img: PIL Image object
             k: Number of top predictions to return
 
         Returns:
             List of (font_name, confidence) tuples, sorted by confidence
         """
-        if not Path(image_path).exists():
-            raise FileNotFoundError(f"Image not found: {image_path}")
-
         # Load model if not already loaded
         self._load_model()
         assert self._model is not None and self._transform is not None and self._classes is not None
 
         # Prepare image
-        img = self._prepare_image(image_path)
+        img = self._prepare_image(img)
 
         # Transform to tensor
         input_tensor = self._transform(img).unsqueeze(0).to(self.device)
