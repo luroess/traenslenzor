@@ -18,7 +18,6 @@ def main():
         os.environ["DEBUG_MODE"] = "true"
 
     # Initialize LLM model (ollama)
-    import traenslenzor.supervisor.llm
 
     from traenslenzor.app import app
     from traenslenzor.logger import setup_logger

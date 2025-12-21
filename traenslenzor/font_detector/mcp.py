@@ -1,15 +1,15 @@
 """MCP server for font detection and size estimation."""
 
+import io
 import json
 import logging
 import os
 import tempfile
 from pathlib import Path
 from typing import List, Optional
-from PIL import Image
-import io
 
 from fastmcp import FastMCP
+from PIL import Image
 
 from traenslenzor.file_server.client import FileClient, SessionClient
 from traenslenzor.file_server.session_state import SessionState
