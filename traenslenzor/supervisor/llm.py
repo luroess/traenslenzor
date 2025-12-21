@@ -1,7 +1,4 @@
-"""Ollama LLM initialization for the supervisor."""
-
-from __future__ import annotations
-
+# host model with `OLLAMA_DEBUG=2 ollama serve` to enable debug logging
 import logging
 
 import requests
@@ -50,11 +47,7 @@ def initialize_model():
     pull_model()
 
 
-def reset_llm_cache() -> None:
-    """Clear the cached LLM instance."""
-    global _llm
-    _llm = None
-
+initialize_model()
 
 llm = ChatOllama(
     model=settings.llm.model,
