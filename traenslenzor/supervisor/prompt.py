@@ -50,7 +50,7 @@ def has_result_been_rendered(session: SessionState) -> bool:
 def format_session(session_id: str, session: SessionState) -> str:
     return f"""
         ✅ the current session_id is '{session_id}'
-        {f"✅ the user has selected the language {session.language}" if session.language else "❌ the user has no language selected"}
+        {f"✅ the user has selected the language {session.tgt_language}" if session.tgt_language else "❌ the user has no language selected"}
         {"✅ the user has a document loaded" if session.rawDocumentId else "❌ the user has no document selected"}
 
         {"✅ text was extracted from the document" if has_text_been_extracted(session) else "❌ no text was extracted from the document"}

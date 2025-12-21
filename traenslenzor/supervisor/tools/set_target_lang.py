@@ -19,7 +19,7 @@ async def set_target_language(language: str, runtime: ToolRuntime) -> Command:
     logger.info(f"Setting language to {language}")
 
     def update_language(session: SessionState):
-        session.language = language
+        session.tgt_language = language
 
     await SessionClient.update(runtime.state["session_id"], update_language)
 
