@@ -7,7 +7,6 @@
 traenslenzor/font_detector/checkpoints/**/*.json filter=lfs diff=lfs merge=lfs -text
 traenslenzor/font_detector/checkpoints/**/*.csv filter=lfs diff=lfs merge=lfs -text
 traenslenzor/font_detector/data/**/*.csv filter=lfs diff=lfs merge=lfs -text
-
 # Fonts
 *.ttf filter=lfs diff=lfs merge=lfs -text
 *.otf filter=lfs diff=lfs merge=lfs -text
