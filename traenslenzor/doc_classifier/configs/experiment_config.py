@@ -136,7 +136,7 @@ class ExperimentConfig(BaseConfig[Trainer]):
             self.trainer_config.update_wandb_config(self)
         return self
 
-    def setup_target(
+    def setup_target(  # type: ignore[override]
         self,
         setup_stage: Stage | str = Stage.TRAIN,
     ) -> tuple[Trainer, LightningModule, LightningDataModule]:
@@ -158,6 +158,7 @@ class ExperimentConfig(BaseConfig[Trainer]):
                 lit_module = self.module_config.target.load_from_checkpoint(
                     checkpoint_path=self.from_ckpt,
                     params=self.module_config,
+                    weights_only=False,
                 )
                 console.log(f"Successfully loaded checkpoint: {lit_module.__class__.__name__}")
             except Exception as exc:
@@ -271,6 +272,7 @@ class ExperimentConfig(BaseConfig[Trainer]):
             trial_console.log(f"Starting trial {trial.number}")
 
             experiment_config_copy = deepcopy(self)
+            assert experiment_config_copy.optuna_config is not None
 
             if experiment_config_copy.trainer_config.use_wandb:
                 experiment_config_copy.trainer_config.wandb_config.name = (

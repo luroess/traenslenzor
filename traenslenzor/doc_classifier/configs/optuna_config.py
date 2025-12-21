@@ -9,7 +9,7 @@ from optuna.integration.pytorch_lightning import PyTorchLightningPruningCallback
 from pydantic import Field
 from pytorch_lightning import Callback
 
-from ..utils import BaseConfig, Metric, Optimizable
+from ..utils import BaseConfig, Console, Metric, Optimizable
 from .path_config import PathConfig
 
 Setter = Callable[[Any], None]
@@ -44,11 +44,22 @@ class OptunaConfig(BaseConfig):
             pruner=pruner,
         )
 
-    def setup_optimizables(self, experiment_config: BaseConfig, trial: optuna.Trial) -> None:
+    def setup_optimizables(
+        self,
+        experiment_config: BaseConfig,
+        trial: optuna.Trial,
+        *,
+        console: Console | None = None,
+    ) -> None:
         """Apply Optimizable hints embedded in the config tree."""
         if not isinstance(experiment_config, BaseConfig):
             return
         self.suggested_params.clear()
+
+        opt_console = console or Console.with_prefix(self.__class__.__name__, "setup_optimizables")
+        opt_console.set_verbose(getattr(experiment_config, "verbose", False)).set_debug(
+            getattr(experiment_config, "is_debug", False)
+        )
 
         def join(prefix: str | None, suffix: str) -> str:
             """Compose dotted paths for nested fields."""
@@ -64,11 +75,14 @@ class OptunaConfig(BaseConfig):
             """Walk config values and apply Optuna suggestions when encountered."""
             optimizable = _extract_optimizable(field_info, value)
             if optimizable is not None:
-                suggestion = optimizable.suggest(trial, path or optimizable.name or "param")
+                param_name = path or optimizable.name or "param"
+                suggestion = optimizable.suggest(trial, param_name)
                 setter(suggestion)
-                self.suggested_params[path or optimizable.name or "param"] = optimizable.serialize(
-                    suggestion
-                )
+                serialized = optimizable.serialize(suggestion)
+                self.suggested_params[param_name] = serialized
+                opt_console.log(f"Optuna suggest {param_name}={serialized} (trial {trial.number})")
+                if optimizable.description:
+                    opt_console.log(f"Optuna param note: {param_name} - {optimizable.description}")
                 return
 
             if isinstance(value, BaseConfig):
