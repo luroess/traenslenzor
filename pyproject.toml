@@ -30,7 +30,7 @@ dependencies = [
     "numpy>=1.26.4,<2.3.0",
     "opencv-python>=4.11.0.86",
     "paddleocr>=3.3.1",
-    "paddlepaddle>=3.2.1; sys_platform == 'darwin' or sys_platform == 'win32'",
+    "paddlepaddle>=3.2.1",
     "types-aiofiles>=25.1.0.20251011",
     "uvicorn>=0.37.0",
     "streamlit>=1.52.1",
@@ -84,13 +84,11 @@ notebook = [
     "jupyterlab>=4.5.0",
 ]
 
+
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths  = ["tests"]
 pythonpath = ["traenslenzor"]
-addopts = "-q"
-filterwarnings = [
-    "ignore:The argument 'device' of Tensor\\.(pin_memory|is_pinned)\\(\\) is deprecated:DeprecationWarning", # PyTorch interal warning
-]
+addopts    = "-q"
 
 [tool.ruff]
 line-length    = 100
