@@ -72,7 +72,7 @@ class FontNameDetector:
     def _prepare_image(self, image_path: str) -> Image.Image:
         """
         Load and prepare image for inference.
-        Strategy: Letterbox (Fit to 224x224 with padding).
+        Strategy: Center crop 224x224 if larger, pad if smaller. No resizing/scaling.
         """
         img = Image.open(image_path)
         if img.mode != "RGB":
@@ -81,21 +81,23 @@ class FontNameDetector:
         w, h = img.size
         target_size = 224
 
-        # Calculate scale to fit within target_size x target_size
-        scale = min(target_size / w, target_size / h)
-
-        new_w = int(w * scale)
-        new_h = int(h * scale)
-
-        # Resize
-        img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-
         # Create white canvas
         new_img = Image.new("RGB", (target_size, target_size), "white")
 
+        # If image is larger than target, crop center
+        if w > target_size or h > target_size:
+            # Calculate crop box
+            left = max(0, (w - target_size) // 2)
+            top = max(0, (h - target_size) // 2)
+            right = min(w, left + target_size)
+            bottom = min(h, top + target_size)
+
+            img = img.crop((left, top, right, bottom))
+            w, h = img.size
+
         # Paste in center
-        offset_x = (target_size - new_w) // 2
-        offset_y = (target_size - new_h) // 2
+        offset_x = (target_size - w) // 2
+        offset_y = (target_size - h) // 2
         new_img.paste(img, (offset_x, offset_y))
 
         return new_img

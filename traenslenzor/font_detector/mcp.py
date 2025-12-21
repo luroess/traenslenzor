@@ -6,6 +6,8 @@ import os
 import tempfile
 from pathlib import Path
 from typing import List, Optional
+from PIL import Image
+import io
 
 from fastmcp import FastMCP
 
@@ -140,8 +142,16 @@ async def detect_font_logic(session_id: str) -> str:
     """Core logic for font detection."""
     # Get session state to access raw document ID
     session = await SessionClient.get(session_id)
-    if not session or not session.rawDocumentId:
-        return "Error: No active session or raw document found"
+    if not session:
+        return "Error: No active session found"
+
+    # Use extracted (flattened) document
+    if not session.extractedDocument or not session.extractedDocument.id:
+        logger.error("No flattened document found. Text extraction must be run first.")
+        return "Error: No flattened document found. Please run text extraction first."
+
+    image_id_to_use = session.extractedDocument.id
+    logger.info(f"Using flattened document image: {image_id_to_use}")
 
     # Download the raw document image
     image_path = None
@@ -150,15 +160,92 @@ async def detect_font_logic(session_id: str) -> str:
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
             image_path = tmp.name
 
-        # Download image bytes and save to temp file
-        image_bytes = await FileClient.get_raw_bytes(session.rawDocumentId)
+        # Download image bytes
+        image_bytes = await FileClient.get_raw_bytes(image_id_to_use)
         if not image_bytes:
-            return "Error: Could not download raw document image"
+            return "Error: Could not download document image"
 
-        with open(image_path, "wb") as f:
-            f.write(image_bytes)
-            f.flush()
-            os.fsync(f.fileno())  # Force write to disk
+        # Load image
+        try:
+            full_image = Image.open(io.BytesIO(image_bytes))
+            if full_image.mode != "RGB":
+                full_image = full_image.convert("RGB")
+        except Exception as e:
+            return f"Error loading image: {e}"
+
+        # Smart Cropping: Find the 224x224 region containing the most text boxes
+        crop_image = full_image
+        if session.text:
+            target_size = 224
+            best_window = None
+            max_count = -1
+
+            # Convert all bboxes to rectangles (min_x, min_y, max_x, max_y)
+            text_rects = []
+            for t in session.text:
+                if t.bbox and len(t.bbox) == 4:
+                    xs = [p.x for p in t.bbox]
+                    ys = [p.y for p in t.bbox]
+                    text_rects.append((min(xs), min(ys), max(xs), max(ys)))
+
+            if text_rects:
+                img_w, img_h = full_image.size
+
+                # If image is smaller than target, use full image
+                if img_w <= target_size and img_h <= target_size:
+                    best_window = (0, 0, img_w, img_h)
+                else:
+                    # Search for best window centered on each text box
+                    for center_rect in text_rects:
+                        cx = (center_rect[0] + center_rect[2]) / 2
+                        cy = (center_rect[1] + center_rect[3]) / 2
+
+                        # Define 224x224 window around center
+                        w_min_x = max(0, int(cx - target_size / 2))
+                        w_min_y = max(0, int(cy - target_size / 2))
+                        w_max_x = min(img_w, w_min_x + target_size)
+                        w_max_y = min(img_h, w_min_y + target_size)
+
+                        # Shift window if it goes out of bounds (to keep it 224x224 if possible)
+                        if w_max_x - w_min_x < target_size and w_min_x > 0:
+                            w_min_x = max(0, w_max_x - target_size)
+                        if w_max_y - w_min_y < target_size and w_min_y > 0:
+                            w_min_y = max(0, w_max_y - target_size)
+
+                        # Count intersections
+                        count = 0
+                        for r in text_rects:
+                            # Check intersection
+                            if (r[0] < w_max_x and r[2] > w_min_x and
+                                r[1] < w_max_y and r[3] > w_min_y):
+                                count += 1
+
+                        if count > max_count:
+                            max_count = count
+                            best_window = (w_min_x, w_min_y, w_max_x, w_max_y)
+
+                if best_window:
+                    crop_image = full_image.crop(best_window)
+                    logger.info(f"Smart crop to dense region: {best_window} with {max_count} boxes")
+
+        # Save debug images
+        if os.environ.get("DEBUG_MODE") == "true":
+            try:
+                debug_dir = Path("debug")
+                debug_dir.mkdir(parents=True, exist_ok=True)
+
+                full_image_path = debug_dir / f"font_debug_{session_id}_full.png"
+                full_image.save(full_image_path)
+
+                crop_image_path = debug_dir / f"font_debug_{session_id}_crop.png"
+                crop_image.save(crop_image_path)
+
+                logger.info(f"Saved debug images to {debug_dir}")
+            except Exception as e:
+                logger.error(f"Failed to save debug images: {e}")
+
+        # Save (potentially cropped) image to temp file
+        crop_image.save(image_path, format="PNG")
 
         # Detect font name globally for the document
         name_detector = get_font_name_detector()
@@ -168,6 +255,7 @@ async def detect_font_logic(session_id: str) -> str:
         size_estimator = get_font_size_estimator()
 
         def update_session(session: SessionState):
+            debug_info = []
             if session.text is not None:
                 for t in session.text:
                     # Use global font name for all text items
@@ -203,6 +291,25 @@ async def detect_font_logic(session_id: str) -> str:
                             t.font_size = 12  # Fallback
                     else:
                         t.font_size = 12  # Fallback
+
+                    # Collect debug info
+                    debug_info.append({
+                        "text": t.extractedText,
+                        "bbox": [{"x": p.x, "y": p.y} for p in t.bbox] if t.bbox else None,
+                        "detectedFont": t.detectedFont,
+                        "font_size": t.font_size
+                    })
+
+            # Save debug info to file
+            if os.environ.get("DEBUG_MODE") == "true":
+                try:
+                    debug_file = Path("debug") / f"font_debug_{session_id}.json"
+                    debug_file.parent.mkdir(parents=True, exist_ok=True)
+                    with open(debug_file, "w") as f:
+                        json.dump(debug_info, f, indent=2)
+                    logger.info(f"Saved font debug info to {debug_file}")
+                except Exception as e:
+                    logger.error(f"Failed to save font debug info: {e}")
 
         await SessionClient.update(session_id, update_session)
         return f"Font detection successful. Detected font: {global_font_name}"
