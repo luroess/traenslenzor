@@ -3,7 +3,7 @@ import logging
 from fastmcp import FastMCP
 
 from traenslenzor.file_server.client import SessionClient
-from traenslenzor.file_server.session_state import SessionState, TranslatedTextItem
+from traenslenzor.file_server.session_state import SessionState
 from traenslenzor.translator.translator import translate_all
 
 ADDRESS = "127.0.0.1"
@@ -17,10 +17,7 @@ logger = logging.getLogger(__name__)
 
 @translator.tool
 async def translate(session_id: str) -> str:
-    """Translates text.
-    Args:
-        session_id (str): ID of the current session
-    """
+    """Translates text for the given session ID."""
     try:
         session = await SessionClient.get(session_id)
     except Exception as e:

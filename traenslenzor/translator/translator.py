@@ -12,18 +12,7 @@ client = Client(host=settings.llm.ollama_url)
 
 
 def translate(text: TextItem, lang: str) -> TextItem:
-    """Translate a single text item into the target language.
-    This uses the configured LLM to translate the ``extractedText`` field of the
-    provided :class:`TextItem` into the specified language. If the model cannot
-    sensibly translate the input, it should return the original text unchanged.
-    Args:
-        text: The text item containing the source text in ``extractedText``.
-        lang: The target language code or name to translate the text into.
-    Returns:
-        A new :class:`TextItem` copied from the input, with ``translatedText``
-        set to the translation (or the original text if translation is not
-        possible).
-    """
+    """Translates a single TextItem's extractedText into the target language using the configured LLM."""
     system = {
         "role": "system",
         "content": (
@@ -48,27 +37,7 @@ def translate(text: TextItem, lang: str) -> TextItem:
 
 
 def translate_all(texts: list[TextItem], lang: str) -> list[TextItem]:
-    """
-    Translate a list of TextItem instances into the target language using batch processing.
-
-    This function first attempts to translate all items in a single LLM call by sending a
-    JSON array of the `extractedText` values and expecting a JSON array of translated
-    strings in the same order. The response may be wrapped in Markdown code fences, which
-    are stripped before JSON parsing.
-
-    If the batch response cannot be parsed as JSON, does not return a list matching the
-    input length, or if any error occurs while calling the LLM, the function logs the
-    issue and falls back to sequential translation by calling `translate` for each item.
-
-    Args:
-        texts: A list of TextItem objects whose `extractedText` fields will be translated.
-        lang: The ISO language code or language name to translate the texts into.
-
-    Returns:
-        A list of TextItem objects, preserving the input order, where each item has its
-        `translatedText` field populated with the corresponding translation (or original
-        text if translation was not possible).
-    """
+    """Translates a list of TextItems into the target language using batch processing, falling back to sequential translation on failure."""
     if not texts:
         return []
 
@@ -114,7 +83,9 @@ def translate_all(texts: list[TextItem], lang: str) -> list[TextItem]:
     except json.JSONDecodeError as e:
         logger.error(f"Batch translation JSON decode failed: {e}. Falling back to sequential.")
     except Exception as e:
-        logger.exception(f"Unexpected error during batch translation: {e}. Falling back to sequential.")
+        logger.exception(
+            f"Unexpected error during batch translation: {e}. Falling back to sequential."
+        )
 
     # Fallback to sequential
     results = []
