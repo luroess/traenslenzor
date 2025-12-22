@@ -62,6 +62,9 @@ st.set_page_config(layout="wide")
 T = TypeVar("T")
 
 _STAGES = ["raw", "extracted", "rendered"]
+ENABLE_SESSION_POLLING = False
+ENABLE_SUPERVISOR_POLLING = True
+_SUPERVISOR_POLL_INTERVAL_SECONDS = 2
 
 
 class AsyncRunner:
@@ -339,9 +342,6 @@ def _render_session_overview(session: SessionState | None) -> None:
             st.json(session.model_dump(), expanded=False)
 
 
-_SUPERVISOR_POLL_INTERVAL_SECONDS = 2
-
-
 @st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
 def _render_sidebar_fragment() -> None:
     """Sidebar fragment that polls for session updates while supervisor runs."""
@@ -352,6 +352,28 @@ def _render_sidebar_fragment() -> None:
 
     session = _get_active_session(force_refresh=_is_supervisor_running())
 
+    st.subheader("Session")
+    _render_session_overview(session)
+
+
+@st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
+def _render_supervisor_watchdog() -> None:
+    """Poll for supervisor completion and trigger an app rerun."""
+    future = _get_pending_supervisor_future()
+    if future is not None and future.done():
+        st.rerun(scope="app")
+
+
+def _render_sidebar() -> None:
+    """Render sidebar with optional polling."""
+    if ENABLE_SESSION_POLLING:
+        _render_sidebar_fragment()
+        return
+
+    if ENABLE_SUPERVISOR_POLLING and _is_supervisor_running():
+        _render_supervisor_watchdog()
+
+    session = _get_active_session(force_refresh=_is_supervisor_running())
     st.subheader("Session")
     _render_session_overview(session)
 
@@ -537,7 +559,7 @@ def main() -> None:
         st.rerun()
 
     with st.sidebar:
-        _render_sidebar_fragment()
+        _render_sidebar()
 
     # Main layout uses cached session (fragment handles live updates)
     active_session = _get_active_session()
