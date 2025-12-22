@@ -5,7 +5,7 @@ from pathlib import Path
 
 async def run():
     app = Path(__file__).parent / "app.py"
-    port = 8080
+    port = 8501
 
     cmd = [
         sys.executable,

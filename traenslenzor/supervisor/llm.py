@@ -35,16 +35,35 @@ def exists_model():
     return settings.llm.model in model_names
 
 
+def load_model():
+    """Trigger model loading into memory"""
+    try:
+        response = requests.post(
+            f"{settings.llm.ollama_url}/api/chat", json={"model": settings.llm.model}
+        )
+        if response.status_code != 200:
+            logger.error(
+                "Failed to trigger model loading for '%s'. Status code: %s, response: %s",
+                settings.llm.model,
+                response.status_code,
+                response.text,
+            )
+    except Exception:
+        logger.exception(
+            "Unexpected error while triggering model loading for '%s'", settings.llm.model
+        )
+
+
 def initialize_model():
-    if exists_model():
-        return
-    resp = input(
-        f"This application requires {settings.llm.model} LLM. Proceed to download model? (Y/n)\n"
-    )
-    if resp.strip().lower() not in ["", "y", "yes"]:
-        print(f"{settings.llm.model} is required for execution, exiting.")
-        exit(0)
-    pull_model()
+    if not exists_model():
+        resp = input(
+            f"This application requires {settings.llm.model} LLM. Proceed to download model? (Y/n)\n"
+        )
+        if resp.strip().lower() not in ["", "y", "yes"]:
+            print(f"{settings.llm.model} is required for execution, exiting.")
+            exit(0)
+        pull_model()
+    load_model()
 
 
 initialize_model()
