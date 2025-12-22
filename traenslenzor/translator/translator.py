@@ -48,6 +48,27 @@ def translate(text: TextItem, lang: str) -> TextItem:
 
 
 def translate_all(texts: list[TextItem], lang: str) -> list[TextItem]:
+    """
+    Translate a list of TextItem instances into the target language using batch processing.
+
+    This function first attempts to translate all items in a single LLM call by sending a
+    JSON array of the `extractedText` values and expecting a JSON array of translated
+    strings in the same order. The response may be wrapped in Markdown code fences, which
+    are stripped before JSON parsing.
+
+    If the batch response cannot be parsed as JSON, does not return a list matching the
+    input length, or if any error occurs while calling the LLM, the function logs the
+    issue and falls back to sequential translation by calling `translate` for each item.
+
+    Args:
+        texts: A list of TextItem objects whose `extractedText` fields will be translated.
+        lang: The ISO language code or language name to translate the texts into.
+
+    Returns:
+        A list of TextItem objects, preserving the input order, where each item has its
+        `translatedText` field populated with the corresponding translation (or original
+        text if translation was not possible).
+    """
     if not texts:
         return []
 
@@ -90,8 +111,10 @@ def translate_all(texts: list[TextItem], lang: str) -> list[TextItem]:
                     "Batch translation returned invalid format or length. Falling back to sequential."
                 )
 
+    except json.JSONDecodeError as e:
+        logger.error(f"Batch translation JSON decode failed: {e}. Falling back to sequential.")
     except Exception as e:
-        logger.error(f"Batch translation failed: {e}. Falling back to sequential.")
+        logger.exception(f"Unexpected error during batch translation: {e}. Falling back to sequential.")
 
     # Fallback to sequential
     results = []
