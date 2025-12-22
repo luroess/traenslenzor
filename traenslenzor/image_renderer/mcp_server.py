@@ -19,6 +19,10 @@ ADDRESS = "127.0.0.1"
 PORT = 8006
 IMAGE_RENDERER_BASE_PATH = f"http://{ADDRESS}:{PORT}/mcp"
 
+# Debug configuration
+DEBUG_DIR = "./debug"
+SAVE_DEBUG = True
+
 # Initialize FastMCP server
 image_renderer_mcp = FastMCP("Image Renderer")
 
@@ -90,11 +94,6 @@ async def replace_text(
     Raises:
         ToolError: If session is invalid, text is not extracted/translated, or document is missing.
     """
-
-    # Debug Config
-    debug_dir = "./debug"
-    save_debug = True
-
     logger.info(f"Extracting text in session '{session_id}'")
     session = await SessionClient.get(session_id)
 
@@ -144,8 +143,8 @@ async def replace_text(
     result_image = await renderer.replace_text(
         image=image,
         texts=translated_texts,
-        save_debug=save_debug,
-        debug_dir=debug_dir,
+        save_debug=SAVE_DEBUG,
+        debug_dir=DEBUG_DIR,
     )
 
     transformation_matrix = session.extractedDocument.transformation_matrix
@@ -164,8 +163,8 @@ async def replace_text(
 
     final_image = renderer.paste_replaced_to_original(original_image, final_image)
 
-    if save_debug:
-        debug_path = Path(debug_dir)
+    if SAVE_DEBUG:
+        debug_path = Path(DEBUG_DIR)
         debug_path.mkdir(parents=True, exist_ok=True)
         final_image.save(debug_path / "debug-result.png")
 

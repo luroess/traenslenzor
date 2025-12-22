@@ -84,7 +84,8 @@ def draw_texts(
     if pil_image.mode != "RGBA":
         pil_image = pil_image.convert("RGBA")
 
-    pil_image.save("./debug/before_draw.png")
+    if debug:
+        pil_image.save("./debug/before_draw.png")
 
     for text in texts:
         # Calculate rotation angle from bbox

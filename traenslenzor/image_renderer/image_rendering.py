@@ -14,8 +14,6 @@ from traenslenzor.image_renderer.text_operations import create_mask, draw_texts
 
 logger = logging.getLogger(__name__)
 
-logger.setLevel(logging.DEBUG)
-
 
 def save_histogram(data: NDArray[np.float32], filename: str) -> None:
     """Save a histogram of the data to a file."""
