@@ -317,7 +317,9 @@ def _render_session_overview(session: SessionState | None) -> None:
                 {
                     "text": item.extractedText[:40]
                     + ("..." if len(item.extractedText) > 40 else ""),
-                    "translated": getattr(item, "translatedText", "")[:40],
+                    "translated": (item.translatedText or "")[:40],
+                    "font_size": item.font_size or "",
+                    "detected_font": item.detectedFont or "",
                     "confidence": f"{item.confidence:.3f}",
                 }
                 for item in session.text
