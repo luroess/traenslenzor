@@ -227,6 +227,8 @@ traenslenzor/image_renderer/lama/*
 # doc_classifier artifacts and cache
 .data/
 .logs/
+!.logs/checkpoints/
+!.logs/checkpoints/*.ckpt
 
 # docs
 main.pdf
@@ -235,8 +237,6 @@ main.pdf
 trash.txt
 debug/
 .data
-.logs
 
 # Generated test images
 **/test_images/
-
