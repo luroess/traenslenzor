@@ -106,7 +106,7 @@ async def test_full_pipeline(file_server):
     session_id = await SessionClient.create(session)
 
     async with Client(text_extractor) as text_extractor_client:
-        extract_result = await text_extractor_client.call_tool(
+        await text_extractor_client.call_tool(
             "extract_text",
             {"session_id": session_id},
         )
@@ -123,7 +123,7 @@ async def test_full_pipeline(file_server):
         assert len(text.extractedText) > 0, "Extracted text is empty"
 
     async with Client(font_detector) as font_detector_client:
-        detect_result = await font_detector_client.call_tool(
+        await font_detector_client.call_tool(
             "detect_font",
             {"session_id": session_id},
         )
@@ -139,7 +139,7 @@ async def test_full_pipeline(file_server):
         assert text.detectedFont is not None, "Font was not detected"
 
     async with Client(translator) as translator_client:
-        translate_result = await translator_client.call_tool(
+        await translator_client.call_tool(
             "translate",
             {"session_id": session_id},
         )
@@ -153,7 +153,7 @@ async def test_full_pipeline(file_server):
         assert text.translatedText is not None, "Translated text is None"
 
     async with Client(image_renderer_mcp) as image_renderer_client:
-        render_result = await image_renderer_client.call_tool(
+        await image_renderer_client.call_tool(
             "replace_text",
             {"session_id": session_id},
         )

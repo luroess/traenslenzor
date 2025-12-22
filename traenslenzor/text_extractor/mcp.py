@@ -1,4 +1,3 @@
-from docutils.nodes import document
 import logging
 
 import cv2
@@ -8,7 +7,7 @@ from fastmcp.exceptions import ToolError
 from PIL import Image
 
 from traenslenzor.file_server.client import FileClient, SessionClient
-from traenslenzor.file_server.session_state import ExtractedDocument, SessionState, BBoxPoint
+from traenslenzor.file_server.session_state import BBoxPoint, ExtractedDocument, SessionState
 from traenslenzor.text_extractor.flatten_image import deskew_document
 from traenslenzor.text_extractor.paddleocr import run_ocr
 
@@ -68,8 +67,7 @@ async def extract_text(session_id: str) -> str:
     extracted_document = ExtractedDocument(
         id=flattened_image_id,
         transformation_matrix=transformation_matrix.tolist(),
-        documentCoordinates=[BBoxPoint(x=pt[0], y=pt[1]) for pt in document_coordinates]
-
+        documentCoordinates=[BBoxPoint(x=pt[0], y=pt[1]) for pt in document_coordinates],
     )
 
     res = run_ocr("en", flattened_img)
