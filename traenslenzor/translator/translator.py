@@ -26,8 +26,8 @@ async def translate(text: TextItem, lang: str) -> TranslatedTextItem:
         confidence=text.confidence,
         bbox=text.bbox,
         color=text.color,
-        detectedFont="Arial",
-        font_size="16",
+        detectedFont=getattr(text, "detectedFont", "Arial"),
+        font_size=getattr(text, "font_size", 16),
     )
 
 

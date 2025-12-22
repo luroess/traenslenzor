@@ -1,0 +1,67 @@
+seed     = 42
+is_debug = false
+verbose  = false
+stage    = "train"
+
+[trainer_config]
+is_debug          = false
+fast_dev_run      = false
+accelerator       = "auto"
+strategy          = "auto"
+max_epochs        = 8
+log_every_n_steps = 10
+use_wandb         = true
+
+    [trainer_config.callbacks]
+    use_model_checkpoint    = true
+    checkpoint_save_top_k   = 1
+    use_early_stopping      = true
+    early_stopping_patience = 3
+    use_lr_monitor          = true
+    use_rich_progress_bar   = false
+    use_tqdm_progress_bar   = true
+    tqdm_refresh_rate       = 10
+    use_rich_model_summary  = true
+    rich_summary_max_depth  = 1
+    # Enable backbone fine-tuning for gradual unfreezing
+    use_backbone_finetuning    = true
+    backbone_unfreeze_at_epoch = 2
+    backbone_train_bn          = true
+    gradient_clip_val          = 1.0
+
+    [trainer_config.wandb_config]
+    project = "doc-class-detector"
+    entity  = "traenslenzor"
+    tags    = ["vit-b16", "finetune"]
+
+[module_config]
+num_classes     = 16
+backbone        = "vit_b_16"
+train_head_only = true       # Start head-only; unfreeze at epoch 2
+use_pretrained  = true       # Use ImageNet pretrained weights
+
+    [module_config.optimizer]
+    learning_rate     = 3e-5 # smaller base LR for pretrained backbone
+    weight_decay      = 1e-4
+    backbone_lr_scale = 0.01 # Lower LR for bassckbone vs head
+
+    [module_config.scheduler]
+    max_lr           = 5e-5  # peak LR
+    div_factor       = 25.0  # initial LR = max_lr/25 = 1.2e-5
+    final_div_factor = 1e4   # final LR ≈ 1.2e-9
+    pct_start        = 0.3   # 30% warm-up
+    anneal_strategy  = "cos"
+
+[datamodule_config]
+batch_size         = 56    #
+persistent_workers = true
+is_debug           = false
+verbose            = true
+
+    [datamodule_config.train_ds]
+    split = "train"
+
+        [datamodule_config.train_ds.transform_config]
+        transform_type = "finetune_plus"
+        img_size       = 224
+        convert_to_rgb = true            # keep 3-channel input for pretrained ResNet

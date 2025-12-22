@@ -224,6 +224,10 @@ traenslenzor/image_renderer/lama/*
 # translenzor
 .supervisor_graph.png
 
+# doc_classifier artifacts and cache
+.data/
+.logs/
+
 # docs
 main.pdf
 *update.pdf
@@ -232,3 +236,7 @@ trash.txt
 debug/
 .data
 .logs
+
+# Generated test images
+**/test_images/
+

@@ -1,12 +1,14 @@
 import logging
-from typing import Callable, Optional, cast
+from typing import Any, Callable, Optional, cast
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import (
     before_agent,
     wrap_tool_call,
 )
-from langchain_core.messages import ToolMessage
+from langchain_core.callbacks import BaseCallbackHandler
+from langchain_core.messages import BaseMessage, ToolMessage
+from langchain_core.outputs import LLMResult
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt.tool_node import ToolCallRequest
@@ -21,6 +23,31 @@ from traenslenzor.supervisor.state import SupervisorState, ToolCall
 from traenslenzor.supervisor.tools.tools import get_tools
 
 logger = logging.getLogger(__name__)
+
+
+class LLMIOLogger(BaseCallbackHandler):
+    """Log model input/output for debugging purposes."""
+
+    def on_chat_model_start(
+        self,
+        serialized: dict[str, Any],
+        messages: list[list[BaseMessage]],
+        **kwargs: Any,
+    ) -> None:
+        logger.info("LLM input:")
+        for message_group in messages:
+            for message in message_group:
+                logger.info("[%s] %s", message.type, message.content)
+
+    def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
+        logger.info("LLM output:")
+        for generation_list in response.generations:
+            for generation in generation_list:
+                message = getattr(generation, "message", None)
+                if message is not None:
+                    logger.info("[%s] %s", message.type, message.content)
+                else:
+                    logger.info("%s", generation.text)
 
 
 @wrap_tool_call  # type: ignore
@@ -64,15 +91,18 @@ class Supervisor:
         )
 
 
-async def run(user_input: str):  # , on_progress):
+async def run(user_input: str, session_id: str | None = None) -> tuple[BaseMessage, str | None]:
     tools = await get_tools()
     supervisor = Supervisor(tools)
 
-    config: RunnableConfig = {"configurable": {"thread_id": "69"}}
-    result = await supervisor.agent.ainvoke(
-        {"messages": [{"role": "user", "content": user_input}]},
-        config=config,
-    )
+    config: RunnableConfig = {
+        "configurable": {"thread_id": "69"},
+        "callbacks": [LLMIOLogger()],
+    }
+    payload: dict[str, Any] = {"messages": [{"role": "user", "content": user_input}]}
+    if session_id:
+        payload["session_id"] = session_id
+    result = await supervisor.agent.ainvoke(payload, config=config)
 
     messages = result.get("messages", [])
     session_id = result.get("session_id", None)

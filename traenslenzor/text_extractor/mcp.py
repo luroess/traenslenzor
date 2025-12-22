@@ -1,3 +1,4 @@
+from docutils.nodes import document
 import logging
 
 import cv2
@@ -7,7 +8,7 @@ from fastmcp.exceptions import ToolError
 from PIL import Image
 
 from traenslenzor.file_server.client import FileClient, SessionClient
-from traenslenzor.file_server.session_state import ExtractedDocument, SessionState
+from traenslenzor.file_server.session_state import ExtractedDocument, SessionState, BBoxPoint
 from traenslenzor.text_extractor.flatten_image import deskew_document
 from traenslenzor.text_extractor.paddleocr import run_ocr
 
@@ -52,7 +53,7 @@ async def extract_text(session_id: str) -> str:
     transformation_matrix = np.eye(3, dtype=np.float64)
     if flattening_result is not None:
         logger.info("Image flattening successful")
-        flattened_img, transformation_matrix = flattening_result
+        flattened_img, transformation_matrix, document_coordinates = flattening_result
     else:
         logger.error("Image flattening failed, proceeding with original image")
 
@@ -67,12 +68,18 @@ async def extract_text(session_id: str) -> str:
     extracted_document = ExtractedDocument(
         id=flattened_image_id,
         transformation_matrix=transformation_matrix.tolist(),
+        documentCoordinates=[BBoxPoint(x=pt[0], y=pt[1]) for pt in document_coordinates]
+
     )
 
     res = run_ocr("en", flattened_img)
 
     if res is None:
         raise ToolError("OCR text extraction failed")
+
+    if res is None:
+        logger.error("OCR failed to extract text")
+        return "OCR failed to extract text"
 
     def update_session(session: SessionState):
         session.text = res  # pyright: ignore[reportAttributeAccessIssue]
@@ -105,4 +112,5 @@ if __name__ == "__main__":
     if flattened_img is None:
         print("Error: None")
         exit(-1)
+    flattened_img = flattened_img[0]
     print(run_ocr("en", flattened_img))

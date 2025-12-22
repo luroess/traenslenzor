@@ -40,7 +40,7 @@ def sample_text() -> TranslatedTextItem:
             BBoxPoint(x=10, y=30),
         ],
         confidence=0.98,
-        font_size="16",
+        font_size=16,
         color=(0, 0, 0),
         detectedFont="Arial",
     )
@@ -58,7 +58,7 @@ def sample_img_fixture() -> PILImage:
 
 @pytest.fixture
 def sample_img_skewed() -> PILImage:
-    return Image.open(Path(__file__).parent / "fixtures" / "skewed_image_5.png").convert("RGB")
+    return Image.open(Path(__file__).parent / "fixtures" / "skewed_image_3.jpeg").convert("RGB")
 
 
 @pytest.fixture
@@ -134,7 +134,7 @@ def test_create_mask_clamps_to_boundaries(renderer: ImageRenderer) -> None:
             BBoxPoint(x=80, y=130),
         ],
         confidence=0.98,
-        font_size="16",
+        font_size=16,
         color=(0, 0, 0),
         detectedFont="Arial",
     )
@@ -191,7 +191,7 @@ def test_draw_texts_respects_font_properties(renderer: ImageRenderer) -> None:
             BBoxPoint(x=10, y=30),
         ],
         confidence=0.98,
-        font_size="24",
+        font_size=24,
         color=(255, 0, 0),
         detectedFont="Arial",
     )
@@ -351,7 +351,7 @@ async def test_draw_rotated_text(
         translatedText="Test",
         bbox=rotated_bbox_points,
         confidence=0.98,
-        font_size="18",
+        font_size=18,
         color=(255, 255, 255),
         detectedFont="Arial",
     )
@@ -436,7 +436,7 @@ async def test_transform_image_with_ocr_bbox(renderer: ImageRenderer, sample_img
 
     assert result is not None
 
-    unskewed_img, matrix = result
+    unskewed_img, matrix,pts = result
     unskewed_pil = Image.fromarray(unskewed_img)
     unskewed_pil.save("./debug/deskewed_image.png")
 
@@ -479,7 +479,7 @@ async def test_transform_image(renderer: ImageRenderer, sample_img_skewed: PILIm
     if result is None:
         assert False
 
-    unskewed_img, matrix = result
+    unskewed_img, matrix, pts = result
     unskewed_pil = Image.fromarray(unskewed_img)
     unskewed_pil.save("./debug/deskewed_image.png")
 
@@ -495,7 +495,7 @@ async def test_transform_image(renderer: ImageRenderer, sample_img_skewed: PILIm
         translatedText="Im Falle von Brand? Bier!",
         bbox=bbox,
         confidence=0.98,
-        font_size="18",
+        font_size=18,
         color=(0, 0, 0),
         detectedFont="Arial",
     )

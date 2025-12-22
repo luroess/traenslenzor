@@ -26,7 +26,7 @@ def get_angle_from_bbox(bbox: List[BBoxPoint]) -> tuple[float, NDArray[np.float6
     delta_x = ur.x - ul.x
     delta_y = ur.y - ul.y
 
-    radians = np.atan2(delta_y, delta_x)
+    radians = np.arctan2(delta_y, delta_x)
     transformation_matrix = np.array(
         [[np.cos(radians), -np.sin(radians)], [np.sin(radians), np.cos(radians)]]
     )

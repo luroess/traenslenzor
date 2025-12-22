@@ -65,12 +65,15 @@ def find_document_corners(image: NDArray[np.uint8]) -> Optional[NDArray[np.float
 
 def deskew_document(
     image: NDArray[np.uint8],
-) -> Optional[tuple[NDArray[np.uint8], NDArray[np.float64]]]:
+) -> Optional[tuple[NDArray[np.uint8], NDArray[np.float64], NDArray[np.float32]]]:
     pts = find_document_corners(image)
     if pts is None:
         logger.error("No document corners identified in image")
         return None
-    return _warp_to_rectangle(image, pts)
+
+    flattend_img, matrix = _warp_to_rectangle(image, pts)
+
+    return (flattend_img, matrix, pts)
 
 
 if __name__ == "__main__":
