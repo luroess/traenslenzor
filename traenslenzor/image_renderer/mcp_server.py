@@ -163,7 +163,7 @@ async def replace_text(
 
     final_image = renderer.paste_replaced_to_original(original_image, final_image)
 
-    if SAVE_DEBUG:
+    if settings.llm.debug_mode:
         debug_path = Path(DEBUG_DIR)
         debug_path.mkdir(parents=True, exist_ok=True)
         final_image.save(debug_path / "debug-result.png")
