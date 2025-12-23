@@ -14,6 +14,7 @@ from pydantic import Field
 from traenslenzor.file_server.client import FileClient, SessionClient
 from traenslenzor.file_server.session_state import SessionState, TranslatedTextItem
 from traenslenzor.image_renderer.image_rendering import ImageRenderer
+from traenslenzor.supervisor.config import settings
 
 ADDRESS = "127.0.0.1"
 PORT = 8006
@@ -21,7 +22,6 @@ IMAGE_RENDERER_BASE_PATH = f"http://{ADDRESS}:{PORT}/mcp"
 
 # Debug configuration
 DEBUG_DIR = "./debug"
-SAVE_DEBUG = True
 
 # Initialize FastMCP server
 image_renderer_mcp = FastMCP("Image Renderer")
@@ -143,7 +143,7 @@ async def replace_text(
     result_image = await renderer.replace_text(
         image=image,
         texts=translated_texts,
-        save_debug=SAVE_DEBUG,
+        save_debug=settings.llm.debug_mode,
         debug_dir=DEBUG_DIR,
     )
 

@@ -151,8 +151,6 @@ def draw_texts(
 
         # Paste rotated text onto main image
         pil_image.paste(rotated, (paste_x, paste_y), rotated)
-        # print(pil_image.mode, rotated.mode)
-        # alpha_composite(pil_image, temp_image)
         if debug:
             pil_draw = ImageDraw.Draw(pil_image)
             bbox_coords = [(point.x, point.y) for point in text.bbox]

@@ -30,7 +30,7 @@ async def translate(text: TextItem, lang: str) -> TranslatedTextItem:
         bbox=text.bbox,
         color=text.color,
         detectedFont=getattr(text, "detectedFont", "Arial"),
-        font_size=getattr(text, "font_size", "16"),
+        font_size=getattr(text, "font_size", 16),
     )
 
 
