@@ -81,6 +81,7 @@ async def context_aware_prompt(request: ModelRequest) -> str:
         You have multiple tools available.
         Execute all of the tools in a sensible order.
         You must execute all of the tools available to you.
+        In case you miss necessary information, such as the document or language, please return a question to the user.
 
     Context:
         {formatted_session}
