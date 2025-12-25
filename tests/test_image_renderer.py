@@ -436,7 +436,7 @@ async def test_transform_image_with_ocr_bbox(renderer: ImageRenderer, sample_img
 
     assert result is not None
 
-    unskewed_img, matrix,pts = result
+    unskewed_img, matrix, pts = result
     unskewed_pil = Image.fromarray(unskewed_img)
     unskewed_pil.save("./debug/deskewed_image.png")
 
