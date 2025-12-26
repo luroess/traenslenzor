@@ -18,7 +18,9 @@ def _order_points(pts: NDArray[np.float32]) -> NDArray[np.float32]:
     return np.array([top_left, top_right, bottom_right, bottom_left], dtype=np.float32)
 
 
-def _warp_to_rectangle(image: NDArray[np.uint8], pts: NDArray[np.float32]) -> NDArray[np.uint8]:
+def _warp_to_rectangle(
+    image: NDArray[np.uint8], pts: NDArray[np.float32]
+) -> tuple[NDArray[np.uint8], NDArray[np.float64]]:
     rect = _order_points(pts)
     (tl, tr, br, bl) = rect
 
@@ -33,7 +35,7 @@ def _warp_to_rectangle(image: NDArray[np.uint8], pts: NDArray[np.float32]) -> ND
     dst = np.array([[0, 0], [maxW - 1, 0], [maxW - 1, maxH - 1], [0, maxH - 1]], dtype=np.float32)
     M = cv2.getPerspectiveTransform(rect, dst)
     warped = cv2.warpPerspective(image, M, (maxW, maxH), flags=cv2.INTER_LINEAR)
-    return cast(NDArray[np.uint8], warped)
+    return (cast(NDArray[np.uint8], warped), np.array(M).astype(np.float64))
 
 
 def find_document_corners(image: NDArray[np.uint8]) -> Optional[NDArray[np.float32]]:
@@ -61,19 +63,24 @@ def find_document_corners(image: NDArray[np.uint8]) -> Optional[NDArray[np.float
     return None
 
 
-def deskew_document(image: NDArray[np.uint8]) -> Optional[NDArray[np.uint8]]:
+def deskew_document(
+    image: NDArray[np.uint8],
+) -> Optional[tuple[NDArray[np.uint8], NDArray[np.float64], NDArray[np.float32]]]:
     pts = find_document_corners(image)
     if pts is None:
         logger.error("No document corners identified in image")
         return None
-    return _warp_to_rectangle(image, pts)
+
+    flattend_img, matrix = _warp_to_rectangle(image, pts)
+
+    return (flattend_img, matrix, pts)
 
 
 if __name__ == "__main__":
     dir_path = os.path.dirname(os.path.realpath(__file__))
     image_path = dir_path + "/../../test_images/skewed_image_1.jpeg"
     img = cv2.imread(image_path)
-    flat = deskew_document(img)  # type: ignore
+    flat, matrix = deskew_document(img)  # type: ignore
     cv2.imshow("Image", flat)  # type: ignore
     cv2.waitKey(0)
     cv2.destroyAllWindows()
