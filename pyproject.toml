@@ -66,6 +66,7 @@ dependencies = [
     "jaxtyping>=0.3.3",
     "typing-extensions>=4.15.0",
     "syrenka>=0.5.7",
+    "watchdog>=6.0.0",
 ]
 
 [dependency-groups]
