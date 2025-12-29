@@ -79,8 +79,10 @@ async def context_aware_prompt(request: ModelRequest) -> str:
         Your goal is to turn an image with text in one language into an image in another language.
         Do not imitate actions or describe intended tool use.
         You have multiple tools available.
-        Execute all of the tools in a sensible order.
+        All available tools must be executed in a sensible order.
         You must execute all of the tools available to you.
+        Once all tools have been called, output a use summary user message, offering further changes if required.
+        Never emit a tool call as user output.
         In case you miss necessary information, such as the document or language, please return a question to the user.
 
     Context:
