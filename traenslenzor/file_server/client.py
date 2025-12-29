@@ -10,7 +10,7 @@ from PIL import Image
 from PIL.Image import Image as PILImage
 
 from traenslenzor.file_server.server import ADDRESS, PORT
-from traenslenzor.file_server.session_state import SessionState
+from traenslenzor.file_server.session_state import SessionProgress, SessionState
 from traenslenzor.image_utils.image_utils import pil_to_numpy
 
 FILES_ENDPOINT = f"http://{ADDRESS}:{PORT}/files"
@@ -144,3 +144,11 @@ class SessionClient:
         session = await SessionClient.get(session_id)
         updater(session)
         await SessionClient.put(session_id, session)
+
+    @staticmethod
+    async def get_progress(session_id: str) -> SessionProgress:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{SESSION_ENDPOINT}/{session_id}/progress")
+        if not resp.is_success:
+            raise Exception(f"Failed to get session progress for id '{session_id}'.")
+        return SessionProgress(**resp.json())
