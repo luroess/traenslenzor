@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Literal, TypeVar, cast
 
 import streamlit as st
 from PIL import ImageDraw
+from PIL.Image import Image
 
 from traenslenzor.file_server.client import FileClient, SessionClient
 from traenslenzor.file_server.session_state import (
@@ -24,7 +25,6 @@ from traenslenzor.supervisor.supervisor import run as run_supervisor
 
 if TYPE_CHECKING:
     from langchain_core.messages import BaseMessage
-    from PIL.Image import Image
     from streamlit.elements.widgets.chat import ChatInputValue
 
     from traenslenzor.file_server.session_state import BBoxPoint, TextItem
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 _STAGES = ["raw", "extracted", "rendered"]
-ENABLE_SESSION_POLLING = False
+ENABLE_SESSION_POLLING = True
 ENABLE_SUPERVISOR_POLLING = True
 _SUPERVISOR_POLL_INTERVAL_SECONDS = 2
 
