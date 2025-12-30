@@ -78,14 +78,13 @@ if __name__ == "__main__":
         elif arg.startswith("--config_path="):
             config_path_arg = Path(arg.split("=", 1)[1])
         elif arg == "--resnet_sweep":
-            use_resnet_sweep = True
+            sweep_path_arg = Path(".configs/resnet_sweep.py")
+        elif arg == "--alexnet_sweep":
+            sweep_path_arg = Path(".configs/alexnet_sweep.py")
         elif arg == "--sweep_path" and i + 1 < len(sys.argv):
             sweep_path_arg = Path(sys.argv[i + 1])
         elif arg.startswith("--sweep_path="):
             sweep_path_arg = Path(arg.split("=", 1)[1])
-
-    if use_resnet_sweep and sweep_path_arg is None:
-        sweep_path_arg = Path(".configs/resnet_sweep.py")
 
     if sweep_path_arg is not None:
         sweep_config = _load_sweep_experiment(sweep_path_arg)
