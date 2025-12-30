@@ -8,14 +8,13 @@ from concurrent.futures import Future
 from typing import TYPE_CHECKING, Literal, TypeVar, cast
 
 import streamlit as st
+from langchain_core.messages import BaseMessage
 from PIL import ImageDraw
 from PIL.Image import Image
 
 from traenslenzor.file_server.client import FileClient, SessionClient
 from traenslenzor.file_server.session_state import (
-    BBoxPoint,
     SessionState,
-    TextItem,
     initialize_session,
 )
 from traenslenzor.logger import setup_logger
@@ -23,8 +22,17 @@ from traenslenzor.streamlit.prompt_presets import PromptPreset, get_prompt_prese
 from traenslenzor.supervisor.supervisor import run as run_supervisor
 
 if TYPE_CHECKING:
-    from langchain_core.messages import BaseMessage
     from streamlit.elements.widgets.chat import ChatInputValue
+
+    from traenslenzor.file_server.session_state import BBoxPoint, TextItem
+
+
+T = TypeVar("T")
+
+_STAGES = ["raw", "extracted", "rendered"]
+ENABLE_SESSION_POLLING = False
+ENABLE_SUPERVISOR_POLLING = True
+_SUPERVISOR_POLL_INTERVAL_SECONDS = 2
 
 DEFAULT_ASSISTANT_MESSAGE = (
     "Document Assistant Ready! I can help you with document operations. Please provide a document:"
@@ -58,13 +66,6 @@ _ensure_defaults()
 setup_logger()
 logger = logging.getLogger(__name__)
 st.set_page_config(layout="wide")
-
-T = TypeVar("T")
-
-_STAGES = ["raw", "extracted", "rendered"]
-ENABLE_SESSION_POLLING = False
-ENABLE_SUPERVISOR_POLLING = True
-_SUPERVISOR_POLL_INTERVAL_SECONDS = 2
 
 
 class AsyncRunner:
@@ -342,26 +343,31 @@ def _render_session_overview(session: SessionState | None) -> None:
             st.json(session.model_dump(), expanded=False)
 
 
-@st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
-def _render_sidebar_fragment() -> None:
-    """Sidebar fragment that polls for session updates while supervisor runs."""
-    # Check if supervisor finished and trigger full app rerun to process result
+def _maybe_rerun_if_supervisor_done() -> None:
+    """Trigger a full app rerun when the background supervisor finishes."""
     future = _get_pending_supervisor_future()
     if future is not None and future.done():
         st.rerun(scope="app")
 
-    session = _get_active_session(force_refresh=_is_supervisor_running())
 
+def _render_session_sidebar_content() -> None:
+    """Render the sidebar's Session panel using cached or refreshed state."""
+    session = _get_active_session(force_refresh=_is_supervisor_running())
     st.subheader("Session")
     _render_session_overview(session)
 
 
 @st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
+def _render_sidebar_fragment() -> None:
+    """Sidebar fragment that polls for session updates while supervisor runs."""
+    _maybe_rerun_if_supervisor_done()
+    _render_session_sidebar_content()
+
+
+@st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
 def _render_supervisor_watchdog() -> None:
     """Poll for supervisor completion and trigger an app rerun."""
-    future = _get_pending_supervisor_future()
-    if future is not None and future.done():
-        st.rerun(scope="app")
+    _maybe_rerun_if_supervisor_done()
 
 
 def _render_sidebar() -> None:
@@ -373,9 +379,7 @@ def _render_sidebar() -> None:
     if ENABLE_SUPERVISOR_POLLING and _is_supervisor_running():
         _render_supervisor_watchdog()
 
-    session = _get_active_session(force_refresh=_is_supervisor_running())
-    st.subheader("Session")
-    _render_session_overview(session)
+    _render_session_sidebar_content()
 
 
 def _render_chat(history: list[dict[str, str]]) -> None:
