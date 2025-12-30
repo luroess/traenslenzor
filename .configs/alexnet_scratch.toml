@@ -9,7 +9,7 @@ is_debug          = false
 fast_dev_run      = false
 accelerator       = "auto"
 strategy          = "auto"
-max_epochs        = 10
+max_epochs        = 15
 precision         = "32-true"
 log_every_n_steps = 50
 use_wandb         = true
@@ -30,7 +30,6 @@ use_wandb         = true
     project = "doc-class-detector"
     entity  = "traenslenzor"
     tags    = ["alexnet", "scratch"]
-    notes   = "Training AlexNet from scratch on RVL-CDIP document classification"
 
 [module_config]
 backbone = "alexnet" # BackboneType.ALEXNET
@@ -40,16 +39,16 @@ backbone = "alexnet" # BackboneType.ALEXNET
     weight_decay  = 0.0005   # Standard L2 regularization
 
     [module_config.scheduler]
-    max_lr           = 0.000327 # Match tuner suggestion for max LR
+    max_lr           = 0.000527 # Match tuner suggestion for max LR
     base_momentum    = 0.85
     max_momentum     = 0.95
-    div_factor       = 10.0     # lr_start = max_lr / 10  = 3.27e-5
-    final_div_factor = 20.0     # lr_final = max_lr / (10*20) = 1.635e-6
+    div_factor       = 25.0     # lr_start = max_lr / 25  = 2.108e-5
+    final_div_factor = 1e3      # lr_final = max_lr / (10*20) = 1.635e-6
     pct_start        = 0.15     # 15% warmup, then cosine decay
     anneal_strategy  = "cos"
 
 [datamodule_config]
-batch_size         = 42    # 48 barely fits onto 3090 (11.5GB VRAM) so reduced to 42
+batch_size         = 44    # 48 barely fits onto 3090 (11.5GB VRAM) so reduced to 42
 persistent_workers = true
 is_debug           = false
 verbose            = true
@@ -58,8 +57,11 @@ verbose            = true
     [datamodule_config.train_ds]
         [datamodule_config.train_ds.transform_config]
         # Aggressive augmentation for scratch training
-        transform_type    = "train"
-        p_color_jitter    = 0.5
-        p_perspective     = 0.3
-        p_affine          = 0.3
-        p_horizontal_flip = 0.5
+        transform_type = "train"
+        convert_to_rgb = false
+
+    [datamodule_config.val_ds]
+        [datamodule_config.val_ds.transform_config]
+        # Aggressive augmentation for scratch training
+        transform_type = "val"
+        convert_to_rgb = false
