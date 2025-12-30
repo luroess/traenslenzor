@@ -142,7 +142,13 @@ class BackboneType(StrEnum):
     RESNET50 = "resnet50"
     VIT_B16 = "vit_b_16"
 
-    def build(self, num_classes: int, train_head_only: bool, use_pretrained: bool) -> BackboneSpec:
+    def build(
+        self,
+        num_classes: int,
+        train_head_only: bool,
+        use_pretrained: bool,
+        model_params: AlexNetParams | None = None,
+    ) -> BackboneSpec:
         """Instantiate the selected backbone and head pair.
 
         Args:
@@ -155,8 +161,12 @@ class BackboneType(StrEnum):
         """
         match self:
             case BackboneType.ALEXNET:
-                alexnet = AlexNetParams(num_classes=num_classes).setup_target()
-                backbone = alexnet.features
+                if model_params is None:
+                    model_params = AlexNetParams(num_classes=num_classes)
+                else:
+                    object.__setattr__(model_params, "num_classes", num_classes)
+                alexnet = model_params.setup_target()
+                backbone = alexnet.backbone
                 if train_head_only:
                     _set_requires_grad(backbone, requires_grad=False)
                 return BackboneSpec(alexnet, backbone, head=alexnet.classifier)
@@ -191,6 +201,9 @@ class DocClassifierConfig(BaseConfig["DocClassifierModule"]):
     target: type["DocClassifierModule"] = Field(
         default_factory=lambda: DocClassifierModule, exclude=True
     )
+
+    model_params: AlexNetParams | None = None
+    """Model-specific parameters (e.g. for AlexNet)."""
 
     num_classes: int = 16
     """Number of document classes (RVL-CDIP has 16)."""
