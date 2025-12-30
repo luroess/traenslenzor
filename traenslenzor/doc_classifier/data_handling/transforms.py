@@ -89,7 +89,6 @@ class TransformConfig(BaseConfig[A.Compose]):
             min_height=self.img_size,
             min_width=self.img_size,
             border_mode=0,
-            value=255,
         )
 
     def _resize_and_pad(self) -> list[A.BasicTransform]:
@@ -141,7 +140,7 @@ class TrainTransformConfig(TransformConfig):
                 ),
                 A.Perspective(scale=(0.02, 0.05), p=0.3),  # Simulate camera perspective
                 # Document-specific degradations
-                A.GaussNoise(std_range=(0.02, 0.08), p=0.3),  # Scanner noise
+                A.GaussNoise(std_range=(0.05, 0.1), p=0.3),  # Scanner noise
                 A.GaussianBlur(blur_limit=(3, 5), p=0.2),  # Slight blur
                 A.MotionBlur(blur_limit=3, p=0.2),  # Motion artifacts
                 # Brightness/contrast (common in scanned documents)
@@ -152,7 +151,7 @@ class TrainTransformConfig(TransformConfig):
                 ),
                 A.RandomGamma(gamma_limit=(80, 120), p=0.3),
                 # Channel handling
-                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.ToGray(p=1.0, num_output_channels=1)),
+                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.NoOp()),
                 self._normalization_transform(),
                 ToTensorV2(),
             ]
@@ -185,7 +184,7 @@ class FineTuneTransformConfig(TransformConfig):
                     p=0.3,
                 ),
                 # Convert channels
-                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.ToGray(p=1.0, num_output_channels=1)),
+                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.NoOp()),
                 # Normalization and tensor conversion
                 self._normalization_transform(),
                 ToTensorV2(),
@@ -222,7 +221,7 @@ class FineTunePlusTransformConfig(TransformConfig):
                     p=0.4,
                 ),
                 A.RandomGamma(gamma_limit=(90, 110), p=0.2),
-                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.ToGray(p=1.0, num_output_channels=1)),
+                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.NoOp()),
                 self._normalization_transform(),
                 ToTensorV2(),
             ]
@@ -248,7 +247,7 @@ class ValTransformConfig(TransformConfig):
             [
                 *self._resize_and_pad(),
                 # Convert grayscale to desired channel count
-                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.ToGray(p=1.0, num_output_channels=1)),
+                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.NoOp()),
                 self._normalization_transform(),
                 ToTensorV2(),
             ]
