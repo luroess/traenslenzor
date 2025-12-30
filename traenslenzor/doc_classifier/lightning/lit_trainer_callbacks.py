@@ -22,7 +22,9 @@ from ..utils import BaseConfig, Metric
 from .finetune_callback import OneCycleBackboneFinetuning
 
 if TYPE_CHECKING:
-    pass
+    from optuna import Trial
+
+    from ..configs.optuna_config import OptunaConfig
 
 
 class CustomTQDMProgressBar(TQDMProgressBar):
@@ -77,6 +79,9 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
     use_lr_monitor: bool = True
     lr_logging_interval: str = "epoch"
 
+    use_optuna_pruning: bool = False
+    """Enable Optuna pruning callback for hyperparameter optimization runs."""
+
     use_rich_progress_bar: bool = False
     """Enable Rich progress bar for enhanced terminal output. Mutually exclusive with use_tqdm_progress_bar."""
 
@@ -127,9 +132,25 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
         safe_name = cls._sanitize_metric_name(monitor_name)
         return f"epoch={{epoch}}-{safe_name}=" + "{" + monitor_name + ":.2f}"
 
-    def setup_target(self, model_name: str | None = None) -> list[Callback]:
+    def setup_target(  # type: ignore[override]
+        self,
+        model_name: str | None = None,
+        *,
+        trial: "Trial | None" = None,
+        optuna_config: "OptunaConfig | None" = None,
+    ) -> list[Callback]:
         console = Console.with_prefix(self.__class__.__name__)
         callbacks: list[Callback] = []
+
+        if trial:
+            object.__setattr__(self, "use_model_checkpoint", False)
+            object.__setattr__(self, "use_early_stopping", False)
+            if self.use_optuna_pruning is False:
+                console.warn(
+                    "Optuna trial provided but use_optuna_pruning is False. "
+                    "Enabling use_optuna_pruning."
+                )
+                object.__setattr__(self, "use_optuna_pruning", True)
 
         if self.use_model_checkpoint:
             dirpath = (
@@ -213,5 +234,13 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
                     interval=self.timer_interval,
                 ),
             )
+
+        if self.use_optuna_pruning:
+            if optuna_config is None:
+                raise ValueError("optuna_config is required when use_optuna_pruning is True.")
+            if trial is None:
+                raise ValueError("trial is required when use_optuna_pruning is True.")
+            callbacks.append(optuna_config.get_pruning_callback(trial))
+            console.log(f"Optuna pruning active (monitor={optuna_config.monitor})")
 
         return callbacks

@@ -17,6 +17,8 @@ from ..utils import BaseConfig, Console
 from .lit_trainer_callbacks import TrainerCallbacksConfig
 
 if TYPE_CHECKING:
+    from optuna import Trial
+
     from ..configs.experiment_config import ExperimentConfig
 
 
@@ -146,11 +148,17 @@ class TrainerFactoryConfig(BaseConfig):
             self.wandb_config.tags = sorted(tags)
             console.log(f"Added stage tag to W&B: {stage}")
 
-    def setup_target(self, experiment: Optional["ExperimentConfig"] = None) -> pl.Trainer:
+    def setup_target(
+        self,
+        experiment: Optional["ExperimentConfig"] = None,
+        *,
+        trial: "Trial | None" = None,
+    ) -> pl.Trainer:
         """Instantiate the configured trainer.
 
         Args:
             experiment: Optional experiment config (ignored currently, kept for API compatibility).
+            trial: Optional Optuna trial to attach pruning callbacks when enabled.
         """
         console = Console.with_prefix(self.__class__.__name__, "setup_target")
         if experiment is not None:
@@ -170,7 +178,9 @@ class TrainerFactoryConfig(BaseConfig):
         console.log(f"Max epochs: {self.max_epochs}, precision: {self.precision}")
 
         callbacks = self.callbacks.setup_target(
-            model_name=experiment.module_config.backbone if experiment else None
+            model_name=experiment.module_config.backbone if experiment else None,
+            trial=trial,
+            optuna_config=experiment.optuna_config if experiment else None,
         )
         console.log(f"Configured {len(callbacks)} callbacks: ")
         console.plog(list(map(lambda cb: type(cb).__name__, callbacks)))

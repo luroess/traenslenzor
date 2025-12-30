@@ -5,7 +5,7 @@ from typing import Any, Callable, Literal
 import optuna
 import wandb
 from optuna import pruners, samplers
-from optuna.integration.pytorch_lightning import PyTorchLightningPruningCallback
+from optuna_integration import PyTorchLightningPruningCallback
 from pydantic import Field
 from pytorch_lightning import Callback
 
