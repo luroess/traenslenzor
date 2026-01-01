@@ -1,3 +1,4 @@
+import os
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
@@ -15,6 +16,9 @@ from traenslenzor.image_renderer.text_operations import create_mask, draw_texts,
 from traenslenzor.text_extractor.flatten_image import deskew_document
 from traenslenzor.text_extractor.paddleocr import run_ocr
 from traenslenzor.translator.translator import translate_all
+
+# Skip tests that require model downloads when running in CI
+IN_CI = os.getenv("CI") == "true"
 
 
 @pytest.fixture
@@ -311,6 +315,7 @@ def test_bbox_to_rotation() -> None:
         )  # Allow small numerical error
 
 
+@pytest.mark.skipif(IN_CI, reason="Skip model download in CI")
 @pytest.mark.anyio
 async def test_draw_rotated_text(
     renderer: ImageRenderer,
@@ -428,6 +433,7 @@ async def test_draw_rotated_text(
     )
 
 
+@pytest.mark.skipif(IN_CI, reason="Skip model download in CI")
 @pytest.mark.anyio
 async def test_transform_image_with_ocr_bbox(renderer: ImageRenderer, sample_img_skewed: PILImage):
     print("Starting deskewing process...")
@@ -472,6 +478,7 @@ async def test_transform_image_with_ocr_bbox(renderer: ImageRenderer, sample_img
     composited.save("./debug/replaced_full.png")
 
 
+@pytest.mark.skipif(IN_CI, reason="Skip model download in CI")
 @pytest.mark.anyio
 async def test_transform_image(renderer: ImageRenderer, sample_img_skewed: PILImage):
     result = deskew_document(np.array(sample_img_skewed))

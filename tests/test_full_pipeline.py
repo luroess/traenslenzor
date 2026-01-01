@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pytest
 from fastmcp import Client
@@ -11,6 +13,9 @@ from traenslenzor.image_renderer.mcp_server import image_renderer_mcp
 from traenslenzor.text_extractor.flatten_image import deskew_document
 from traenslenzor.text_extractor.mcp import text_extractor
 from traenslenzor.translator.mcp import translator
+
+# Skip tests that require model downloads when running in CI
+IN_CI = os.getenv("CI") == "true"
 
 
 def create_test_image(texts: list[str]) -> PILImage:
@@ -88,6 +93,7 @@ async def create_extracted_document(
     return document
 
 
+@pytest.mark.skipif(IN_CI, reason="Skip model download in CI")
 @pytest.mark.anyio
 async def test_full_pipeline(file_server):
     test_texts = [
