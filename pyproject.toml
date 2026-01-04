@@ -30,8 +30,6 @@ dependencies = [
     "langgraph>=1.0.0",
     "numpy>=1.26.4,<2.3.0",
     "opencv-python>=4.11.0.86",
-    "paddleocr>=3.3.1",
-    "paddlepaddle>=3.2.1",
     "types-aiofiles>=25.1.0.20251011",
     "requests>=2.31.0",
     "transformers>=4.30.0",
@@ -74,6 +72,7 @@ dev = [
     "typing-extensions>=4.15.0",
     "syrenka>=0.5.7",
     "watchdog>=6.0.0",
+    "pytesseract>=0.3.13",
 ]
 
 notebook = [
