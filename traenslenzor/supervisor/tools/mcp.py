@@ -4,6 +4,7 @@ from traenslenzor.doc_classifier.mcp_integration.mcp_server import DOC_CLASSIFIE
 from traenslenzor.font_detector.mcp import FONT_DETECTOR_BASE_PATH
 from traenslenzor.image_renderer.mcp_server import IMAGE_RENDERER_BASE_PATH
 from traenslenzor.text_extractor.mcp import TEXT_EXTRACTOR_BASE_PATH
+from traenslenzor.text_optimizer.mcp import TEXT_OPTIMIZER_PATH
 from traenslenzor.translator.mcp import TRANSLATOR_PATH
 
 MCP_SERVERS: dict[str, Connection] = {
@@ -26,6 +27,10 @@ MCP_SERVERS: dict[str, Connection] = {
     "document_classifier": {
         "transport": "streamable_http",
         "url": DOC_CLASSIFIER_BASE_PATH,
+    },
+    "text_optimizer": {
+        "transport": "streamable_http",
+        "url": TEXT_OPTIMIZER_PATH,
     },
 }
 
