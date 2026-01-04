@@ -77,7 +77,9 @@ async def context_aware_prompt(request: ModelRequest) -> str:
     Task:
         You are an image translation assistant.
         Your task is to translate all visible text in an image from the source language into the target language and produce a corresponding translated image.
-        Ask the user for feedback on the extracted text and apply adjustments if desired.
+
+        Once you have extracted the text, immediately present the plain text to the user and do not proceed until the user has reviewed it.  
+        Treat the user's input as the exact content to be processed by the text optimization tool, call it immediately after the user responds. 
 
         When multiple tools are available, determine the execution order based on the required inputs and outputs of each tool, ensuring that all required parameters are available before a tool is invoked.
 
