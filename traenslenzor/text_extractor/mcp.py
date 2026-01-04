@@ -108,9 +108,8 @@ if __name__ == "__main__":
     dir_path = os.path.dirname(os.path.realpath(__file__))
     image_path = dir_path + "/../../test_images/skewed_image_1.jpeg"
     npimg = load_image_as_bytes(image_path)
-    # run_ocr("en", npimg)
 
-    flattened_img = deskew_document(npimg)
+    _, flattened_img = deskew_document(npimg)
     if flattened_img is None:
         print("Error: None")
         exit(-1)
