@@ -165,7 +165,7 @@ class ExtractedDocument(BaseModel):
     transformation_matrix: list[list[float]]
     """3x3 transformation matrix from OpenCV's getPerspectiveTransform used by `traenslenzor.image_renderer.mcp_server.replace_text` to transform rendered text back to original image space."""
     documentCoordinates: list[BBoxPoint]
-    """Document polygon for the deskewed image (currently empty in `traenslenzor.text_extractor.mcp.extract_text`)."""
+    """Document polygon for the deskewed image."""
 
 
 class SessionState(BaseModel):
