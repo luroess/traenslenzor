@@ -456,6 +456,8 @@ def fetch_image(
             file_id = session.rawDocumentId
             if not file_id:
                 failure_reason = "No raw document."
+            if session.extractedDocument:
+                document_coordinates = session.extractedDocument.documentCoordinates
         case "extracted":
             extracted = session.extractedDocument
             if extracted is None:
@@ -483,7 +485,7 @@ def fetch_image(
             elif failure_reason is None:
                 failure_reason = "Image not found."
 
-    if image is not None and stage == "extracted" and document_coordinates:
+    if image is not None and stage == "raw" and document_coordinates:
         image = _draw_document_outline(image, document_coordinates)
 
     return image, file_id, failure_reason
@@ -497,6 +499,17 @@ def _ensure_session_id() -> str:
     return session_id
 
 
+@st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
+def do_render_image(stage):
+    session = _get_active_session()
+    img, file_id, reason = fetch_image(session, stage)
+    if img is not None:
+        st.caption(f"{stage.title()} document image ({file_id}).")
+        st.image(img, width="stretch")
+    elif reason:
+        st.caption(reason)
+
+
 def _render_image(session: SessionState | None) -> None:
     if session is None:
         return
@@ -504,12 +517,7 @@ def _render_image(session: SessionState | None) -> None:
     tabs = st.tabs([stage.title() for stage in _STAGES])
     for stage, tab in zip(_STAGES, tabs):
         with tab:
-            img, file_id, reason = fetch_image(session, stage)
-            if img is not None:
-                st.caption(f"{stage.title()} document image ({file_id}).")
-                st.image(img, width="stretch")
-            elif reason:
-                st.caption(reason)
+            do_render_image(stage)
 
 
 def _collect_prompt() -> str | ChatInputValue | None:
