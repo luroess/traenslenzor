@@ -19,18 +19,23 @@ def parse_tesseract_lines(data) -> list[OCRTextItem]:
     confs = defaultdict(list)
     bboxes = defaultdict(list)
 
-    n = len(data['text'])
+    n = len(data["text"])
     for i in range(n):
-        text = data['text'][i].strip()
+        text = data["text"][i].strip()
         if not text:
             continue
-        block, line = data['block_num'][i], data['line_num'][i]
+        block, line = data["block_num"][i], data["line_num"][i]
         key = (block, line)
 
         lines[key].append(text)
-        confs[key].append(float(data['conf'][i]))
+        confs[key].append(float(data["conf"][i]))
 
-        left, top, width, height = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
+        left, top, width, height = (
+            data["left"][i],
+            data["top"][i],
+            data["width"][i],
+            data["height"][i],
+        )
         bbox = [
             BBoxPoint(x=left, y=top),
             BBoxPoint(x=left + width, y=top),
@@ -70,7 +75,6 @@ def tesseract_ocr_lines(npimg: np.ndarray) -> list[OCRTextItem]:
     return parse_tesseract_lines(data)
 
 
-
 def run_ocr(npimg: np.ndarray) -> Optional[Any]:
     try:
         return tesseract_ocr_lines(npimg)
@@ -97,7 +101,7 @@ def draw_text_items(npimg: np.ndarray, items: list[OCRTextItem]) -> np.ndarray:
             fontScale=0.5,
             color=(0, 0, 255),
             thickness=1,
-            lineType=cv2.LINE_AA
+            lineType=cv2.LINE_AA,
         )
 
     return img
