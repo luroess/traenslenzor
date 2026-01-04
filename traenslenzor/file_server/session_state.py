@@ -1,5 +1,4 @@
-from enum import StrEnum
-from typing import Any
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -52,33 +51,41 @@ class SessionState(BaseModel):
     """Rendered image id set by `traenslenzor.image_renderer.mcp.replace_text`."""
     text: list[TextItem] | None = None
     """OCR items set by `traenslenzor.text_extractor.mcp.extract_text` and enriched by `traenslenzor.font_detector.mcp.detect_font` and `traenslenzor.translator.mcp.translate`."""
-    tgt_language: str | None = None
+    language: str | None = None
     """Target language set by `traenslenzor.supervisor.tools.set_target_lang.set_target_language`."""
     class_probabilities: dict[str, float] | None = None
     """Class probabilities set by `traenslenzor.doc_class_detector.mcp.classify_document` or `traenslenzor.doc_classifier.mcp_integration.mcp_server.classify_document`."""
 
 
-class SessionEventType(StrEnum):
-    """Event types emitted when a session changes."""
-
-    SESSION_CREATED = "session_created"
-    SESSION_UPDATED = "session_updated"
-    SESSION_DELETED = "session_deleted"
-
-
-class SessionEvent(BaseModel):
-    """Session change event emitted by the file server."""
-
-    session_id: str
-    """Session id that changed."""
-    event_type: SessionEventType
-    """Type of change that occurred."""
-    timestamp: str
-    """UTC timestamp (ISO 8601)."""
-    payload: dict[str, Any] | None = None
-    """Optional metadata describing the change."""
-
-
 def initialize_session() -> SessionState:
     """Create a new empty session for the file server."""
     return SessionState()
+
+
+class SessionProgressStep(BaseModel):
+    """Represents a single workflow step and its completion status."""
+
+    label: str
+    done: bool
+    detail: str | None = None
+
+
+ProgressStage = Literal[
+    "awaiting_document",
+    "detecting_language",
+    "extracting_text",
+    "translating",
+    "detecting_font",
+    "classifying",
+    "rendering",
+]
+
+
+class SessionProgress(BaseModel):
+    """Derived progress summary for a session."""
+
+    session_id: str
+    stage: ProgressStage
+    completed_steps: int
+    total_steps: int
+    steps: list[SessionProgressStep]

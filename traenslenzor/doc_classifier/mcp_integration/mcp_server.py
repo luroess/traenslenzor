@@ -104,7 +104,9 @@ async def classify_document(
 
 
 async def run():
-    await doc_classifier_mcp.run_async(transport="streamable-http", host=ADDRESS, port=PORT)
+    await doc_classifier_mcp.run_async(
+        transport="streamable-http", host=ADDRESS, port=PORT, show_banner=False
+    )
 
 
 __all__ = [
