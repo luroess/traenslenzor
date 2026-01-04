@@ -343,7 +343,9 @@ async def detect_font(session_id: str) -> str:
 
 
 async def run():
-    await font_detector.run_async(transport="streamable-http", port=PORT, host=ADDRESS)
+    await font_detector.run_async(
+        transport="streamable-http", port=PORT, host=ADDRESS, show_banner=False
+    )
 
 
 if __name__ == "__main__":

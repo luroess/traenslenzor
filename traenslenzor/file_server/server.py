@@ -1,13 +1,18 @@
 import asyncio
 import uuid
 from io import BytesIO
-from typing import Dict, Tuple
+from typing import Dict, Tuple, get_args
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from uvicorn import Config, Server
 
-from traenslenzor.file_server.session_state import SessionState
+from traenslenzor.file_server.session_state import (
+    ProgressStage,
+    SessionProgress,
+    SessionProgressStep,
+    SessionState,
+)
 
 app = FastAPI(title="File Server")
 
@@ -15,6 +20,7 @@ ADDRESS = "127.0.0.1"
 PORT = 8001
 STORE: Dict[str, Tuple[bytes, str, str]] = {}
 STATE: Dict[str, SessionState] = {}
+PROGRESS_STAGE_ORDER: list[str] = list(get_args(ProgressStage))
 
 
 @app.post("/files")
@@ -72,6 +78,58 @@ async def get_session(session_id: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
+
+
+@app.get("/sessions/{session_id}/progress", response_model=SessionProgress)
+async def get_session_progress(session_id: str):
+    session = STATE.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return _compute_session_progress(session_id, session)
+
+
+def _compute_session_progress(session_id: str, session: SessionState) -> SessionProgress:
+    text_items = session.text or []
+    text_count = len(text_items)
+    translated = sum(bool(item.translatedText) for item in text_items)
+    fonted = sum(bool(item.detectedFont) for item in text_items)
+
+    def detail(count: int) -> str | None:
+        return None if not text_count else f"{count}/{text_count}"
+
+    class_probs = session.class_probabilities or {}
+    top_class = max(class_probs.items(), key=lambda item: item[1])[0] if class_probs else None
+
+    steps_data = [
+        ("Document loaded", bool(session.rawDocumentId or session.extractedDocument), None),
+        ("Language detected", bool(session.language), session.language),
+        ("Text extracted", text_count > 0, f"{text_count} items" if text_count else None),
+        ("Translated", text_count > 0 and translated == text_count, detail(translated)),
+        ("Font detected", text_count > 0 and fonted == text_count, detail(fonted)),
+        (
+            "Classified",
+            bool(class_probs),
+            f"{top_class} ({class_probs[top_class]:.0%})" if top_class else None,
+        ),
+        ("Rendered", bool(session.renderedDocumentId), None),
+    ]
+
+    steps = [
+        SessionProgressStep(label=label, done=done, detail=info) for label, done, info in steps_data
+    ]
+    fallback_stage = PROGRESS_STAGE_ORDER[-1] if PROGRESS_STAGE_ORDER else "rendering"
+    stage = next(
+        (PROGRESS_STAGE_ORDER[idx] for idx, step in enumerate(steps) if not step.done),
+        fallback_stage,
+    )
+
+    return SessionProgress(
+        session_id=session_id,
+        stage=stage,
+        completed_steps=sum(step.done for step in steps),
+        total_steps=len(steps),
+        steps=steps,
+    )
 
 
 @app.put("/sessions/{session_id}", response_model=SessionState)

@@ -14,6 +14,7 @@ from PIL.Image import Image
 from traenslenzor.file_server.client import FileClient, SessionClient
 from traenslenzor.file_server.session_state import (
     BBoxPoint,
+    SessionProgress,
     SessionState,
     TextItem,
     initialize_session,
@@ -25,6 +26,16 @@ from traenslenzor.supervisor.supervisor import run as run_supervisor
 if TYPE_CHECKING:
     from langchain_core.messages import BaseMessage
     from streamlit.elements.widgets.chat import ChatInputValue
+
+    from traenslenzor.file_server.session_state import BBoxPoint, TextItem
+
+
+T = TypeVar("T")
+
+_STAGES = ["raw", "extracted", "rendered"]
+ENABLE_SESSION_POLLING = True
+ENABLE_SUPERVISOR_POLLING = True
+_SUPERVISOR_POLL_INTERVAL_SECONDS = 2
 
 DEFAULT_ASSISTANT_MESSAGE = (
     "Document Assistant Ready! I can help you with document operations. Please provide a document:"
@@ -50,6 +61,9 @@ def _get_session_id() -> str | None:
 
 
 def _set_session_id(value: str | None) -> None:
+    if st.session_state.get("last_session_id") != value:
+        st.session_state.pop("cached_session", None)
+        st.session_state.pop("cached_progress", None)
     st.session_state["last_session_id"] = value
 
 
@@ -58,10 +72,6 @@ _ensure_defaults()
 setup_logger()
 logger = logging.getLogger(__name__)
 st.set_page_config(layout="wide")
-
-T = TypeVar("T")
-
-_STAGES = ["raw", "extracted", "rendered"]
 
 
 class AsyncRunner:
@@ -170,6 +180,7 @@ def _consume_pending_supervisor() -> bool:
     else:
         _set_session_id(session_id)
         st.session_state.pop("cached_session", None)  # Invalidate to fetch fresh
+        st.session_state.pop("cached_progress", None)
         _get_history().append({"role": "assistant", "content": msg.content})
         st.toast("Supervisor finished.", icon="✅")
     st.session_state.pop("pending_supervisor_future", None)
@@ -212,6 +223,25 @@ def _get_active_session(force_refresh: bool = False) -> SessionState | None:
         return None
 
 
+def _get_session_progress(force_refresh: bool = False) -> SessionProgress | None:
+    session_id = _get_session_id()
+    if not session_id:
+        st.session_state.pop("cached_progress", None)
+        return None
+
+    if not force_refresh:
+        cached = st.session_state.get("cached_progress")
+        if cached is not None:
+            return cast(SessionProgress, cached)
+
+    try:
+        progress = _run_async(SessionClient.get_progress(session_id))
+        st.session_state["cached_progress"] = progress
+        return progress
+    except Exception:
+        return None
+
+
 def _short_session_id(session_id: str) -> str:
     if len(session_id) <= 12:
         return session_id
@@ -226,22 +256,9 @@ def _count_text_items(text_items: list[TextItem] | None) -> tuple[int, int, int]
     return len(text_items), translated, fonts
 
 
-def _class_summary(class_probs: dict[str, float] | None) -> tuple[bool, str | None]:
-    if not class_probs:
-        return False, None
-    top_label, top_prob = max(class_probs.items(), key=lambda item: item[1])
-    return True, f"{top_label} ({top_prob:.0%})"
-
-
-def _progress_summary(count: int, total: int) -> tuple[bool, str | None]:
-    if total == 0:
-        return False, None
-    if count == total:
-        return True, f"{count}/{total}"
-    return False, f"{count}/{total}"
-
-
-def _render_session_overview(session: SessionState | None) -> None:
+def _render_session_overview(
+    session: SessionState | None, progress: SessionProgress | None
+) -> None:
     session_id = _get_session_id()
     if not session_id:
         st.caption("No active session yet.")
@@ -251,36 +268,24 @@ def _render_session_overview(session: SessionState | None) -> None:
         st.caption("Session state unavailable.")
         return
 
+    if progress is None:
+        st.caption("Session progress unavailable.")
+        return
+
     text_count, translated_count, font_count = _count_text_items(session.text)
-    has_document = bool(session.rawDocumentId or session.extractedDocument)
-    has_text = text_count > 0
-    has_render = bool(session.renderedDocumentId)
-    has_language = bool(session.language)
 
-    translation_done, translation_detail = _progress_summary(translated_count, text_count)
-    font_done, font_detail = _progress_summary(font_count, text_count)
-    class_done, class_detail = _class_summary(session.class_probabilities)
-
-    steps = [
-        ("Document loaded", has_document, None),
-        ("Language detected", has_language, session.language if has_language else None),
-        ("Text extracted", has_text, f"{text_count} items" if has_text else None),
-        ("Translated", translation_done, translation_detail),
-        ("Font detected", font_done, font_detail),
-        ("Classified", class_done, class_detail),
-        ("Rendered", has_render, None),
-    ]
-
-    done_count = sum(1 for _, done, _ in steps if done)
-    total_steps = len(steps)
+    done_count = progress.completed_steps
+    total_steps = progress.total_steps
+    progress_steps = [(step.label, step.done, step.detail) for step in progress.steps]
 
     # Header with session ID only
     with st.container(border=True):
         st.metric("Session", _short_session_id(session_id))
 
     # Progress bar and step checklist
-    st.progress(done_count / total_steps, text=f"{done_count}/{total_steps} complete")
-    for label, done, detail in steps:
+    progress_value = done_count / total_steps if total_steps else 0.0
+    st.progress(progress_value, text=f"{done_count}/{total_steps} complete")
+    for label, done, detail in progress_steps:
         suffix = f" — {detail}" if detail else ""
         st.checkbox(f"{label}{suffix}", value=done, disabled=True)
 
@@ -339,21 +344,45 @@ def _render_session_overview(session: SessionState | None) -> None:
             st.json(session.model_dump(), expanded=False)
 
 
-_SUPERVISOR_POLL_INTERVAL_SECONDS = 2
+def _maybe_rerun_if_supervisor_done() -> None:
+    """Trigger a full app rerun when the background supervisor finishes."""
+    future = _get_pending_supervisor_future()
+    if future is not None and future.done():
+        st.rerun(scope="app")
+
+
+def _render_session_sidebar_content() -> None:
+    """Render the sidebar's Session panel using cached or refreshed state."""
+    session = _get_active_session(force_refresh=_is_supervisor_running())
+    progress = _get_session_progress(force_refresh=_is_supervisor_running())
+
+    st.subheader("Session")
+    _render_session_overview(session, progress)
 
 
 @st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
 def _render_sidebar_fragment() -> None:
     """Sidebar fragment that polls for session updates while supervisor runs."""
-    # Check if supervisor finished and trigger full app rerun to process result
-    future = _get_pending_supervisor_future()
-    if future is not None and future.done():
-        st.rerun(scope="app")
+    _maybe_rerun_if_supervisor_done()
+    _render_session_sidebar_content()
 
-    session = _get_active_session(force_refresh=_is_supervisor_running())
 
-    st.subheader("Session")
-    _render_session_overview(session)
+@st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
+def _render_supervisor_watchdog() -> None:
+    """Poll for supervisor completion and trigger an app rerun."""
+    _maybe_rerun_if_supervisor_done()
+
+
+def _render_sidebar() -> None:
+    """Render sidebar with optional polling."""
+    if ENABLE_SESSION_POLLING:
+        _render_sidebar_fragment()
+        return
+
+    if ENABLE_SUPERVISOR_POLLING and _is_supervisor_running():
+        _render_supervisor_watchdog()
+
+    _render_session_sidebar_content()
 
 
 def _render_chat(history: list[dict[str, str]]) -> None:
@@ -508,6 +537,7 @@ def _handle_prompt(prompt: str | ChatInputValue) -> None:
                 SessionClient.update(session_id, lambda s: setattr(s, "rawDocumentId", file_id))
             )
             st.session_state.pop("cached_session", None)
+            st.session_state.pop("cached_progress", None)
             _get_history().append({"role": "user", "content": f"[Image pasted] {uploaded.name}"})
 
     # Build LLM input
@@ -537,7 +567,7 @@ def main() -> None:
         st.rerun()
 
     with st.sidebar:
-        _render_sidebar_fragment()
+        _render_sidebar()
 
     # Main layout uses cached session (fragment handles live updates)
     active_session = _get_active_session()

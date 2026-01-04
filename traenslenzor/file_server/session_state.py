@@ -100,3 +100,32 @@ class SessionState(BaseModel):
 def initialize_session() -> SessionState:
     """Create a new empty session for the file server."""
     return SessionState()
+
+
+class SessionProgressStep(BaseModel):
+    """Represents a single workflow step and its completion status."""
+
+    label: str
+    done: bool
+    detail: str | None = None
+
+
+ProgressStage = Literal[
+    "awaiting_document",
+    "detecting_language",
+    "extracting_text",
+    "translating",
+    "detecting_font",
+    "classifying",
+    "rendering",
+]
+
+
+class SessionProgress(BaseModel):
+    """Derived progress summary for a session."""
+
+    session_id: str
+    stage: ProgressStage
+    completed_steps: int
+    total_steps: int
+    steps: list[SessionProgressStep]
