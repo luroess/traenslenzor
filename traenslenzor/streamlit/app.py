@@ -5,16 +5,19 @@ import logging
 import threading
 from collections.abc import Awaitable
 from concurrent.futures import Future
+from queue import SimpleQueue
 from typing import TYPE_CHECKING, Literal, TypeVar, cast
 
 import streamlit as st
-from langchain_core.messages import BaseMessage
 from PIL import ImageDraw
 from PIL.Image import Image
 
 from traenslenzor.file_server.client import FileClient, SessionClient
 from traenslenzor.file_server.session_state import (
+    BBoxPoint,
+    SessionEvent,
     SessionState,
+    TextItem,
     initialize_session,
 )
 from traenslenzor.logger import setup_logger
@@ -22,17 +25,8 @@ from traenslenzor.streamlit.prompt_presets import PromptPreset, get_prompt_prese
 from traenslenzor.supervisor.supervisor import run as run_supervisor
 
 if TYPE_CHECKING:
+    from langchain_core.messages import BaseMessage
     from streamlit.elements.widgets.chat import ChatInputValue
-
-    from traenslenzor.file_server.session_state import BBoxPoint, TextItem
-
-
-T = TypeVar("T")
-
-_STAGES = ["raw", "extracted", "rendered"]
-ENABLE_SESSION_POLLING = False
-ENABLE_SUPERVISOR_POLLING = True
-_SUPERVISOR_POLL_INTERVAL_SECONDS = 2
 
 DEFAULT_ASSISTANT_MESSAGE = (
     "Document Assistant Ready! I can help you with document operations. Please provide a document:"
@@ -66,6 +60,10 @@ _ensure_defaults()
 setup_logger()
 logger = logging.getLogger(__name__)
 st.set_page_config(layout="wide")
+
+T = TypeVar("T")
+
+_STAGES = ["raw", "extracted", "rendered"]
 
 
 class AsyncRunner:
@@ -147,6 +145,46 @@ def _get_pending_supervisor_future() -> Future[tuple["BaseMessage", str | None]]
     )
 
 
+def _get_prompt_queue() -> list[tuple[str, int]]:
+    queue = st.session_state.setdefault("pending_prompt_queue", [])
+    return cast(list[tuple[str, int]], queue)
+
+
+def _append_assistant_placeholder(content: str) -> int:
+    history = _get_history()
+    history.append({"role": "assistant", "content": content})
+    return len(history) - 1
+
+
+def _update_history_content(index: int, content: str) -> None:
+    history = _get_history()
+    if 0 <= index < len(history):
+        history[index]["content"] = content
+
+
+def _maybe_start_next_prompt() -> None:
+    if _is_supervisor_running():
+        return
+    queue = _get_prompt_queue()
+    if not queue:
+        return
+    llm_input, placeholder_index = queue.pop(0)
+    _update_history_content(placeholder_index, "Running...")
+    session_id = _ensure_session_id()
+    future = _submit_async(run_supervisor(llm_input, session_id=session_id))
+    st.session_state["pending_supervisor_future"] = future
+    st.session_state["pending_supervisor_placeholder_index"] = placeholder_index
+    st.session_state["supervisor_running"] = True
+
+
+def _queue_prompt(llm_input: str) -> None:
+    if not llm_input:
+        return
+    placeholder_index = _append_assistant_placeholder("Queued...")
+    _get_prompt_queue().append((llm_input, placeholder_index))
+    _maybe_start_next_prompt()
+
+
 def _is_supervisor_running() -> bool:
     """Check whether the supervisor is still running."""
     return bool(st.session_state.get("supervisor_running", False))
@@ -155,6 +193,62 @@ def _is_supervisor_running() -> bool:
 def _get_image_cache() -> dict[str, Image]:
     cache = st.session_state.setdefault("image_cache", {})
     return cast(dict[str, Image], cache)
+
+
+def _get_session_event_queue() -> SimpleQueue[SessionEvent]:
+    queue = st.session_state.setdefault("session_event_queue", SimpleQueue())
+    return cast(SimpleQueue[SessionEvent], queue)
+
+
+def _get_event_listener_future() -> Future[None] | None:
+    return cast(Future[None] | None, st.session_state.get("session_event_listener"))
+
+
+def _cancel_event_listener() -> None:
+    future = _get_event_listener_future()
+    if future is not None:
+        future.cancel()
+    st.session_state.pop("session_event_listener", None)
+    st.session_state.pop("session_event_listener_session_id", None)
+
+
+async def _listen_session_events(session_id: str, event_queue: SimpleQueue[SessionEvent]) -> None:
+    try:
+        async for event in SessionClient.stream_events(session_id):
+            event_queue.put(event)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.exception("Session event stream failed for session %s", session_id)
+
+
+def _ensure_event_listener(session_id: str) -> None:
+    existing_id = st.session_state.get("session_event_listener_session_id")
+    future = _get_event_listener_future()
+    if (
+        existing_id == session_id
+        and future is not None
+        and not future.cancelled()
+        and not future.done()
+    ):
+        return
+    _cancel_event_listener()
+    event_queue = _get_session_event_queue()
+    st.session_state["session_event_listener_session_id"] = session_id
+    st.session_state["session_event_listener"] = _submit_async(
+        _listen_session_events(session_id, event_queue)
+    )
+
+
+def _consume_session_events() -> bool:
+    queue = _get_session_event_queue()
+    consumed = False
+    while not queue.empty():
+        queue.get_nowait()
+        consumed = True
+    if consumed:
+        st.session_state.pop("cached_session", None)
+    return consumed
 
 
 def _consume_pending_supervisor() -> bool:
@@ -166,18 +260,25 @@ def _consume_pending_supervisor() -> bool:
     future = _get_pending_supervisor_future()
     if future is None or not future.done():
         return False
+    placeholder_index = st.session_state.get("pending_supervisor_placeholder_index")
     try:
         msg, session_id = future.result()
     except Exception as exc:
-        _get_history().append({"role": "assistant", "content": f"Supervisor failed: {exc!s}"})
+        content = f"Supervisor failed: {exc!s}"
         st.toast("Supervisor failed.", icon="⚠️")
     else:
         _set_session_id(session_id)
         st.session_state.pop("cached_session", None)  # Invalidate to fetch fresh
-        _get_history().append({"role": "assistant", "content": msg.content})
+        content = msg.content
         st.toast("Supervisor finished.", icon="✅")
+    if isinstance(placeholder_index, int):
+        _update_history_content(placeholder_index, content)
+    else:
+        _get_history().append({"role": "assistant", "content": content})
     st.session_state.pop("pending_supervisor_future", None)
+    st.session_state.pop("pending_supervisor_placeholder_index", None)
     st.session_state["supervisor_running"] = False
+    _maybe_start_next_prompt()
     return True
 
 
@@ -187,12 +288,7 @@ def _start_supervisor_run(llm_input: str) -> None:
     Args:
         llm_input (str): User prompt for the supervisor.
     """
-    if _is_supervisor_running():
-        return
-    session_id = _ensure_session_id()
-    future = _submit_async(run_supervisor(llm_input, session_id=session_id))
-    st.session_state["pending_supervisor_future"] = future
-    st.session_state["supervisor_running"] = True
+    _queue_prompt(llm_input)
 
 
 def _get_active_session(force_refresh: bool = False) -> SessionState | None:
@@ -259,7 +355,7 @@ def _render_session_overview(session: SessionState | None) -> None:
     has_document = bool(session.rawDocumentId or session.extractedDocument)
     has_text = text_count > 0
     has_render = bool(session.renderedDocumentId)
-    has_language = bool(session.language)
+    has_language = bool(session.tgt_language)
 
     translation_done, translation_detail = _progress_summary(translated_count, text_count)
     font_done, font_detail = _progress_summary(font_count, text_count)
@@ -267,7 +363,7 @@ def _render_session_overview(session: SessionState | None) -> None:
 
     steps = [
         ("Document loaded", has_document, None),
-        ("Language detected", has_language, session.language if has_language else None),
+        ("Language detected", has_language, session.tgt_language if has_language else None),
         ("Text extracted", has_text, f"{text_count} items" if has_text else None),
         ("Translated", translation_done, translation_detail),
         ("Font detected", font_done, font_detail),
@@ -343,43 +439,24 @@ def _render_session_overview(session: SessionState | None) -> None:
             st.json(session.model_dump(), expanded=False)
 
 
-def _maybe_rerun_if_supervisor_done() -> None:
-    """Trigger a full app rerun when the background supervisor finishes."""
-    future = _get_pending_supervisor_future()
-    if future is not None and future.done():
-        st.rerun(scope="app")
-
-
-def _render_session_sidebar_content() -> None:
-    """Render the sidebar's Session panel using cached or refreshed state."""
-    session = _get_active_session(force_refresh=_is_supervisor_running())
-    st.subheader("Session")
-    _render_session_overview(session)
+_SUPERVISOR_POLL_INTERVAL_SECONDS = 2
 
 
 @st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
 def _render_sidebar_fragment() -> None:
     """Sidebar fragment that polls for session updates while supervisor runs."""
-    _maybe_rerun_if_supervisor_done()
-    _render_session_sidebar_content()
+    # Check if supervisor finished and trigger full app rerun to process result
+    future = _get_pending_supervisor_future()
+    if future is not None and future.done():
+        st.rerun(scope="app")
 
+    if _consume_session_events():
+        st.rerun(scope="app")
 
-@st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
-def _render_supervisor_watchdog() -> None:
-    """Poll for supervisor completion and trigger an app rerun."""
-    _maybe_rerun_if_supervisor_done()
+    session = _get_active_session(force_refresh=_is_supervisor_running())
 
-
-def _render_sidebar() -> None:
-    """Render sidebar with optional polling."""
-    if ENABLE_SESSION_POLLING:
-        _render_sidebar_fragment()
-        return
-
-    if ENABLE_SUPERVISOR_POLLING and _is_supervisor_running():
-        _render_supervisor_watchdog()
-
-    _render_session_sidebar_content()
+    st.subheader("Session")
+    _render_session_overview(session)
 
 
 def _render_chat(history: list[dict[str, str]]) -> None:
@@ -483,6 +560,7 @@ def _ensure_session_id() -> str:
         return session_id
     session_id = _run_async(SessionClient.create(initialize_session()))
     _set_session_id(session_id)
+    _ensure_event_listener(session_id)
     return session_id
 
 
@@ -558,12 +636,15 @@ def _render_layout(session: SessionState | None) -> None:
 
 
 def main() -> None:
+    if session_id := _get_session_id():
+        _ensure_event_listener(session_id)
+
     # Handle completed supervisor runs
     if _consume_pending_supervisor():
         st.rerun()
 
     with st.sidebar:
-        _render_sidebar()
+        _render_sidebar_fragment()
 
     # Main layout uses cached session (fragment handles live updates)
     active_session = _get_active_session()
