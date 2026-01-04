@@ -9,7 +9,7 @@ from PIL import Image
 from traenslenzor.file_server.client import FileClient, SessionClient
 from traenslenzor.file_server.session_state import BBoxPoint, ExtractedDocument, SessionState
 from traenslenzor.text_extractor.flatten_image import deskew_document
-from traenslenzor.text_extractor.paddleocr import run_ocr
+from traenslenzor.text_extractor.ocr import run_ocr
 
 ADDRESS = "127.0.0.1"
 PORT = 8002
