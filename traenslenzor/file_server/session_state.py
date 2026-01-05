@@ -8,11 +8,9 @@ class DeskewBackend(str, Enum):
     """Supported document deskew backends."""
 
     opencv = "opencv"
-    """Classic OpenCV contour-based deskew."""
+    """OpenCV contour-based deskew."""
     uvdoc = "uvdoc"
-    """UVDoc neural unwarping (py_reform)."""
-    docscanner = "docscanner"
-    """DocScanner localization + warp (if available)."""
+    """UVDoc neural unwarping ([GitHub](https://github.com/tanguymagne/UVDoc))."""
 
 
 class BBoxPoint(BaseModel):
@@ -51,9 +49,9 @@ class ExtractedDocument(BaseModel):
     documentCoordinates: list[BBoxPoint] = Field(default_factory=list)
     """Document polygon in original image coordinates (UL, UR, LR, LL)."""
     mapXYId: str | None = None
-    """File id for the optional map_xy array mapping output pixels to original image pixels."""
+    """File id for the optional map_xy array mapping output pixels to original image pixels (may be downsampled)."""
     mapXYShape: tuple[int, int, int] | None = None
-    """Shape metadata for map_xy as (H, W, 2) when available."""
+    """Shape metadata for map_xy as (H, W, 2) when available (downsampled shapes are allowed)."""
     backend: DeskewBackend | None = None
     """Deskew backend used to generate this extracted document."""
 
