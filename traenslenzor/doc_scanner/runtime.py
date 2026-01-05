@@ -44,13 +44,11 @@ class DocScannerRuntime:
     async def scan_session(
         self,
         session_id: str,
-        backend: DeskewBackend | None = None,
     ) -> ExtractedDocument:
         """Deskew the session's raw document and upload results.
 
         Args:
             session_id (str): File server session id.
-            backend (DeskewBackend | None): Optional override backend.
 
         Returns:
             ExtractedDocument: Deskewed document metadata including ids and coordinates.
@@ -65,9 +63,9 @@ class DocScannerRuntime:
 
         image_rgb = np.array(image.convert("RGB"), dtype=np.uint8)
 
-        backend_choice = backend or self.config.default_backend
-        docscanner_backend = self._get_backend(backend_choice)
-        result: DeskewResult = docscanner_backend.deskew(image_rgb)
+        backend_choice = session.deskew_backend or self.config.default_backend
+        deskew_backend = self._get_backend(backend_choice)
+        result: DeskewResult = deskew_backend.deskew(image_rgb)
 
         output_image = Image.fromarray(result.image_rgb)
         output_id = await FileClient.put_img(f"{session_id}_deskewed.png", output_image)

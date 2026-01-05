@@ -16,7 +16,6 @@ from traenslenzor.text_extractor.flatten_image import find_document_corners
 
 from .utils import (
     build_full_image_corners,
-    build_map_xy_from_homography,
     compute_map_xy_stride,
     find_page_corners,
     order_points_clockwise,
@@ -70,16 +69,13 @@ class OpenCVDeskewBackend:
             corners = build_full_image_corners(bgr.shape[0], bgr.shape[1])
 
         corners = order_points_clockwise(corners)
-        warped_bgr, matrix, output_size = warp_from_corners(bgr, corners)
+        warped_bgr, _, _ = warp_from_corners(bgr, corners)
         warped_rgb = cv2.cvtColor(warped_bgr, cv2.COLOR_BGR2RGB)
-
-        # OpenCV backend does not emit map_xy (avoid misleading grid on simple perspective warp).
-        map_xy = None
 
         return DeskewResult(
             image_rgb=warped_rgb,
             corners_original=corners,
-            map_xy=map_xy,
+            map_xy=None,
         )
 
 

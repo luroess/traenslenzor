@@ -11,8 +11,7 @@ from typing import TYPE_CHECKING, Literal, TypeVar, cast
 
 import numpy as np
 import streamlit as st
-from PIL import ImageDraw
-from PIL.Image import Image
+from PIL import Image, ImageDraw
 
 from traenslenzor.doc_classifier.configs.path_config import PathConfig
 from traenslenzor.doc_classifier.mcp_integration import mcp_server as doc_classifier_mcp_server
@@ -49,13 +48,11 @@ DEFAULT_ASSISTANT_MESSAGE = (
 )
 
 
-def _default_history() -> list[dict[str, str]]:
-    return [{"role": "assistant", "content": DEFAULT_ASSISTANT_MESSAGE}]
-
-
 def _ensure_defaults() -> None:
     """Ensure base session state keys exist."""
-    st.session_state.setdefault("history", _default_history())
+    st.session_state.setdefault(
+        "history", [{"role": "assistant", "content": DEFAULT_ASSISTANT_MESSAGE}]
+    )
     st.session_state.setdefault("last_session_id", None)
 
 
@@ -71,6 +68,8 @@ def _set_session_id(value: str | None) -> None:
     if st.session_state.get("last_session_id") != value:
         st.session_state.pop("cached_session", None)
         st.session_state.pop("cached_progress", None)
+        st.session_state.pop("extracted_image_id", None)
+        st.session_state.pop("extracted_image", None)
     st.session_state["last_session_id"] = value
 
 
@@ -165,9 +164,9 @@ def _is_supervisor_running() -> bool:
     return bool(st.session_state.get("supervisor_running", False))
 
 
-def _get_image_cache() -> dict[str, Image]:
+def _get_image_cache() -> dict[str, Image.Image]:
     cache = st.session_state.setdefault("image_cache", {})
-    return cast(dict[str, Image], cache)
+    return cast(dict[str, Image.Image], cache)
 
 
 def _consume_pending_supervisor() -> bool:
@@ -285,6 +284,8 @@ def _render_session_overview(
         if session.extractedDocument and session.extractedDocument.backend
         else None
     )
+    extracted_doc = session.extractedDocument
+    extracted_status = "Yes" if extracted_doc else "No"
     deskew_pref = (
         session.deskew_backend.value if session.deskew_backend is not None else extracted_backend
     )
@@ -307,24 +308,22 @@ def _render_session_overview(
     # Session details expander
     with st.expander("Session details", expanded=False):
         st.markdown("**Deskew**")
-        deskew_cols = st.columns(3)
-        deskew_cols[0].caption("Backend")
-        deskew_cols[0].code(deskew_pref or "—")
-        deskew_cols[1].caption("Map XY")
-        if session.extractedDocument and session.extractedDocument.mapXYId:
-            map_shape = (
-                session.extractedDocument.mapXYShape
-                if session.extractedDocument.mapXYShape
-                else ("?", "?", 2)
-            )
-            deskew_cols[1].code(f"{map_shape}")
-        else:
-            deskew_cols[1].code("—")
-        deskew_cols[2].caption("Map XY Id")
-        if session.extractedDocument and session.extractedDocument.mapXYId:
-            deskew_cols[2].code(session.extractedDocument.mapXYId[:13] + "...")
+        deskew_cols = st.columns(4)
+        deskew_cols[0].caption("Extracted")
+        deskew_cols[0].code(extracted_status)
+        deskew_cols[1].caption("Backend")
+        deskew_cols[1].code(deskew_pref or "—")
+        deskew_cols[2].caption("Map XY")
+        if extracted_doc and extracted_doc.mapXYId:
+            map_shape = extracted_doc.mapXYShape if extracted_doc.mapXYShape else ("?", "?", 2)
+            deskew_cols[2].code(f"{map_shape}")
         else:
             deskew_cols[2].code("—")
+        deskew_cols[3].caption("Map XY Id")
+        if extracted_doc and extracted_doc.mapXYId:
+            deskew_cols[3].code(extracted_doc.mapXYId[:13] + "...")
+        else:
+            deskew_cols[3].code("—")
 
         # Documents section
         st.markdown("**Documents**")
@@ -332,16 +331,16 @@ def _render_session_overview(
         doc_cols[0].caption("Raw")
         doc_cols[0].code(session.rawDocumentId[:13] + "..." if session.rawDocumentId else "—")
         doc_cols[1].caption("Extracted")
-        extracted_id = session.extractedDocument.id if session.extractedDocument else None
+        extracted_id = extracted_doc.id if extracted_doc else None
         doc_cols[1].code(extracted_id[:13] + "..." if extracted_id else "—")
         doc_cols[2].caption("Rendered")
         doc_cols[2].code(
             session.renderedDocumentId[:13] + "..." if session.renderedDocumentId else "—"
         )
 
-        if session.extractedDocument and session.extractedDocument.documentCoordinates:
+        if extracted_doc and extracted_doc.documentCoordinates:
             st.caption(
-                f"Extracted document coordinates: {len(session.extractedDocument.documentCoordinates)} points"
+                f"Extracted document coordinates: {len(extracted_doc.documentCoordinates)} points"
             )
 
         # Text items section
@@ -379,6 +378,16 @@ def _render_session_overview(
             st.json(session.model_dump(), expanded=False)
 
 
+def _render_session_sidebar_content(*, force_refresh: bool) -> None:
+    """Render the sidebar's Session panel using cached or refreshed state."""
+    session = _get_active_session(force_refresh=force_refresh)
+    progress = _get_session_progress(force_refresh=force_refresh)
+
+    _render_deskew_backend_selector(session)
+    _render_classifier_checkpoint_selector()
+    _render_session_overview(session, progress)
+
+
 def _maybe_rerun_if_supervisor_done() -> None:
     """Trigger a full app rerun when the background supervisor finishes."""
     future = _get_pending_supervisor_future()
@@ -386,21 +395,22 @@ def _maybe_rerun_if_supervisor_done() -> None:
         st.rerun(scope="app")
 
 
-def _render_session_sidebar_content() -> None:
-    """Render the sidebar's Session panel using cached or refreshed state."""
-    session = _get_active_session(force_refresh=_is_supervisor_running())
-    progress = _get_session_progress(force_refresh=_is_supervisor_running())
+@st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
+def _render_sidebar_fragment() -> None:
+    """Sidebar fragment that polls for session updates while supervisor runs."""
+    _maybe_rerun_if_supervisor_done()
+    _render_session_sidebar_content(force_refresh=True)
 
-    st.subheader("Session")
-    _render_deskew_backend_selector(session)
-    _render_classifier_checkpoint_selector()
-    _render_session_overview(session, progress)
+
+@st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
+def _render_supervisor_watchdog() -> None:
+    """Poll for supervisor completion and trigger an app rerun."""
+    _maybe_rerun_if_supervisor_done()
 
 
 def _render_deskew_backend_selector(session: SessionState | None) -> None:
     """Render the deskew backend selector and persist preference."""
     options: list[tuple[str, DeskewBackend]] = [
-        ("DocScanner", DeskewBackend.docscanner),
         ("UVDoc", DeskewBackend.uvdoc),
         ("OpenCV", DeskewBackend.opencv),
     ]
@@ -486,21 +496,9 @@ def _render_classifier_checkpoint_selector() -> None:
     doc_classifier_mcp_server.reset_runtime()
 
 
-@st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
-def _render_sidebar_fragment() -> None:
-    """Sidebar fragment that polls for session updates while supervisor runs."""
-    _maybe_rerun_if_supervisor_done()
-    _render_session_sidebar_content()
-
-
-@st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
-def _render_supervisor_watchdog() -> None:
-    """Poll for supervisor completion and trigger an app rerun."""
-    _maybe_rerun_if_supervisor_done()
-
-
 def _render_sidebar() -> None:
     """Render sidebar with optional polling."""
+    st.subheader("Session")
     if ENABLE_SESSION_POLLING:
         _render_sidebar_fragment()
         return
@@ -508,7 +506,7 @@ def _render_sidebar() -> None:
     if ENABLE_SUPERVISOR_POLLING and _is_supervisor_running():
         _render_supervisor_watchdog()
 
-    _render_session_sidebar_content()
+    _render_session_sidebar_content(force_refresh=False)
 
 
 def _render_chat(history: list[dict[str, str]]) -> None:
@@ -521,7 +519,9 @@ def _render_chat(history: list[dict[str, str]]) -> None:
             st.status("TrÄenslönzing...", state="running", expanded=False)
 
 
-def _draw_document_outline(image: Image, document_coordinates: list[BBoxPoint]) -> Image:
+def _draw_document_outline(
+    image: Image.Image, document_coordinates: list[BBoxPoint]
+) -> Image.Image:
     """Draw document polygon coordinates on top of the image.
 
     Args:
@@ -554,7 +554,7 @@ def _draw_document_outline(image: Image, document_coordinates: list[BBoxPoint]) 
 def fetch_image(
     session: SessionState,
     stage: Literal["raw", "extracted", "rendered"],
-) -> tuple[Image | None, str | None, str | None]:
+) -> tuple[Image.Image | None, str | None, str | None]:
     """Fetch the requested stage image and apply overlays as needed.
 
     Args:
@@ -565,7 +565,7 @@ def fetch_image(
         Image, file ID, and optional failure reason.
     """
     file_id: str | None = None
-    image: Image | None = None
+    image: Image.Image | None = None
     failure_reason: str | None = None
 
     match stage:
@@ -579,6 +579,10 @@ def fetch_image(
                 failure_reason = "No extracted document."
             else:
                 file_id = extracted.id
+                cached_id = st.session_state.get("extracted_image_id")
+                cached_image = st.session_state.get("extracted_image")
+                if cached_id == file_id and isinstance(cached_image, Image.Image):
+                    return cached_image, file_id, None
         case "rendered":
             file_id = session.renderedDocumentId
             if not file_id:
@@ -596,6 +600,9 @@ def fetch_image(
             if image is not None:
                 image.load()
                 cache[file_id] = image
+                if stage == "extracted":
+                    st.session_state["extracted_image_id"] = file_id
+                    st.session_state["extracted_image"] = image
             elif failure_reason is None:
                 failure_reason = "Image not found."
 
@@ -611,7 +618,9 @@ def _load_map_xy(map_xy_id: str) -> np.ndarray | None:
         return np.load(buffer)
 
 
-def _render_overlay_image(session: SessionState) -> tuple[Image | None, str | None, str | None]:
+def _render_overlay_image(
+    session: SessionState,
+) -> tuple[Image.Image | None, str | None, str | None]:
     """Render the raw image with polygon and map_xy grid overlays."""
     file_id = session.rawDocumentId
     if not file_id:
@@ -640,25 +649,6 @@ def _render_overlay_image(session: SessionState) -> tuple[Image | None, str | No
     return image, file_id, None
 
 
-def _render_deskewed_image(session: SessionState) -> tuple[Image | None, str | None, str | None]:
-    """Render the deskewed/prettified image (extracted document) without overlays."""
-    extracted = session.extractedDocument
-    if extracted is None:
-        return None, None, "No extracted document."
-
-    file_id = extracted.id
-    try:
-        image = _run_async(FileClient.get_image(file_id))
-    except Exception:
-        logger.exception("Failed to fetch extracted image (file_id=%s)", file_id)
-        return None, file_id, "Failed to fetch image."
-
-    if image is None:
-        return None, file_id, "Image not found."
-
-    return image, file_id, None
-
-
 def _ensure_session_id() -> str:
     if session_id := _get_session_id():
         return session_id
@@ -674,7 +664,6 @@ def _render_image(session: SessionState | None) -> None:
     tab_specs = [
         ("Raw", lambda: fetch_image(session, "raw")),
         ("Overlay", lambda: _render_overlay_image(session)),
-        ("Deskewed", lambda: _render_deskewed_image(session)),
         ("Extracted", lambda: fetch_image(session, "extracted")),
         ("Rendered", lambda: fetch_image(session, "rendered")),
     ]
@@ -755,7 +744,7 @@ def main() -> None:
     with st.sidebar:
         _render_sidebar()
 
-    # Main layout uses cached session (fragment handles live updates)
+    # Main layout uses cached session; sidebar refresh updates the cache.
     active_session = _get_active_session()
     _render_layout(active_session)
 
