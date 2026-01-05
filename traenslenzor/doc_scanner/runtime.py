@@ -25,10 +25,9 @@ class DocScannerRuntime:
         self.console.set_verbose(config.verbose).set_debug(config.is_debug)
         self._opencv_backend = None
         self._uvdoc_backend = None
-        self._docscanner_backend = None
 
     def _get_backend(self, backend: DeskewBackend):
-        from .backends import DocScannerDeskewBackend, OpenCVDeskewBackend, UVDocDeskewBackend
+        from .backends import OpenCVDeskewBackend, UVDocDeskewBackend
 
         match backend:
             case DeskewBackend.opencv:
@@ -39,10 +38,6 @@ class DocScannerRuntime:
                 if self._uvdoc_backend is None:
                     self._uvdoc_backend = UVDocDeskewBackend(self.config.uvdoc)
                 return self._uvdoc_backend
-            case DeskewBackend.docscanner:
-                if self._docscanner_backend is None:
-                    self._docscanner_backend = DocScannerDeskewBackend(self.config.docscanner)
-                return self._docscanner_backend
             case _:
                 raise ValueError(f"Unsupported backend: {backend}")
 
@@ -71,8 +66,8 @@ class DocScannerRuntime:
         image_rgb = np.array(image.convert("RGB"), dtype=np.uint8)
 
         backend_choice = backend or self.config.default_backend
-        deskew_backend = self._get_backend(backend_choice)
-        result: DeskewResult = deskew_backend.deskew(image_rgb)
+        docscanner_backend = self._get_backend(backend_choice)
+        result: DeskewResult = docscanner_backend.deskew(image_rgb)
 
         output_image = Image.fromarray(result.image_rgb)
         output_id = await FileClient.put_img(f"{session_id}_deskewed.png", output_image)
