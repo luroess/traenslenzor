@@ -1,6 +1,18 @@
+from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class DeskewBackend(str, Enum):
+    """Supported document deskew backends."""
+
+    opencv = "opencv"
+    """Classic OpenCV contour-based deskew."""
+    uvdoc = "uvdoc"
+    """UVDoc neural unwarping (py_reform)."""
+    docscanner = "docscanner"
+    """DocScanner localization + warp (if available)."""
 
 
 class BBoxPoint(BaseModel):
@@ -32,12 +44,18 @@ class TextItem(BaseModel):
 
 
 class ExtractedDocument(BaseModel):
-    """Deskewed document metadata from `traenslenzor.text_extractor.mcp.extract_text`."""
+    """Deskewed document metadata."""
 
     id: str
-    """File id for the deskewed image uploaded in `traenslenzor.text_extractor.mcp.extract_text`."""
-    documentCoordinates: list[BBoxPoint]
-    """Document polygon for the deskewed image (currently empty in `traenslenzor.text_extractor.mcp.extract_text`)."""
+    """File id for the deskewed image uploaded."""
+    documentCoordinates: list[BBoxPoint] = Field(default_factory=list)
+    """Document polygon in original image coordinates (UL, UR, LR, LL)."""
+    mapXYId: str | None = None
+    """File id for the optional map_xy array mapping output pixels to original image pixels."""
+    mapXYShape: tuple[int, int, int] | None = None
+    """Shape metadata for map_xy as (H, W, 2) when available."""
+    backend: DeskewBackend | None = None
+    """Deskew backend used to generate this extracted document."""
 
 
 class SessionState(BaseModel):
@@ -45,8 +63,10 @@ class SessionState(BaseModel):
 
     rawDocumentId: str | None = None
     """Raw document file id set by `traenslenzor.supervisor.tools.document_loader.document_loader`."""
+    deskew_backend: DeskewBackend | None = None
+    """Preferred backend for deskewing documents."""
     extractedDocument: ExtractedDocument | None = None
-    """Deskewed document metadata set by `traenslenzor.text_extractor.mcp.extract_text`."""
+    """Deskewed document metadata."""
     renderedDocumentId: str | None = None
     """Rendered image id set by `traenslenzor.image_renderer.mcp.replace_text`."""
     text: list[TextItem] | None = None
@@ -72,6 +92,7 @@ class SessionProgressStep(BaseModel):
 
 ProgressStage = Literal[
     "awaiting_document",
+    "extracting_document",
     "detecting_language",
     "extracting_text",
     "translating",

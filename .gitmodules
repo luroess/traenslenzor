@@ -1,0 +1,3 @@
+[submodule "external/UVDoc"]
+	path = external/UVDoc
+	url = https://github.com/tanguymagne/UVDoc

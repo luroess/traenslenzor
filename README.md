@@ -79,9 +79,13 @@ sequenceDiagram
 ```ts
 interface State {
     rawDocumentId: string;
+    deskewBackend?: "opencv" | "uvdoc";
     extractedDocument: {
         id: string,
         documentCoordinates: [];
+        mapXYId?: string,
+        mapXYShape?: [number, number, number],
+        backend?: "opencv" | "uvdoc",
     }
     renderedDocumentId: string,
     text: TextItem[];
@@ -101,6 +105,3 @@ interface TextItem {
     translatedText: string;
 }
 ```
-
-
-

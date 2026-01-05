@@ -5,15 +5,22 @@ import logging
 import threading
 from collections.abc import Awaitable
 from concurrent.futures import Future
+from io import BytesIO
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal, TypeVar, cast
 
+import numpy as np
 import streamlit as st
 from PIL import ImageDraw
 from PIL.Image import Image
 
+from traenslenzor.doc_classifier.configs.path_config import PathConfig
+from traenslenzor.doc_classifier.mcp_integration import mcp_server as doc_classifier_mcp_server
+from traenslenzor.doc_scanner.visualize import draw_grid_overlay
 from traenslenzor.file_server.client import FileClient, SessionClient
 from traenslenzor.file_server.session_state import (
     BBoxPoint,
+    DeskewBackend,
     SessionProgress,
     SessionState,
     TextItem,
@@ -21,6 +28,7 @@ from traenslenzor.file_server.session_state import (
 )
 from traenslenzor.logger import setup_logger
 from traenslenzor.streamlit.prompt_presets import PromptPreset, get_prompt_presets
+from traenslenzor.supervisor.config import settings
 from traenslenzor.supervisor.supervisor import run as run_supervisor
 
 if TYPE_CHECKING:
@@ -32,7 +40,6 @@ if TYPE_CHECKING:
 
 T = TypeVar("T")
 
-_STAGES = ["raw", "extracted", "rendered"]
 ENABLE_SESSION_POLLING = True
 ENABLE_SUPERVISOR_POLLING = True
 _SUPERVISOR_POLL_INTERVAL_SECONDS = 2
@@ -273,6 +280,14 @@ def _render_session_overview(
         return
 
     text_count, translated_count, font_count = _count_text_items(session.text)
+    extracted_backend = (
+        session.extractedDocument.backend.value
+        if session.extractedDocument and session.extractedDocument.backend
+        else None
+    )
+    deskew_pref = (
+        session.deskew_backend.value if session.deskew_backend is not None else extracted_backend
+    )
 
     done_count = progress.completed_steps
     total_steps = progress.total_steps
@@ -291,6 +306,26 @@ def _render_session_overview(
 
     # Session details expander
     with st.expander("Session details", expanded=False):
+        st.markdown("**Deskew**")
+        deskew_cols = st.columns(3)
+        deskew_cols[0].caption("Backend")
+        deskew_cols[0].code(deskew_pref or "—")
+        deskew_cols[1].caption("Map XY")
+        if session.extractedDocument and session.extractedDocument.mapXYId:
+            map_shape = (
+                session.extractedDocument.mapXYShape
+                if session.extractedDocument.mapXYShape
+                else ("?", "?", 2)
+            )
+            deskew_cols[1].code(f"{map_shape}")
+        else:
+            deskew_cols[1].code("—")
+        deskew_cols[2].caption("Map XY Id")
+        if session.extractedDocument and session.extractedDocument.mapXYId:
+            deskew_cols[2].code(session.extractedDocument.mapXYId[:13] + "...")
+        else:
+            deskew_cols[2].code("—")
+
         # Documents section
         st.markdown("**Documents**")
         doc_cols = st.columns(3)
@@ -357,7 +392,98 @@ def _render_session_sidebar_content() -> None:
     progress = _get_session_progress(force_refresh=_is_supervisor_running())
 
     st.subheader("Session")
+    _render_deskew_backend_selector(session)
+    _render_classifier_checkpoint_selector()
     _render_session_overview(session, progress)
+
+
+def _render_deskew_backend_selector(session: SessionState | None) -> None:
+    """Render the deskew backend selector and persist preference."""
+    options: list[tuple[str, DeskewBackend]] = [
+        ("DocScanner", DeskewBackend.docscanner),
+        ("UVDoc", DeskewBackend.uvdoc),
+        ("OpenCV", DeskewBackend.opencv),
+    ]
+    labels = [label for label, _ in options]
+    current = None
+    if session is not None:
+        if session.deskew_backend is not None:
+            current = session.deskew_backend
+        elif session.extractedDocument is not None:
+            current = session.extractedDocument.backend
+    current_index = next(
+        (idx for idx, (_, value) in enumerate(options) if value == current),
+        0,
+    )
+
+    selection = st.selectbox(
+        "Deskew backend",
+        options=labels,
+        index=current_index,
+        help="Choose which backend the doc-scanner tool should use.",
+        key="deskew_backend_select",
+        disabled=session is None,
+    )
+    selected_backend = dict(options).get(selection)
+
+    if session is None or selected_backend is None or selected_backend == current:
+        return
+
+    session_id = _get_session_id()
+    if session_id is None:
+        return
+
+    _run_async(
+        SessionClient.update(
+            session_id,
+            lambda s: setattr(s, "deskew_backend", selected_backend),
+        )
+    )
+    st.session_state.pop("cached_session", None)
+    st.session_state.pop("cached_progress", None)
+
+
+def _render_classifier_checkpoint_selector() -> None:
+    """Render checkpoint selector for the doc-classifier runtime."""
+    checkpoints_dir = PathConfig().checkpoints
+    checkpoints = sorted(checkpoints_dir.glob("*.ckpt"))
+
+    if not checkpoints:
+        st.caption("No classifier checkpoints found in .logs/checkpoints.")
+        return
+
+    labels = [path.name for path in checkpoints]
+
+    current_path = settings.doc_classifier.checkpoint_path
+    current_full = None
+    if current_path:
+        candidate = Path(current_path)
+        current_full = (
+            candidate if candidate.is_absolute() else (checkpoints_dir / candidate)
+        ).resolve()
+
+    current_index = 0
+    if current_full is not None:
+        for idx, path in enumerate(checkpoints):
+            if path.resolve() == current_full:
+                current_index = idx
+                break
+
+    selection = st.selectbox(
+        "Classifier checkpoint",
+        options=labels,
+        index=current_index,
+        help="Select the Lightning checkpoint used for document classification.",
+        key="classifier_checkpoint_select",
+    )
+    selected_path = checkpoints[labels.index(selection)]
+    selected_rel = str(selected_path.name)
+
+    if settings.doc_classifier.checkpoint_path == selected_rel:
+        return
+
+    settings.doc_classifier.checkpoint_path = selected_rel
+    doc_classifier_mcp_server.reset_runtime()
 
 
 @st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
@@ -439,7 +565,6 @@ def fetch_image(
         Image, file ID, and optional failure reason.
     """
     file_id: str | None = None
-    document_coordinates: list[BBoxPoint] | None = None
     image: Image | None = None
     failure_reason: str | None = None
 
@@ -454,7 +579,6 @@ def fetch_image(
                 failure_reason = "No extracted document."
             else:
                 file_id = extracted.id
-                document_coordinates = extracted.documentCoordinates
         case "rendered":
             file_id = session.renderedDocumentId
             if not file_id:
@@ -475,10 +599,64 @@ def fetch_image(
             elif failure_reason is None:
                 failure_reason = "Image not found."
 
-    if image is not None and stage == "extracted" and document_coordinates:
-        image = _draw_document_outline(image, document_coordinates)
-
     return image, file_id, failure_reason
+
+
+def _load_map_xy(map_xy_id: str) -> np.ndarray | None:
+    """Load a map_xy array from the file server."""
+    data = _run_async(FileClient.get_raw_bytes(map_xy_id))
+    if data is None:
+        return None
+    with BytesIO(data) as buffer:
+        return np.load(buffer)
+
+
+def _render_overlay_image(session: SessionState) -> tuple[Image | None, str | None, str | None]:
+    """Render the raw image with polygon and map_xy grid overlays."""
+    file_id = session.rawDocumentId
+    if not file_id:
+        return None, None, "No raw document."
+
+    try:
+        image = _run_async(FileClient.get_image(file_id))
+    except Exception:
+        logger.exception("Failed to fetch raw image for overlay (file_id=%s)", file_id)
+        return None, file_id, "Failed to fetch image."
+
+    if image is None:
+        return None, file_id, "Image not found."
+
+    extracted = session.extractedDocument
+    if extracted and extracted.documentCoordinates:
+        image = _draw_document_outline(image, extracted.documentCoordinates)
+
+    if extracted and extracted.mapXYId:
+        map_xy = _load_map_xy(extracted.mapXYId)
+        if map_xy is not None:
+            np_img = np.array(image.convert("RGB"))
+            np_img = draw_grid_overlay(np_img, map_xy, step=40)
+            image = Image.fromarray(np_img)
+
+    return image, file_id, None
+
+
+def _render_deskewed_image(session: SessionState) -> tuple[Image | None, str | None, str | None]:
+    """Render the deskewed/prettified image (extracted document) without overlays."""
+    extracted = session.extractedDocument
+    if extracted is None:
+        return None, None, "No extracted document."
+
+    file_id = extracted.id
+    try:
+        image = _run_async(FileClient.get_image(file_id))
+    except Exception:
+        logger.exception("Failed to fetch extracted image (file_id=%s)", file_id)
+        return None, file_id, "Failed to fetch image."
+
+    if image is None:
+        return None, file_id, "Image not found."
+
+    return image, file_id, None
 
 
 def _ensure_session_id() -> str:
@@ -493,12 +671,20 @@ def _render_image(session: SessionState | None) -> None:
     if session is None:
         return
 
-    tabs = st.tabs([stage.title() for stage in _STAGES])
-    for stage, tab in zip(_STAGES, tabs):
+    tab_specs = [
+        ("Raw", lambda: fetch_image(session, "raw")),
+        ("Overlay", lambda: _render_overlay_image(session)),
+        ("Deskewed", lambda: _render_deskewed_image(session)),
+        ("Extracted", lambda: fetch_image(session, "extracted")),
+        ("Rendered", lambda: fetch_image(session, "rendered")),
+    ]
+
+    tabs = st.tabs([label for label, _ in tab_specs])
+    for (label, handler), tab in zip(tab_specs, tabs):
         with tab:
-            img, file_id, reason = fetch_image(session, stage)
+            img, file_id, reason = handler()
             if img is not None:
-                st.caption(f"{stage.title()} document image ({file_id}).")
+                st.caption(f"{label} document image ({file_id}).")
                 st.image(img, width="stretch")
             elif reason:
                 st.caption(reason)

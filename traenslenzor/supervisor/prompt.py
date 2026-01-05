@@ -48,12 +48,18 @@ def has_result_been_rendered(session: SessionState) -> bool:
 
 
 def format_session(session_id: str, session: SessionState) -> str:
+    deskew_backend = session.deskew_backend.value if session.deskew_backend else None
+    text_count = len(session.text) if session.text else 0
     return f"""
         ✅ the current session_id is '{session_id}'
-        {f"✅ the user has selected the language {session.tgt_language}" if session.tgt_language else "❌ the user has no language selected"}
+        {f"✅ the user has selected the language {session.language}" if session.language else "❌ the user has no language selected"}
         {"✅ the user has a document loaded" if session.rawDocumentId else "❌ the user has no document selected"}
+        {f"✅ deskew backend: {deskew_backend}" if deskew_backend else "❌ no deskew backend selected"}
+
+        {"✅ extracted document is available" if has_extracted_document(session) else "❌ no extracted document available"}
 
         {"✅ text was extracted from the document" if has_text_been_extracted(session) else "❌ no text was extracted from the document"}
+        {f"✅ extracted document backend: {extracted_backend}" if extracted_backend else "❌ no extracted document backend recorded"}
         {"✅ the text was translated" if has_translated_text(session) else "❌ the text has not yet been translated"}
         {"✅ the font has been detected" if has_font_been_detected(session) else "❌ the font has not yet been detected"}
         {"✅ the document has been classified" if has_document_been_classified(session) else "❌ the document has not yet been classified"}
