@@ -20,6 +20,8 @@ def order_points_clockwise(
 
     Returns:
         ndarray[float32]: Ordered points with shape (4, 2).
+
+    NOTE: Adapted from ``traenslenzor/text_extractor/flatten_image.py::_order_points`` by Felix Schlandt`` - difference:
     """
     pts_arr = np.asarray(pts, dtype=np.float32)
     if pts_arr.shape[0] != 4:
@@ -34,6 +36,27 @@ def order_points_clockwise(
     rect[1] = pts_arr[np.argmin(diff)]
     rect[3] = pts_arr[np.argmax(diff)]
     return rect
+
+
+def build_full_image_corners(height: int, width: int) -> Float32[NDArray, "4 2"]:
+    """Return rectangle corners covering the full image.
+
+    Args:
+        height (int): Image height in pixels.
+        width (int): Image width in pixels.
+
+    Returns:
+        ndarray[float32]: Corners as (tl, tr, br, bl) in pixel coordinates.
+    """
+    return np.array(
+        [
+            [0.0, 0.0],
+            [float(width - 1), 0.0],
+            [float(width - 1), float(height - 1)],
+            [0.0, float(height - 1)],
+        ],
+        dtype=np.float32,
+    )
 
 
 def warp_from_corners(
@@ -51,6 +74,8 @@ def warp_from_corners(
             - ndarray[uint8]: Warped image in BGR order, shape (H2, W2, 3).
             - ndarray[float32]: 3x3 homography mapping original -> warped.
             - tuple[int, int]: Output size as (height, width).
+
+    NOTE: Adapted from ``traenslenzor/text_extractor/flatten_image.py::_warp_to_rectangle`` by Felix Schlandt`` - only difference: return homography matrix and output size.
     """
     rect = order_points_clockwise(corners)
     (tl, tr, br, bl) = rect
@@ -70,38 +95,6 @@ def warp_from_corners(
     matrix = cv2.getPerspectiveTransform(rect, dst)
     warped = cv2.warpPerspective(image_bgr, matrix, (max_w, max_h), flags=cv2.INTER_LINEAR)
     return warped, matrix.astype(np.float32), (max_h, max_w)
-
-
-def build_map_xy_from_homography(
-    homography: Float32[NDArray, "3 3"],
-    output_size: tuple[int, int],
-    *,
-    stride: int = 1,
-) -> Float32[NDArray, "H W 2"]:
-    """Create a map_xy array from a homography.
-
-    The returned map maps output pixels -> input pixels.
-
-    Args:
-        homography (ndarray[float32]): Homography mapping input -> output.
-        output_size (tuple[int, int]): Output size as (height, width).
-        stride (int): Sampling stride for map_xy. Values > 1 yield a downsampled map.
-
-    Returns:
-        ndarray[float32]: map_xy of shape (H, W, 2) mapping output -> input.
-    """
-    if stride < 1:
-        raise ValueError(f"stride must be >= 1, got {stride}")
-    out_h, out_w = output_size
-    xs, ys = np.meshgrid(
-        np.arange(0, out_w, stride, dtype=np.float32),
-        np.arange(0, out_h, stride, dtype=np.float32),
-    )
-    grid = np.stack([xs, ys], axis=-1).reshape(-1, 1, 2)
-
-    inv = np.linalg.inv(homography)
-    mapped = cv2.perspectiveTransform(grid, inv).reshape(xs.shape[0], xs.shape[1], 2)
-    return mapped.astype(np.float32)
 
 
 def sample_map_xy(
@@ -176,28 +169,6 @@ def find_page_corners(
         return None, area_ratio
 
     return order_points_clockwise(corners), area_ratio
-
-
-def build_full_image_corners(height: int, width: int) -> Float32[NDArray, "4 2"]:
-    """Return corners for the full image frame.
-
-    Args:
-        height (int): Image height in pixels.
-        width (int): Image width in pixels.
-
-    Returns:
-        ndarray[float32]: Corners array in clockwise order, shape (4, 2).
-    """
-    return np.array(
-        [[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]],
-        dtype=np.float32,
-    )
-
-
-def should_generate_map_xy(output_size: Tuple[int, int], max_pixels: int) -> bool:
-    """Decide whether map_xy generation is safe for the given output size."""
-    out_h, out_w = output_size
-    return out_h * out_w <= max_pixels
 
 
 def compute_map_xy_stride(output_size: Tuple[int, int], max_pixels: int) -> int:

@@ -84,9 +84,13 @@ async def deskew_document(
     runtime = get_runtime()
     session = await SessionClient.get(session_id)
     preferred_backend = session.deskew_backend if session is not None else None
-    backend_choice = backend or preferred_backend
     try:
-        extracted = await runtime.scan_session(session_id, backend_choice)
+        if backend is not None and backend != preferred_backend:
+            await SessionClient.update(
+                session_id,
+                lambda state: setattr(state, "deskew_backend", backend),
+            )
+        extracted = await runtime.scan_session(session_id)
     except Exception as exc:
         console.error(str(exc))
         raise ToolError(str(exc)) from exc
