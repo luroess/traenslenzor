@@ -75,6 +75,8 @@ def warp_from_corners(
 def build_map_xy_from_homography(
     homography: Float32[NDArray, "3 3"],
     output_size: tuple[int, int],
+    *,
+    stride: int = 1,
 ) -> Float32[NDArray, "H W 2"]:
     """Create a map_xy array from a homography.
 
@@ -83,16 +85,22 @@ def build_map_xy_from_homography(
     Args:
         homography (ndarray[float32]): Homography mapping input -> output.
         output_size (tuple[int, int]): Output size as (height, width).
+        stride (int): Sampling stride for map_xy. Values > 1 yield a downsampled map.
 
     Returns:
         ndarray[float32]: map_xy of shape (H, W, 2) mapping output -> input.
     """
+    if stride < 1:
+        raise ValueError(f"stride must be >= 1, got {stride}")
     out_h, out_w = output_size
-    xs, ys = np.meshgrid(np.arange(out_w, dtype=np.float32), np.arange(out_h, dtype=np.float32))
+    xs, ys = np.meshgrid(
+        np.arange(0, out_w, stride, dtype=np.float32),
+        np.arange(0, out_h, stride, dtype=np.float32),
+    )
     grid = np.stack([xs, ys], axis=-1).reshape(-1, 1, 2)
 
     inv = np.linalg.inv(homography)
-    mapped = cv2.perspectiveTransform(grid, inv).reshape(out_h, out_w, 2)
+    mapped = cv2.perspectiveTransform(grid, inv).reshape(xs.shape[0], xs.shape[1], 2)
     return mapped.astype(np.float32)
 
 
@@ -190,3 +198,13 @@ def should_generate_map_xy(output_size: Tuple[int, int], max_pixels: int) -> boo
     """Decide whether map_xy generation is safe for the given output size."""
     out_h, out_w = output_size
     return out_h * out_w <= max_pixels
+
+
+def compute_map_xy_stride(output_size: Tuple[int, int], max_pixels: int) -> int:
+    """Compute a safe downsampling stride to fit map_xy under a pixel budget."""
+    out_h, out_w = output_size
+    total = out_h * out_w
+    if max_pixels <= 0 or total <= max_pixels:
+        return 1
+    scale = (total / max_pixels) ** 0.5
+    return max(1, int(np.ceil(scale)))

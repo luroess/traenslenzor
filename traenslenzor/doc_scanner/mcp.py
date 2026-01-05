@@ -36,7 +36,6 @@ def get_runtime() -> DocScannerRuntime:
     if _runtime is None:
         config = DocScannerMCPConfig()
         config.uvdoc.device = settings.doc_scanner.uvdoc_device
-        config.docscanner.device = settings.doc_scanner.docscanner_device
         _runtime = config.setup_target()
     return _runtime
 
@@ -68,7 +67,7 @@ async def deskew_document(
     backend: Annotated[
         DeskewBackend | None,
         Field(
-            description="Optional backend override: opencv, uvdoc, or docscanner.",
+            description="Optional backend override: opencv or uvdoc.",
             default=None,
         ),
     ] = None,

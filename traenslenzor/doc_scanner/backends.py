@@ -17,15 +17,15 @@ from traenslenzor.text_extractor.flatten_image import find_document_corners
 from .utils import (
     build_full_image_corners,
     build_map_xy_from_homography,
+    compute_map_xy_stride,
     find_page_corners,
     order_points_clockwise,
     sample_map_xy,
-    should_generate_map_xy,
     warp_from_corners,
 )
 
 if TYPE_CHECKING:
-    from .configs import DocScannerDeskewConfig, OpenCVDeskewConfig, UVDocDeskewConfig
+    from .configs import OpenCVDeskewConfig, UVDocDeskewConfig
 
 
 @dataclass(slots=True)
@@ -73,11 +73,8 @@ class OpenCVDeskewBackend:
         warped_bgr, matrix, output_size = warp_from_corners(bgr, corners)
         warped_rgb = cv2.cvtColor(warped_bgr, cv2.COLOR_BGR2RGB)
 
+        # OpenCV backend does not emit map_xy (avoid misleading grid on simple perspective warp).
         map_xy = None
-        if self.config.generate_map_xy and should_generate_map_xy(
-            output_size, self.config.max_map_pixels
-        ):
-            map_xy = build_map_xy_from_homography(matrix, output_size)
 
         return DeskewResult(
             image_rgb=warped_rgb,
@@ -212,10 +209,12 @@ class UVDocDeskewBackend:
                     unwarped_rgb.shape[0], unwarped_rgb.shape[1]
                 )
 
+        map_xy_stride = compute_map_xy_stride((h, w), self.config.max_map_pixels)
+
         if corners_unwarped is None:
             output_rgb = unwarped_rgb
             output_size = (unwarped_rgb.shape[0], unwarped_rgb.shape[1])
-            map_xy_out = map_xy_full
+            map_xy_out = map_xy_full[::map_xy_stride, ::map_xy_stride]
         else:
             unwarped_bgr = cv2.cvtColor(unwarped_rgb, cv2.COLOR_RGB2BGR)
             cropped_bgr, crop_matrix, output_size = warp_from_corners(
@@ -224,177 +223,31 @@ class UVDocDeskewBackend:
             output_rgb = cv2.cvtColor(cropped_bgr, cv2.COLOR_BGR2RGB)
 
             map_xy_out = None
-            if self.config.generate_map_xy and should_generate_map_xy(
-                output_size, self.config.max_map_pixels
-            ):
+            if self.config.generate_map_xy:
                 out_h, out_w = output_size
+                map_xy_stride = compute_map_xy_stride(output_size, self.config.max_map_pixels)
                 xs, ys = np.meshgrid(
-                    np.arange(out_w, dtype=np.float32), np.arange(out_h, dtype=np.float32)
+                    np.arange(0, out_w, map_xy_stride, dtype=np.float32),
+                    np.arange(0, out_h, map_xy_stride, dtype=np.float32),
                 )
                 grid_out = np.stack([xs, ys], axis=-1).reshape(-1, 1, 2)
                 inv_crop = np.linalg.inv(crop_matrix)
                 coords_unwarped = cv2.perspectiveTransform(grid_out, inv_crop).reshape(
-                    out_h, out_w, 2
+                    xs.shape[0], xs.shape[1], 2
                 )
                 coords_flat = coords_unwarped.reshape(-1, 2)
                 mapped = sample_map_xy(map_xy_full, coords_flat)
-                map_xy_out = mapped.reshape(out_h, out_w, 2).astype(np.float32)
+                map_xy_out = mapped.reshape(xs.shape[0], xs.shape[1], 2).astype(np.float32)
 
         corners_original = None
         if corners_unwarped is not None:
             corners_original = sample_map_xy(map_xy_full, corners_unwarped)
 
-        if not self.config.generate_map_xy or not should_generate_map_xy(
-            (output_rgb.shape[0], output_rgb.shape[1]), self.config.max_map_pixels
-        ):
+        if not self.config.generate_map_xy:
             map_xy_out = None
 
         return DeskewResult(
             image_rgb=output_rgb,
             corners_original=corners_original,
             map_xy=map_xy_out,
-        )
-
-
-class DocScannerDeskewBackend:
-    """DocScanner localization backend using the segmentation module."""
-
-    def __init__(self, config: "DocScannerDeskewConfig") -> None:
-        self.config = config
-        self.console = Console.with_prefix(self.__class__.__name__, "init")
-        self.console.set_verbose(config.verbose).set_debug(config.is_debug)
-        self._model = None
-        self._device: str | None = None
-        self._repo_dir: Path | None = None
-
-    def _resolve_device(self) -> str:
-        if self.config.device != "auto":
-            return self.config.device
-
-        import torch
-
-        return "cuda" if torch.cuda.is_available() else "cpu"
-
-    def _load_model(self) -> None:
-        if self._model is not None:
-            return
-
-        repo_dir = Path(self.config.repo_dir)
-        if not repo_dir.exists():
-            raise RuntimeError(
-                f"DocScanner repo not found at {repo_dir}. "
-                "Clone it there or update docscanner.repo_dir."
-            )
-
-        import sys
-
-        if str(repo_dir) not in sys.path:
-            sys.path.insert(0, str(repo_dir))
-
-        try:
-            from seg import U2NETP  # type: ignore
-        except Exception as exc:  # pragma: no cover - external dependency
-            raise RuntimeError(f"Failed to import DocScanner seg module: {exc}") from exc
-
-        import torch
-
-        self._device = self._resolve_device()
-        model = U2NETP(3, 1).to(self._device).eval()
-
-        weights_path = Path(self.config.seg_weights) if self.config.seg_weights else None
-        if weights_path is None or not weights_path.exists():
-            raise RuntimeError(
-                "DocScanner seg weights not found. Expected seg.pth under model_pretrained."
-            )
-
-        state = torch.load(weights_path, map_location=self._device)
-        model_state = model.state_dict()
-        cleaned = {}
-        for key, value in state.items():
-            cleaned_key = key
-            if cleaned_key.startswith("module."):
-                cleaned_key = cleaned_key[7:]
-            if cleaned_key.startswith("model."):
-                cleaned_key = cleaned_key[6:]
-            if cleaned_key in model_state and model_state[cleaned_key].shape == value.shape:
-                cleaned[cleaned_key] = value
-        model_state.update(cleaned)
-        model.load_state_dict(model_state)
-
-        self._model = model
-        self._repo_dir = repo_dir
-
-    def _detect_corners(
-        self,
-        image_rgb: UInt8[NDArray, "H W 3"],
-    ) -> Float32[NDArray, "4 2"] | None:
-        import torch
-
-        assert self._model is not None
-        assert self._device is not None
-
-        im = image_rgb.astype(np.float32) / 255.0
-        h, w = im.shape[:2]
-        im_resized = cv2.resize(im, (288, 288))
-        tensor = torch.from_numpy(im_resized.transpose(2, 0, 1)).unsqueeze(0).to(self._device)
-
-        with torch.no_grad():
-            mask_pred, *_ = self._model(tensor)
-
-        mask = mask_pred[0, 0].detach().cpu().numpy()
-        doc_mask = (mask > self.config.mask_threshold).astype(np.uint8)
-        doc_mask = cv2.morphologyEx(doc_mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
-
-        contours, _ = cv2.findContours(doc_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not contours:
-            return None
-
-        contour = max(contours, key=cv2.contourArea).astype(np.float32)
-        contour[:, 0, 0] *= w / 288.0
-        contour[:, 0, 1] *= h / 288.0
-
-        epsilon = 0.02 * cv2.arcLength(contour, True)
-        approx = cv2.approxPolyDP(contour, epsilon, True)
-        if len(approx) != 4:
-            rect = cv2.minAreaRect(contour)
-            approx = cv2.boxPoints(rect).astype(np.float32).reshape(-1, 1, 2)
-
-        corners = approx.reshape(-1, 2).astype(np.float32)
-        return order_points_clockwise(corners)
-
-    def deskew(
-        self,
-        image_rgb: UInt8[NDArray, "H W 3"],
-    ) -> DeskewResult:
-        """Deskew via DocScanner segmentation localization.
-
-        Args:
-            image_rgb (ndarray[uint8]): Input RGB image, shape (H, W, 3).
-
-        Returns:
-            DeskewResult containing deskewed RGB image, corners, and optional map_xy.
-        """
-        self._load_model()
-
-        corners = self._detect_corners(image_rgb)
-        if corners is None:
-            if not self.config.fallback_to_original:
-                raise RuntimeError("DocScanner backend failed to find document corners.")
-            self.console.warn("DocScanner failed to find corners; using full image.")
-            corners = build_full_image_corners(image_rgb.shape[0], image_rgb.shape[1])
-
-        bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
-        warped_bgr, matrix, output_size = warp_from_corners(bgr, corners)
-        warped_rgb = cv2.cvtColor(warped_bgr, cv2.COLOR_BGR2RGB)
-
-        map_xy = None
-        if self.config.generate_map_xy and should_generate_map_xy(
-            output_size, self.config.max_map_pixels
-        ):
-            map_xy = build_map_xy_from_homography(matrix, output_size)
-
-        return DeskewResult(
-            image_rgb=warped_rgb,
-            corners_original=corners,
-            map_xy=map_xy,
         )
