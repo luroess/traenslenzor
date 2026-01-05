@@ -546,7 +546,7 @@ class DocClassifierModule(pl.LightningModule):
             batch: Tuple of (inputs, targets) where:
                    - inputs: ImageBatch with shape (B, C, H, W)
                    - targets: Targets with shape (B,) containing class indices
-            batch_idx: Index of the current batch.
+            batch_idx: Index of the current batch.r
         """
         inputs, targets = batch
         logits = self(inputs)

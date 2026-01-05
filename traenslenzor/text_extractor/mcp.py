@@ -6,7 +6,11 @@ from fastmcp import FastMCP
 from PIL import Image
 
 from traenslenzor.file_server.client import FileClient, SessionClient
-from traenslenzor.file_server.session_state import ExtractedDocument, SessionState
+from traenslenzor.file_server.session_state import (
+    DeskewBackend,
+    ExtractedDocument,
+    SessionState,
+)
 from traenslenzor.text_extractor.flatten_image import deskew_document
 from traenslenzor.text_extractor.paddleocr import run_ocr
 
@@ -38,33 +42,52 @@ async def extract_text(session_id: str) -> str:
         logger.error(f"No raw document available for session : {session_id}")
         return "No raw document available for this session"
 
-    file_data = await FileClient.get_raw_bytes(session.rawDocumentId)
+    file_data = None
+    using_existing_extracted = False
+
+    if session.extractedDocument is not None and session.extractedDocument.id:
+        file_data = await FileClient.get_raw_bytes(session.extractedDocument.id)
+        if file_data is not None:
+            using_existing_extracted = True
+        else:
+            logger.error("Stored extracted document missing; falling back to raw document.")
+
     if file_data is None:
-        logger.error("Invalid file id, no such document found")
-        return f"Document not found: {session.rawDocumentId}"
+        file_data = await FileClient.get_raw_bytes(session.rawDocumentId)
+        if file_data is None:
+            logger.error("Invalid file id, no such document found")
+            return f"Document not found: {session.rawDocumentId}"
+    else:
+        logger.info("Using previously extracted document for OCR")
 
     orig_img = bytes_to_numpy_image(file_data)
 
-    flattened_img = deskew_document(orig_img)
-    if flattened_img is None:
-        logger.error("Image flattening failed, fallback to original.")
-        flattened_img = orig_img
+    extracted_document = None
+    if not using_existing_extracted:
+        flattened_img = deskew_document(orig_img)
+        if flattened_img is None:
+            logger.error("Image flattening failed, fallback to original.")
+            flattened_img = orig_img
 
-    upload_image = cv2.cvtColor(flattened_img, cv2.COLOR_BGR2RGB)
-    flattened_image_id = await FileClient.put_img(
-        f"{session_id}_deskewed.png", Image.fromarray(upload_image)
-    )
-    if flattened_image_id is None:
-        logger.error("Uploading of extracted document image failed")
-        return "Uploading of extracted document image failed"
+        upload_image = cv2.cvtColor(flattened_img, cv2.COLOR_BGR2RGB)
+        flattened_image_id = await FileClient.put_img(
+            f"{session_id}_deskewed.png", Image.fromarray(upload_image)
+        )
+        if flattened_image_id is None:
+            logger.error("Uploading of extracted document image failed")
+            return "Uploading of extracted document image failed"
 
-    extracted_document = ExtractedDocument(
-        id=flattened_image_id,
-        # TODO: fix this shit
-        documentCoordinates=[],
-    )
+        extracted_document = ExtractedDocument(
+            id=flattened_image_id,
+            # TODO: fix this shit
+            documentCoordinates=[],
+            backend=DeskewBackend.opencv,
+        )
 
-    res = run_ocr("en", flattened_img)
+        orig_img = flattened_img
+
+    # TODO: set detected language from session state
+    res = run_ocr("en", orig_img)
     logger.info(res)
 
     if res is None:
@@ -73,7 +96,9 @@ async def extract_text(session_id: str) -> str:
 
     def update_session(session: SessionState):
         session.text = res
-        session.extractedDocument = extracted_document
+        if extracted_document is not None:
+            session.extractedDocument = extracted_document
+            session.deskew_backend = extracted_document.backend
 
     await SessionClient.update(session_id, update_session)
     return "Text extraction successful"

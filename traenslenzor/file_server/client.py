@@ -59,6 +59,14 @@ class FileClient:
         return str(resp.json().get("id"))
 
     @staticmethod
+    async def put_numpy_array(name: str, array: NDArray[np.float32]) -> Optional[str]:
+        """Upload a numpy array as .npy bytes and return its UUID string."""
+        buffer = BytesIO()
+        np.save(buffer, array)
+        buffer.seek(0)
+        return await FileClient.put_bytes(name, buffer.getvalue())
+
+    @staticmethod
     async def get_raw_bytes(file_id: str) -> Optional[bytes]:
         """Download a file and return its bytes, or None if not found."""
         async with httpx.AsyncClient() as client:
