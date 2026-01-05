@@ -10,7 +10,7 @@ from PIL.Image import Resampling
 from PIL.ImageFont import FreeTypeFont
 from PIL.ImageFont import ImageFont as ImageFontType
 
-from traenslenzor.file_server.session_state import BBoxPoint, TranslatedTextItem
+from traenslenzor.file_server.session_state import BBoxPoint, RenderReadyItem
 from traenslenzor.image_utils.image_utils import np_img_to_pil, pil_to_numpy
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ def get_angle_from_bbox(bbox: List[BBoxPoint]) -> tuple[float, NDArray[np.float6
     return (np.degrees(radians) % 360, transformation_matrix)
 
 
-def create_mask(texts: list[TranslatedTextItem], mask_shape: tuple[int, int]) -> NDArray[np.uint8]:
+def create_mask(texts: list[RenderReadyItem], mask_shape: tuple[int, int]) -> NDArray[np.uint8]:
     """
     Create a binary mask from text regions.
 
@@ -62,7 +62,7 @@ def create_mask(texts: list[TranslatedTextItem], mask_shape: tuple[int, int]) ->
 
 
 def draw_texts(
-    image: NDArray[np.float32], texts: list[TranslatedTextItem], debug: bool | None = None
+    image: NDArray[np.float32], texts: list[RenderReadyItem], debug: bool | None = None
 ) -> NDArray[np.float32]:
     """
     Draw text onto an image using PIL with rotation support.
@@ -94,16 +94,18 @@ def draw_texts(
 
         # Get text properties
         ul = text.bbox[0]  # upper-left corner
-        text_str = text.translatedText
+        text_str = text.translation.translatedText
         color = text.color or "black"
 
         # Load font
         font: FreeTypeFont | ImageFontType
         try:
-            font = ImageFont.truetype(text.detectedFont, float(text.font_size))
+            font = ImageFont.truetype(text.font.detectedFont, float(text.font.font_size))
         except OSError:
-            logger.warning(f"Font '{text.detectedFont}' not found, falling back to default font")
-            font = ImageFont.load_default(float(text.font_size))
+            logger.warning(
+                f"Font '{text.font.detectedFont}' not found, falling back to default font"
+            )
+            font = ImageFont.load_default(float(text.font.font_size))
 
         # Get text dimensions from rectified bbox
         rectified_bbox = [point.T @ matrix for point in bbox_as_array]

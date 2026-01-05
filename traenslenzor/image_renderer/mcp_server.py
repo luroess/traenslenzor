@@ -12,7 +12,7 @@ from fastmcp.exceptions import ToolError
 from pydantic import Field
 
 from traenslenzor.file_server.client import FileClient, SessionClient
-from traenslenzor.file_server.session_state import SessionState, TranslatedTextItem
+from traenslenzor.file_server.session_state import RenderReadyItem, SessionState
 from traenslenzor.image_renderer.image_rendering import ImageRenderer
 from traenslenzor.supervisor.config import settings
 
@@ -103,19 +103,19 @@ async def replace_text(
             "No text items found in session. Please extract text from the document first."
         )
 
-    # Validate all text items are translated
-    if not all(text.type == "translated" for text in session.text):
-        untranslated = [text.extractedText for text in session.text if text.type != "translated"]
-        logger.error(f"Text items are not translated yet: {untranslated}")
+    # Validate all text items are render ready (have both font and translation)
+    if not all(text.type == "render_ready" for text in session.text):
+        not_ready = [text.extractedText for text in session.text if text.type != "render_ready"]
+        logger.error(f"Text items are not render ready yet: {not_ready}")
         raise ToolError(
-            f"All text items must be translated before rendering. "
-            f"Found {len(untranslated)} untranslated item(s). "
-            f"Please translate the text first."
+            f"All text items must be render ready (with font detection and translation) before rendering. "
+            f"Found {len(not_ready)} item(s) not ready. "
+            f"Please ensure font detection and translation are complete."
         )
 
-    # Type narrowing: we know all items are translated now
-    translated_texts: list[TranslatedTextItem] = [
-        text for text in session.text if text.type == "translated"
+    # Type narrowing: we know all items are render ready now
+    render_ready_texts: list[RenderReadyItem] = [
+        text for text in session.text if text.type == "render_ready"
     ]
     if session.rawDocumentId is None:
         logger.error(f"No raw document available for session: {session_id}")
@@ -142,7 +142,7 @@ async def replace_text(
     renderer = get_renderer()
     result_image = await renderer.replace_text(
         image=image,
-        texts=translated_texts,
+        texts=render_ready_texts,
         save_debug=settings.llm.debug_mode,
         debug_dir=DEBUG_DIR,
     )

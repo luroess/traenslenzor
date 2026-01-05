@@ -10,7 +10,11 @@ from fastmcp import FastMCP
 from PIL import Image
 
 from traenslenzor.file_server.client import FileClient, SessionClient
-from traenslenzor.file_server.session_state import DetectedFontTextItem, SessionState
+from traenslenzor.file_server.session_state import (
+    FontInfo,
+    SessionState,
+    add_font_info,
+)
 from traenslenzor.supervisor.config import settings
 
 from .font_name_detector import FontNameDetector
@@ -282,12 +286,12 @@ async def detect_font_logic(session_id: str) -> str:
                             logger.error(f"Error estimating font size: {e}")
                             font_size = 12  # Fallback
 
-                    # Create DetectedFontTextItem from any TextItem type
-                    detected_item = DetectedFontTextItem(
-                        **t.model_dump(exclude={"type"}),
+                    # Create font info and add to text item
+                    font_info = FontInfo(
                         detectedFont=global_font_name,
                         font_size=font_size,
                     )
+                    detected_item = add_font_info(t, font_info)
                     updated_texts.append(detected_item)
 
                     # Collect debug info
@@ -297,8 +301,8 @@ async def detect_font_logic(session_id: str) -> str:
                             "bbox": [{"x": p.x, "y": p.y} for p in detected_item.bbox]
                             if detected_item.bbox
                             else None,
-                            "detectedFont": detected_item.detectedFont,
-                            "font_size": detected_item.font_size,
+                            "detectedFont": detected_item.font.detectedFont,
+                            "font_size": detected_item.font.font_size,
                         }
                     )
 

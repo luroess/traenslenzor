@@ -8,7 +8,7 @@ from PIL import Image
 from PIL.Image import Image as PILImage
 
 import traenslenzor.image_utils.image_utils as ImageUtils
-from traenslenzor.file_server.session_state import TranslatedTextItem
+from traenslenzor.file_server.session_state import RenderReadyItem
 from traenslenzor.image_renderer.inpainting import Inpainter
 from traenslenzor.image_renderer.text_operations import create_mask, draw_texts
 
@@ -51,7 +51,7 @@ class ImageRenderer:
     async def replace_text(
         self,
         image: PILImage,
-        texts: list[TranslatedTextItem],
+        texts: list[RenderReadyItem],
         save_debug: bool = True,
         debug_dir: str = "./debug",
     ) -> PILImage:

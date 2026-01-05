@@ -4,18 +4,33 @@ from pydantic import BaseModel, Discriminator
 
 
 class BBoxPoint(BaseModel):
-    """Image-space point used by `traenslenzor.text_extractor.paddleocr.parse_result` and `traenslenzor.text_extractor.mcp.extract_text`."""
+    """Image-space point used by OCR/document polygons."""
 
     x: float
-    """X coordinate in pixels for OCR/document polygons."""
+    """X coordinate in pixels."""
     y: float
-    """Y coordinate in pixels for OCR/document polygons."""
+    """Y coordinate in pixels."""
 
 
-class OCRTextItem(BaseModel):
-    """OCR text item from `traenslenzor.text_extractor.paddleocr.parse_result`, stored by `traenslenzor.text_extractor.mcp.extract_text`."""
+class FontInfo(BaseModel):
+    """Font detection results from `traenslenzor.font_detector.mcp.detect_font`."""
 
-    type: Literal["untranslated"] = "untranslated"
+    detectedFont: str
+    """Font family name."""
+    font_size: int
+    """Font size in pixels."""
+
+
+class TranslationInfo(BaseModel):
+    """Translation results from `traenslenzor.translator.mcp.translate`."""
+
+    translatedText: str
+    """Translated text."""
+
+
+class OCRBase(BaseModel):
+    """Base OCR data present in all text items."""
+
     extractedText: str
     """Raw text from PaddleOCR `rec_texts`."""
     confidence: float
@@ -26,47 +41,120 @@ class OCRTextItem(BaseModel):
     """Reserved for OCR text color (not populated by current tools)."""
 
 
-class DetectedFontTextItem(BaseModel):
-    """Text item with detected font information from `traenslenzor.font_detector.mcp.detect_font`."""
+class OCRTextItem(OCRBase):
+    """Text item directly from OCR - no processing yet.
+
+    Produced by: `traenslenzor.text_extractor.mcp.extract_text`
+    Consumed by: Font Detector, Translator
+    """
+
+    type: Literal["ocr"] = "ocr"
+
+
+class FontDetectedItem(OCRBase):
+    """Text item with font detection but no translation.
+
+    Produced by: Font Detector (from OCRTextItem)
+    Consumed by: Translator (to produce RenderReadyItem)
+    """
 
     type: Literal["font_detected"] = "font_detected"
-    extractedText: str
-    """Raw text from PaddleOCR `rec_texts`."""
-    confidence: float
-    """PaddleOCR confidence score from `rec_scores`."""
-    bbox: list[BBoxPoint]
-    """PaddleOCR polygon from `rec_polys` (4 points ordered UL, UR, LR, LL)."""
-    detectedFont: str
-    """Font family name set by `traenslenzor.font_detector.mcp.detect_font`."""
-    font_size: int
-    """Font size set by `traenslenzor.font_detector.mcp.detect_font`."""
-    color: tuple[int, int, int] | None = None
-    """Reserved for OCR text color (not populated by current tools)."""
+    font: FontInfo
 
 
-class TranslatedTextItem(BaseModel):
-    """Fully processed text item with translation from `traenslenzor.translator.mcp.translate`."""
+class TranslatedOnlyItem(OCRBase):
+    """Text item with translation but no font detection.
 
-    type: Literal["translated"] = "translated"
-    extractedText: str
-    """Raw text from PaddleOCR `rec_texts`."""
-    confidence: float
-    """PaddleOCR confidence score from `rec_scores`."""
-    bbox: list[BBoxPoint]
-    """PaddleOCR polygon from `rec_polys` (4 points ordered UL, UR, LR, LL)."""
-    detectedFont: str
-    """Font family name set by `traenslenzor.font_detector.mcp.detect_font`."""
-    font_size: int
-    """Font size set by `traenslenzor.font_detector.mcp.detect_font`."""
-    translatedText: str
-    """Translated text set by `traenslenzor.translator.mcp.translate`."""
-    color: tuple[int, int, int] | None = None
-    """Reserved for OCR text color (not populated by current tools)."""
+    Produced by: Translator (from OCRTextItem)
+    Consumed by: Font Detector (to produce RenderReadyItem)
+    """
+
+    type: Literal["translated_only"] = "translated_only"
+    translation: TranslationInfo
 
 
+class RenderReadyItem(OCRBase):
+    """Fully processed text item ready for rendering.
+
+    Produced by:
+        - Font Detector (from TranslatedOnlyItem)
+        - Translator (from FontDetectedItem)
+    Consumed by: `traenslenzor.image_renderer.mcp.replace_text`
+    """
+
+    type: Literal["render_ready"] = "render_ready"
+    font: FontInfo
+    translation: TranslationInfo
+
+
+# Discriminated Union for all possible text item states
 TextItem = Annotated[
-    Union[OCRTextItem, DetectedFontTextItem, TranslatedTextItem], Discriminator("type")
+    Union[OCRTextItem, FontDetectedItem, TranslatedOnlyItem, RenderReadyItem],
+    Discriminator("type"),
 ]
+
+# Type aliases for processor input/output signatures
+NeedsFontDetection = OCRTextItem | TranslatedOnlyItem
+NeedsTranslation = OCRTextItem | FontDetectedItem
+HasFontInfo = FontDetectedItem | RenderReadyItem
+HasTranslation = TranslatedOnlyItem | RenderReadyItem
+
+
+def add_font_info(item: TextItem, font: FontInfo) -> FontDetectedItem | RenderReadyItem:
+    """Add font detection results to any text item.
+
+    Args:
+        item: Any text item in the pipeline
+        font: Font detection results to add
+
+    Returns:
+        FontDetectedItem if item had no translation, RenderReadyItem if it did
+    """
+    base_data = item.model_dump(exclude={"type", "font", "translation"})
+
+    if isinstance(item, (TranslatedOnlyItem, RenderReadyItem)):
+        # Already has translation -> becomes RenderReady
+        return RenderReadyItem(**base_data, font=font, translation=item.translation)
+    else:
+        # No translation yet -> becomes FontDetected
+        return FontDetectedItem(**base_data, font=font)
+
+
+def add_translation(
+    item: TextItem, translation: TranslationInfo
+) -> TranslatedOnlyItem | RenderReadyItem:
+    """Add translation results to any text item.
+
+    Args:
+        item: Any text item in the pipeline
+        translation: Translation results to add
+
+    Returns:
+        TranslatedOnlyItem if item had no font info, RenderReadyItem if it did
+    """
+    base_data = item.model_dump(exclude={"type", "font", "translation"})
+
+    if isinstance(item, (FontDetectedItem, RenderReadyItem)):
+        # Already has font -> becomes RenderReady
+        return RenderReadyItem(**base_data, font=item.font, translation=translation)
+    else:
+        # No font yet -> becomes TranslatedOnly
+        return TranslatedOnlyItem(**base_data, translation=translation)
+
+
+def is_render_ready(item: TextItem) -> bool:
+    """Check if an item is ready for rendering."""
+    return isinstance(item, RenderReadyItem)
+
+
+def filter_render_ready(items: list[TextItem]) -> list[RenderReadyItem]:
+    """Filter a list to only render-ready items."""
+    return [item for item in items if isinstance(item, RenderReadyItem)]
+
+
+def all_render_ready(items: list[TextItem]) -> bool:
+    """Check if all items in the list are ready for rendering."""
+    return all(is_render_ready(item) for item in items)
 
 
 class ExtractedDocument(BaseModel):
