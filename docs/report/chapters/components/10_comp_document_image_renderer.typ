@@ -1,4 +1,4 @@
-#import "/template/lib.typ": *
+#import "@preview/supercharged-hm:0.1.0": *
 
 == Document Image Renderer
 

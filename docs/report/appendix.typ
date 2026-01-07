@@ -1,5 +1,8 @@
-== Important Technical Details
+#import "@preview/supercharged-hm:0.1.0"
 
-Some important technical details
+= Appendix
+== PaddleOCR Import Shim <paddle_shim> 
 
-#lorem(100)
+#figure(caption: [])[
+  #code
+]
