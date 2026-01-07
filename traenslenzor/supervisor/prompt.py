@@ -21,7 +21,7 @@ def has_translated_text(session: SessionState) -> bool:
     if session.text is None:
         return False
     for text in session.text:
-        if text.type == "translated":
+        if text.type in ["translated", "render_ready"]:
             return True
     return False
 
@@ -34,7 +34,7 @@ def has_font_been_detected(session: SessionState) -> bool:
     if session.text is None:
         return False
     for text in session.text:
-        if text.type in ("font_detected", "translated"):
+        if text.type in ("font_detected", "render_ready"):
             return True
     return False
 
