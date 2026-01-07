@@ -1,6 +1,6 @@
 #import "@preview/supercharged-hm:0.1.0": *
 
-== Layout Detector
+== Layout Detector <comp_layout_detector>
 
 - What is detected
 - how it works

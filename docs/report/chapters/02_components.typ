@@ -1,18 +1,46 @@
 #import "@preview/supercharged-hm:0.1.0": *
 
-= Components
+= Components <components>
 
-#box(fill: luma(240), inset: 8pt, radius: 6pt)[
-  #strong[To do.] Add a diagram of your architecture and explain it.
-]
+#figure(caption: [Architecture overview of components and established communication paths])[
+  // the drawio source file can be found under ./docs/report/graphics/adl-report.drawio
+  #image("../imgs/architecturev1.png")
+] <components_architecture_fig>
 
-See @fig:arch for a diagram of the overall architecture.
+All components of the image translator are visualized in @components_architecture_fig.
+\
+The user interacts through the web-based streamlit user interface described in @comp_user_interface.
+There, the user can upload an image to be translated and specify a prompt with requests for language and further alterations of the result.
+Upon the user starting the user interface, a new session is created via an #gls("http") #gls("api") call to the file server component, instantiating a session state with a unique session id.
+\
+The file server component described in @comp_file_server serves as the central storage location for all associated for a session, including image data like the uploaded document and associated metadata such as extracted Text and corresponding bounding boxes.
+All data exchange between different tool components, the ui and the supervisor is orchestrated via the file server component.
+Once the user sends a prompt in the user interface, the supervisor component described in @comp_supervisor is invoked. 
+\
+The supervisor is the central node of the program, running the agent #gls("llm") and is connected to all tool components.
+Utilizing langchain as the framework for agentic #gls("llm") task, all tools are provided to the `gwen3:4b` #gls("llm") model.
+Beginning with the first prompt received by the #gls("llm") in a session, the #gls("llm") will then deduct a logical order for tool execution from the required data dependencies and descriptions provided by the tools. 
+A fixed order is not provided.
+In case the #gls("llm") requires further user input such as the destination language it might respond to the user with a followup question for further clarification.
+\
+Typically the text extraction tool described in @comp_text_extractor is called as the first step.
+First, the image borders are recognized and it is deskewed to a fitting rectangle. Then utilizing an #gls("ocr") library, the text features and their location are extracted from the image.
+The resulting deskewed image and metadata is then uploaded to the file server.
+\
+#warning-note([
+  *TODO: All other components need to be added *\
+  - doc class detector
+  - font detector
+  - translator
+  - doc layout detector ???? (DO WE EVEN HAVE THIS ONE?)
+  - X - Doc Editor
+  - Doc image renderer
+])
 
-#figure(caption: [Architecture])[
-  #image("/imgs/arch.png", width: 80%)
-] <fig:arch>
 
-#box(fill: luma(240), inset: 8pt, radius: 6pt)[
+
+
+#warning-note()[
   #strong[For each component:] Add a description (task, input, output, #emph[interesting] technical detail).
   For some components (e.g., the font detector or the document class detector), add experiment results (confusion matrices, loss curves, etc.).
 ]

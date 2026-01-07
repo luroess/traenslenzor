@@ -1,6 +1,6 @@
 #import "@preview/supercharged-hm:0.1.0": *
 
-== Document Class Detector
+== Document Class Detector <comp_class_detector>
 
 TODO
 

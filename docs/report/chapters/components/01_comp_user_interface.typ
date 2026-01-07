@@ -1,6 +1,6 @@
 #import "@preview/supercharged-hm:0.1.0": *
 
-== User Interface
+== User Interface <comp_user_interface>
 
 - Streamlit App
 - Show screenshot

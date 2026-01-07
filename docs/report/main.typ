@@ -1,6 +1,7 @@
 
 #import "@preview/supercharged-hm:0.1.0": *
 #import "glossary.typ" : glossary
+#import "appendix.typ": appendix
 
 #show: hm-template(
   title: "Traenslenzor",
@@ -25,5 +26,5 @@
   #include "/chapters/03_team.typ"
 
   // Ugly workaround till i will be able to the template
-  #include "/appendix.typ"
+  #appendix
 ]
