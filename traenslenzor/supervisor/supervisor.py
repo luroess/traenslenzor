@@ -7,7 +7,7 @@ from langchain.agents.middleware import (
     wrap_tool_call,
 )
 from langchain_core.callbacks import BaseCallbackHandler
-from langchain_core.messages import BaseMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 from langchain_core.outputs import LLMResult
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
@@ -91,6 +91,15 @@ class Supervisor:
         )
 
 
+def select_final_message(messages: list[BaseMessage]) -> BaseMessage:
+    if messages and isinstance(messages[-1], AIMessage):
+        return messages[-1]
+    logger.warning("Supervisor ended without a final AI message. Returning fallback summary.")
+    return AIMessage(
+        content="Workflow completed. Please check the results and respond with necessary adjustments"
+    )
+
+
 async def run(user_input: str, session_id: str | None = None) -> tuple[BaseMessage, str | None]:
     tools = await get_tools()
     supervisor = Supervisor(tools)
@@ -107,4 +116,4 @@ async def run(user_input: str, session_id: str | None = None) -> tuple[BaseMessa
     messages = result.get("messages", [])
     session_id = result.get("session_id", None)
 
-    return (messages[-1], session_id)
+    return (select_final_message(messages), session_id)

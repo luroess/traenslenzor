@@ -3,7 +3,12 @@ import logging
 
 from ollama import Client
 
-from traenslenzor.file_server.session_state import TextItem
+from traenslenzor.file_server.session_state import (
+    HasTranslation,
+    TextItem,
+    TranslationInfo,
+    add_translation,
+)
 from traenslenzor.supervisor.config import settings
 
 logger = logging.getLogger(__name__)
@@ -11,7 +16,7 @@ logger = logging.getLogger(__name__)
 client = Client(host=settings.llm.ollama_url)
 
 
-def translate(text: TextItem, lang: str) -> TextItem:
+def translate(text: TextItem, lang: str) -> HasTranslation:
     """Translates a single TextItem's extractedText into the target language using the configured LLM."""
     system = {
         "role": "system",
@@ -31,12 +36,11 @@ def translate(text: TextItem, lang: str) -> TextItem:
 
     assert response.message.content is not None
 
-    new_item = text.model_copy()
-    new_item.translatedText = response.message.content
-    return new_item
+    translation_info = TranslationInfo(translatedText=response.message.content)
+    return add_translation(text, translation_info)
 
 
-def translate_all(texts: list[TextItem], lang: str) -> list[TextItem]:
+def translate_all(texts: list[TextItem], lang: str) -> list[HasTranslation]:
     """Translates a list of TextItems into the target language using batch processing, falling back to sequential translation on failure."""
     if not texts:
         return []
@@ -69,11 +73,10 @@ def translate_all(texts: list[TextItem], lang: str) -> list[TextItem]:
             translated_texts = json.loads(content.strip())
 
             if isinstance(translated_texts, list) and len(translated_texts) == len(texts):
-                results = []
+                results: list[HasTranslation] = []
                 for i, item in enumerate(texts):
-                    new_item = item.model_copy()
-                    new_item.translatedText = translated_texts[i]
-                    results.append(new_item)
+                    translation_info = TranslationInfo(translatedText=translated_texts[i])
+                    results.append(add_translation(item, translation_info))
                 return results
             else:
                 logger.warning(
