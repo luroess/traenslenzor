@@ -34,21 +34,42 @@ _runtime_config_signature: dict[str, object] | None = None
 
 _EXTRACTED_DOCUMENT_SCHEMA: dict[str, object] = {
     "type": "object",
+    "description": "Deskewed document metadata produced by the doc-scanner.",
     "properties": {
-        "id": {"type": "string"},
+        "id": {
+            "type": "string",
+            "description": "File id of the deskewed (extracted) document image.",
+        },
         "documentCoordinates": {
             "type": "array",
+            "description": (
+                "Four corner points of the document in original image pixel coordinates "
+                "(order: UL, UR, LR, LL)."
+            ),
             "items": {
                 "type": "object",
-                "properties": {"x": {"type": "number"}, "y": {"type": "number"}},
+                "properties": {
+                    "x": {
+                        "type": "number",
+                        "description": "X coordinate in original image pixels.",
+                    },
+                    "y": {
+                        "type": "number",
+                        "description": "Y coordinate in original image pixels.",
+                    },
+                },
                 "required": ["x", "y"],
                 "additionalProperties": False,
             },
         },
-        "mapXYId": {"type": ["string", "null"]},
+        "mapXYId": {
+            "type": ["string", "null"],
+            "description": "File id of the map_xy flow field.",
+        },
         "mapXYShape": {
             "type": ["array", "null"],
             "items": {"type": "integer"},
+            "description": "Shape of map_xy as [H, W, 2].",
         },
     },
     "required": ["id", "documentCoordinates", "mapXYId", "mapXYShape"],
@@ -56,7 +77,12 @@ _EXTRACTED_DOCUMENT_SCHEMA: dict[str, object] = {
 }
 _DESKEW_OUTPUT_SCHEMA: dict[str, object] = {
     "type": "object",
-    "properties": {"extractedDocument": _EXTRACTED_DOCUMENT_SCHEMA},
+    "properties": {
+        "extractedDocument": {
+            **_EXTRACTED_DOCUMENT_SCHEMA,
+            "description": "Extracted document metadata from the deskew operation.",
+        }
+    },
     "required": ["extractedDocument"],
     "additionalProperties": False,
 }
@@ -109,7 +135,7 @@ async def deskew_document(
     session_id: Annotated[
         str,
         Field(
-            description="File server session id (injected by the supervisor; do not ask the user).",
+            description="File server session id.",
             pattern="^[0-9a-fA-F-]{36}$",
         ),
     ],
