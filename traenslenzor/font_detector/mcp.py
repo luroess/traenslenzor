@@ -12,6 +12,7 @@ from PIL import Image
 from traenslenzor.file_server.client import FileClient, SessionClient
 from traenslenzor.file_server.session_state import (
     FontInfo,
+    HasFontInfo,
     SessionState,
     add_font_info,
 )
@@ -258,7 +259,7 @@ async def detect_font_logic(session_id: str) -> str:
         def update_session(session: SessionState):
             debug_info = []
             if session.text is not None:
-                updated_texts = []
+                updated_texts: List[HasFontInfo] = []
                 for t in session.text:
                     # Calculate font size for each text item
                     font_size = 12  # Default fallback
