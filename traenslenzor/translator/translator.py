@@ -57,6 +57,7 @@ def translate_all(texts: list[TextItem], lang: str) -> list[HasTranslation]:
         "content": json.dumps(input_texts),
     }
 
+    content = None
     try:
         response = client.chat(model=settings.llm.model, messages=[system, message])
         content = response.message.content
@@ -71,6 +72,9 @@ def translate_all(texts: list[TextItem], lang: str) -> list[HasTranslation]:
                 content = content[:-3]
 
             translated_texts = json.loads(content.strip())
+            preview = content.strip()
+            if len(preview) > 200:
+                preview = preview[:200] + "..."
 
             if isinstance(translated_texts, list) and len(translated_texts) == len(texts):
                 results: list[HasTranslation] = []
@@ -79,12 +83,29 @@ def translate_all(texts: list[TextItem], lang: str) -> list[HasTranslation]:
                     results.append(add_translation(item, translation_info))
                 return results
             else:
-                logger.warning(
-                    "Batch translation returned invalid format or length. Falling back to sequential."
-                )
+                if not isinstance(translated_texts, list):
+                    logger.warning(
+                        "Batch translation returned non-list JSON (%s). Preview: %r. Falling back to sequential.",
+                        type(translated_texts).__name__,
+                        preview,
+                    )
+                else:
+                    logger.warning(
+                        "Batch translation returned length mismatch (expected %s, got %s). Preview: %r. Falling back to sequential.",
+                        len(texts),
+                        len(translated_texts),
+                        preview,
+                    )
 
     except json.JSONDecodeError as e:
-        logger.error(f"Batch translation JSON decode failed: {e}. Falling back to sequential.")
+        preview = (content or "").strip()
+        if len(preview) > 200:
+            preview = preview[:200] + "..."
+        logger.error(
+            "Batch translation JSON decode failed: %s. Preview: %r. Falling back to sequential.",
+            e,
+            preview,
+        )
     except Exception as e:
         logger.exception(
             f"Unexpected error during batch translation: {e}. Falling back to sequential."
