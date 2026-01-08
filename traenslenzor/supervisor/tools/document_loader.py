@@ -22,7 +22,6 @@ async def document_loader(filepath: str, runtime: ToolRuntime) -> Command:
         session = initialize_session()
         session.rawDocumentId = file_id
         session.language = existing_session.language
-        session.deskew_backend = existing_session.deskew_backend
         await SessionClient.put(session_id, session)
 
         logger.info(f"Successfully loaded file: '{filepath}'")

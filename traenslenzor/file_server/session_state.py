@@ -1,16 +1,6 @@
-from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field
-
-
-class DeskewBackend(str, Enum):
-    """Supported document deskew backends."""
-
-    opencv = "opencv"
-    """OpenCV contour-based deskew."""
-    uvdoc = "uvdoc"
-    """UVDoc neural unwarping ([GitHub](https://github.com/tanguymagne/UVDoc))."""
 
 
 class BBoxPoint(BaseModel):
@@ -52,8 +42,6 @@ class ExtractedDocument(BaseModel):
     """File id for the optional map_xy array mapping output pixels to original image pixels (may be downsampled)."""
     mapXYShape: tuple[int, int, int] | None = None
     """Shape metadata for map_xy as (H, W, 2) when available (downsampled shapes are allowed)."""
-    backend: DeskewBackend | None = None
-    """Deskew backend used to generate this extracted document."""
 
 
 class SessionState(BaseModel):
@@ -61,8 +49,6 @@ class SessionState(BaseModel):
 
     rawDocumentId: str | None = None
     """Raw document file id set by `traenslenzor.supervisor.tools.document_loader.document_loader`."""
-    deskew_backend: DeskewBackend | None = None
-    """Preferred backend for deskewing documents."""
     extractedDocument: ExtractedDocument | None = None
     """Deskewed document metadata."""
     renderedDocumentId: str | None = None

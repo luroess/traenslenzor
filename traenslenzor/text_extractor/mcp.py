@@ -6,11 +6,7 @@ from fastmcp import FastMCP
 from PIL import Image
 
 from traenslenzor.file_server.client import FileClient, SessionClient
-from traenslenzor.file_server.session_state import (
-    DeskewBackend,
-    ExtractedDocument,
-    SessionState,
-)
+from traenslenzor.file_server.session_state import ExtractedDocument, SessionState
 from traenslenzor.text_extractor.flatten_image import deskew_document
 from traenslenzor.text_extractor.paddleocr import run_ocr
 
@@ -81,7 +77,6 @@ async def extract_text(session_id: str) -> str:
             id=flattened_image_id,
             # TODO: fix this shit
             documentCoordinates=[],
-            backend=DeskewBackend.opencv,
         )
 
         orig_img = flattened_img
@@ -98,7 +93,6 @@ async def extract_text(session_id: str) -> str:
         session.text = res
         if extracted_document is not None:
             session.extractedDocument = extracted_document
-            session.deskew_backend = extracted_document.backend
 
     await SessionClient.update(session_id, update_session)
     return "Text extraction successful"
