@@ -3,4 +3,4 @@ seed = 69
 temperature = 0
 #ollama_url =  "http://wgserver.ddnss.ch:45876"
 ollama_url = "http://localhost:11434"
-model = "qwen3:4b"
+model = "qwen3:4B"
