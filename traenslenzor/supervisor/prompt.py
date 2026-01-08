@@ -52,13 +52,11 @@ def has_result_been_rendered(session: SessionState) -> bool:
 
 
 def format_session(session_id: str, session: SessionState) -> str:
-    deskew_backend = session.deskew_backend.value if session.deskew_backend else None
     text_count = len(session.text) if session.text else 0
     return f"""
         ✅ the current session_id is '{session_id}'
         {f"✅ the user has selected the language {session.language}" if session.language else "❌ the user has no language selected"}
         {"✅ the user has a document loaded" if session.rawDocumentId else "❌ the user has no document selected"}
-        {f"✅ deskew backend: {deskew_backend}" if deskew_backend else "❌ no deskew backend selected"}
 
         {"✅ extracted document is available" if has_extracted_document(session) else "❌ no extracted document available"}
 

@@ -5,7 +5,6 @@ import logging
 import threading
 from collections.abc import Awaitable
 from concurrent.futures import Future
-from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, TypeVar, cast
 
@@ -13,13 +12,13 @@ import numpy as np
 import streamlit as st
 from PIL import Image, ImageDraw
 
+from traenslenzor.doc_classifier.configs.mcp_config import DocClassifierMCPConfig
 from traenslenzor.doc_classifier.configs.path_config import PathConfig
 from traenslenzor.doc_classifier.mcp_integration import mcp_server as doc_classifier_mcp_server
 from traenslenzor.doc_scanner.visualize import draw_grid_overlay
 from traenslenzor.file_server.client import FileClient, SessionClient
 from traenslenzor.file_server.session_state import (
     BBoxPoint,
-    DeskewBackend,
     SessionProgress,
     SessionState,
     TextItem,
@@ -27,7 +26,6 @@ from traenslenzor.file_server.session_state import (
 )
 from traenslenzor.logger import setup_logger
 from traenslenzor.streamlit.prompt_presets import PromptPreset, get_prompt_presets
-from traenslenzor.supervisor.config import settings
 from traenslenzor.supervisor.supervisor import run as run_supervisor
 
 if TYPE_CHECKING:
@@ -46,6 +44,7 @@ _SUPERVISOR_POLL_INTERVAL_SECONDS = 2
 DEFAULT_ASSISTANT_MESSAGE = (
     "Document Assistant Ready! I can help you with document operations. Please provide a document:"
 )
+_DOC_CLASSIFIER_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "doc-classifier.toml"
 
 
 def _ensure_defaults() -> None:
@@ -135,6 +134,28 @@ def _submit_async(coro: Awaitable[T]) -> Future[T]:
 def _prompt_presets_key() -> str:
     nonce = st.session_state.get("prompt_presets_nonce", 0)
     return f"prompt_presets__{nonce}"
+
+
+def _load_doc_classifier_config() -> DocClassifierMCPConfig:
+    """Load the doc-classifier MCP config, creating a default file if needed."""
+    config_path = _DOC_CLASSIFIER_CONFIG_PATH
+    if not config_path.exists() or config_path.stat().st_size == 0:
+        config = DocClassifierMCPConfig(checkpoint_path=None, device="auto")
+        config.save_toml(config_path)
+        return config
+
+    try:
+        return DocClassifierMCPConfig.from_toml(config_path)
+    except Exception:
+        logger.exception("Failed to load doc-classifier config at %s. Using defaults.", config_path)
+        config = DocClassifierMCPConfig(checkpoint_path=None, device="auto")
+        config.save_toml(config_path)
+        return config
+
+
+def _save_doc_classifier_config(config: DocClassifierMCPConfig) -> None:
+    """Persist the doc-classifier MCP config to disk."""
+    config.save_toml(_DOC_CLASSIFIER_CONFIG_PATH)
 
 
 def _render_prompt_presets(presets: list[PromptPreset]) -> str | None:
@@ -254,6 +275,14 @@ def _short_session_id(session_id: str) -> str:
     return f"{session_id[:8]}...{session_id[-4:]}"
 
 
+def _format_document_corners(points: list[BBoxPoint] | None) -> str:
+    if not points or len(points) < 4:
+        return "—"
+    labels = ("UL", "UR", "LR", "LL")
+    formatted = [f"{label}: ({point.x:.0f}, {point.y:.0f})" for label, point in zip(labels, points)]
+    return "\n".join(formatted)
+
+
 def _count_text_items(text_items: list[TextItem] | None) -> tuple[int, int, int]:
     if not text_items:
         return 0, 0, 0
@@ -279,16 +308,8 @@ def _render_session_overview(
         return
 
     text_count, translated_count, font_count = _count_text_items(session.text)
-    extracted_backend = (
-        session.extractedDocument.backend.value
-        if session.extractedDocument and session.extractedDocument.backend
-        else None
-    )
     extracted_doc = session.extractedDocument
-    extracted_status = "Yes" if extracted_doc else "No"
-    deskew_pref = (
-        session.deskew_backend.value if session.deskew_backend is not None else extracted_backend
-    )
+    document_corners = extracted_doc.documentCoordinates if extracted_doc else None
 
     done_count = progress.completed_steps
     total_steps = progress.total_steps
@@ -308,22 +329,20 @@ def _render_session_overview(
     # Session details expander
     with st.expander("Session details", expanded=False):
         st.markdown("**Deskew**")
-        deskew_cols = st.columns(4)
-        deskew_cols[0].caption("Extracted")
-        deskew_cols[0].code(extracted_status)
-        deskew_cols[1].caption("Backend")
-        deskew_cols[1].code(deskew_pref or "—")
-        deskew_cols[2].caption("Map XY")
+        deskew_cols = st.columns(3)
+        deskew_cols[0].caption("Corners (orig)")
+        deskew_cols[0].code(_format_document_corners(document_corners))
+        deskew_cols[1].caption("Map XY")
         if extracted_doc and extracted_doc.mapXYId:
             map_shape = extracted_doc.mapXYShape if extracted_doc.mapXYShape else ("?", "?", 2)
-            deskew_cols[2].code(f"{map_shape}")
+            deskew_cols[1].code(f"{map_shape}")
+        else:
+            deskew_cols[1].code("—")
+        deskew_cols[2].caption("Map XY Id")
+        if extracted_doc and extracted_doc.mapXYId:
+            deskew_cols[2].code(extracted_doc.mapXYId[:13] + "...")
         else:
             deskew_cols[2].code("—")
-        deskew_cols[3].caption("Map XY Id")
-        if extracted_doc and extracted_doc.mapXYId:
-            deskew_cols[3].code(extracted_doc.mapXYId[:13] + "...")
-        else:
-            deskew_cols[3].code("—")
 
         # Documents section
         st.markdown("**Documents**")
@@ -383,7 +402,6 @@ def _render_session_sidebar_content(*, force_refresh: bool) -> None:
     session = _get_active_session(force_refresh=force_refresh)
     progress = _get_session_progress(force_refresh=force_refresh)
 
-    _render_deskew_backend_selector(session)
     _render_classifier_checkpoint_selector()
     _render_session_overview(session, progress)
 
@@ -408,51 +426,6 @@ def _render_supervisor_watchdog() -> None:
     _maybe_rerun_if_supervisor_done()
 
 
-def _render_deskew_backend_selector(session: SessionState | None) -> None:
-    """Render the deskew backend selector and persist preference."""
-    options: list[tuple[str, DeskewBackend]] = [
-        ("UVDoc", DeskewBackend.uvdoc),
-        ("OpenCV", DeskewBackend.opencv),
-    ]
-    labels = [label for label, _ in options]
-    current = None
-    if session is not None:
-        if session.deskew_backend is not None:
-            current = session.deskew_backend
-        elif session.extractedDocument is not None:
-            current = session.extractedDocument.backend
-    current_index = next(
-        (idx for idx, (_, value) in enumerate(options) if value == current),
-        0,
-    )
-
-    selection = st.selectbox(
-        "Deskew backend",
-        options=labels,
-        index=current_index,
-        help="Choose which backend the doc-scanner tool should use.",
-        key="deskew_backend_select",
-        disabled=session is None,
-    )
-    selected_backend = dict(options).get(selection)
-
-    if session is None or selected_backend is None or selected_backend == current:
-        return
-
-    session_id = _get_session_id()
-    if session_id is None:
-        return
-
-    _run_async(
-        SessionClient.update(
-            session_id,
-            lambda s: setattr(s, "deskew_backend", selected_backend),
-        )
-    )
-    st.session_state.pop("cached_session", None)
-    st.session_state.pop("cached_progress", None)
-
-
 def _render_classifier_checkpoint_selector() -> None:
     """Render checkpoint selector for the doc-classifier runtime."""
     checkpoints_dir = PathConfig().checkpoints
@@ -464,7 +437,8 @@ def _render_classifier_checkpoint_selector() -> None:
 
     labels = [path.name for path in checkpoints]
 
-    current_path = settings.doc_classifier.checkpoint_path
+    config = _load_doc_classifier_config()
+    current_path = config.checkpoint_path
     current_full = None
     if current_path:
         candidate = Path(current_path)
@@ -489,10 +463,11 @@ def _render_classifier_checkpoint_selector() -> None:
     selected_path = checkpoints[labels.index(selection)]
     selected_rel = str(selected_path.name)
 
-    if settings.doc_classifier.checkpoint_path == selected_rel:
+    if current_full is not None and current_full.name == selected_rel:
         return
 
-    settings.doc_classifier.checkpoint_path = selected_rel
+    config.checkpoint_path = Path(selected_rel)
+    _save_doc_classifier_config(config)
     doc_classifier_mcp_server.reset_runtime()
 
 
@@ -609,15 +584,6 @@ def fetch_image(
     return image, file_id, failure_reason
 
 
-def _load_map_xy(map_xy_id: str) -> np.ndarray | None:
-    """Load a map_xy array from the file server."""
-    data = _run_async(FileClient.get_raw_bytes(map_xy_id))
-    if data is None:
-        return None
-    with BytesIO(data) as buffer:
-        return np.load(buffer)
-
-
 def _render_overlay_image(
     session: SessionState,
 ) -> tuple[Image.Image | None, str | None, str | None]:
@@ -640,7 +606,11 @@ def _render_overlay_image(
         image = _draw_document_outline(image, extracted.documentCoordinates)
 
     if extracted and extracted.mapXYId:
-        map_xy = _load_map_xy(extracted.mapXYId)
+        try:
+            map_xy = _run_async(FileClient.get_numpy_array(extracted.mapXYId))
+        except Exception:
+            logger.exception("Failed to fetch map_xy overlay (file_id=%s)", extracted.mapXYId)
+            map_xy = None
         if map_xy is not None:
             np_img = np.array(image.convert("RGB"))
             np_img = draw_grid_overlay(np_img, map_xy, step=40)

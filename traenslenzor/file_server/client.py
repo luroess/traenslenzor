@@ -67,6 +67,18 @@ class FileClient:
         return await FileClient.put_bytes(name, buffer.getvalue())
 
     @staticmethod
+    async def get_numpy_array(file_id: str) -> Optional[NDArray[np.float32]]:
+        """Download a .npy file and return as a numpy array, or None if not found."""
+        file_bytes = await FileClient.get_raw_bytes(file_id)
+
+        if file_bytes is None:
+            return None
+
+        buffer = BytesIO(file_bytes)
+        buffer.seek(0)
+        return np.load(buffer)
+
+    @staticmethod
     async def get_raw_bytes(file_id: str) -> Optional[bytes]:
         """Download a file and return its bytes, or None if not found."""
         async with httpx.AsyncClient() as client:

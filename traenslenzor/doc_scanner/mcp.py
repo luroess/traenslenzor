@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 from fastmcp import FastMCP
@@ -13,12 +14,12 @@ from traenslenzor.doc_classifier.utils import Console
 from traenslenzor.doc_scanner.configs import DocScannerMCPConfig
 from traenslenzor.doc_scanner.runtime import DocScannerRuntime
 from traenslenzor.file_server.client import SessionClient
-from traenslenzor.file_server.session_state import DeskewBackend, SessionState
-from traenslenzor.supervisor.config import settings
+from traenslenzor.file_server.session_state import SessionState
 
 ADDRESS = "127.0.0.1"
 PORT = 8004
 DOC_SCANNER_BASE_PATH = f"http://{ADDRESS}:{PORT}/mcp"
+_DOC_SCANNER_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "doc-scanner.toml"
 
 doc_scanner_mcp = FastMCP(
     name="doc-scanner",
@@ -29,14 +30,60 @@ console = Console.with_prefix("doc-scanner-mcp", "init")
 DocScannerMCPConfig.model_rebuild(_types_namespace={"DocScannerRuntime": DocScannerRuntime})
 
 _runtime: DocScannerRuntime | None = None
+_runtime_config_signature: dict[str, object] | None = None
+
+_EXTRACTED_DOCUMENT_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "properties": {
+        "id": {"type": "string"},
+        "documentCoordinates": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"x": {"type": "number"}, "y": {"type": "number"}},
+                "required": ["x", "y"],
+                "additionalProperties": False,
+            },
+        },
+        "mapXYId": {"type": ["string", "null"]},
+        "mapXYShape": {
+            "type": ["array", "null"],
+            "items": {"type": "integer"},
+        },
+    },
+    "required": ["id", "documentCoordinates", "mapXYId", "mapXYShape"],
+    "additionalProperties": False,
+}
+_DESKEW_OUTPUT_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "properties": {"extractedDocument": _EXTRACTED_DOCUMENT_SCHEMA},
+    "required": ["extractedDocument"],
+    "additionalProperties": False,
+}
+
+
+def _load_doc_scanner_config() -> DocScannerMCPConfig:
+    """Load the doc-scanner MCP config, falling back to defaults if needed."""
+    config_path = _DOC_SCANNER_CONFIG_PATH
+    if not config_path.exists() or config_path.stat().st_size == 0:
+        return DocScannerMCPConfig()
+
+    try:
+        return DocScannerMCPConfig.from_toml(config_path)
+    except Exception as exc:
+        console.error(f"Failed to load doc-scanner config at {config_path}: {exc}")
+        return DocScannerMCPConfig()
 
 
 def get_runtime() -> DocScannerRuntime:
     global _runtime
-    if _runtime is None:
-        config = DocScannerMCPConfig()
-        config.uvdoc.device = settings.doc_scanner.uvdoc_device
+    global _runtime_config_signature
+
+    config = _load_doc_scanner_config()
+    config_signature = config.model_dump()
+    if _runtime is None or config_signature != _runtime_config_signature:
         _runtime = config.setup_target()
+        _runtime_config_signature = config_signature
     return _runtime
 
 
@@ -45,7 +92,8 @@ def get_runtime() -> DocScannerRuntime:
     title="Deskew document",
     description=(
         "Deskew/prettify the current document and write the extracted document metadata to the session. "
-        "The supervisor injects `session_id` automatically; do not ask the user for it."
+        "The supervisor injects `session_id` automatically; do not ask the user for it. "
+        "Returns the extracted document payload."
     ),
     tags={"doc-scanner", "deskew", "session"},
     annotations=ToolAnnotations(
@@ -55,6 +103,7 @@ def get_runtime() -> DocScannerRuntime:
         idempotentHint=False,
         openWorldHint=False,
     ),
+    output_schema=_DESKEW_OUTPUT_SCHEMA,
 )
 async def deskew_document(
     session_id: Annotated[
@@ -64,32 +113,16 @@ async def deskew_document(
             pattern="^[0-9a-fA-F-]{36}$",
         ),
     ],
-    backend: Annotated[
-        DeskewBackend | None,
-        Field(
-            description="Optional backend override: opencv or uvdoc.",
-            default=None,
-        ),
-    ] = None,
-) -> dict:
+) -> dict[str, object]:
     """Deskew the session document and update the session state.
 
     Args:
         session_id (str): File server session id injected by the supervisor.
-        backend (DeskewBackend | None): Optional backend override.
-
     Returns:
-        dict: Serialized ExtractedDocument payload.
+        dict[str, object]: Payload containing the serialized extracted document.
     """
     runtime = get_runtime()
-    session = await SessionClient.get(session_id)
-    preferred_backend = session.deskew_backend if session is not None else None
     try:
-        if backend is not None and backend != preferred_backend:
-            await SessionClient.update(
-                session_id,
-                lambda state: setattr(state, "deskew_backend", backend),
-            )
         extracted = await runtime.scan_session(session_id)
     except Exception as exc:
         console.error(str(exc))
@@ -97,10 +130,9 @@ async def deskew_document(
 
     def update_session(state: SessionState) -> None:
         state.extractedDocument = extracted
-        state.deskew_backend = extracted.backend
 
     await SessionClient.update(session_id, update_session)
-    return extracted.model_dump()
+    return {"extractedDocument": extracted.model_dump()}
 
 
 async def run() -> None:

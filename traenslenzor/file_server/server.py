@@ -100,15 +100,9 @@ def _compute_session_progress(session_id: str, session: SessionState) -> Session
     class_probs = session.class_probabilities or {}
     top_class = max(class_probs.items(), key=lambda item: item[1])[0] if class_probs else None
 
-    extracted_backend = (
-        session.extractedDocument.backend.value
-        if session.extractedDocument and session.extractedDocument.backend
-        else None
-    )
-
     steps_data = [
         ("Document loaded", bool(session.rawDocumentId or session.extractedDocument), None),
-        ("Document extracted", bool(session.extractedDocument), extracted_backend),
+        ("Document extracted", bool(session.extractedDocument), None),
         ("Language detected", bool(session.language), session.language),
         ("Text extracted", text_count > 0, f"{text_count} items" if text_count else None),
         ("Translated", text_count > 0 and translated == text_count, detail(translated)),

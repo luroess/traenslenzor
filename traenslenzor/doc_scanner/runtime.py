@@ -9,7 +9,7 @@ from PIL import Image
 
 from traenslenzor.doc_classifier.utils import Console
 from traenslenzor.file_server.client import FileClient, SessionClient
-from traenslenzor.file_server.session_state import BBoxPoint, DeskewBackend, ExtractedDocument
+from traenslenzor.file_server.session_state import BBoxPoint, ExtractedDocument
 
 if TYPE_CHECKING:
     from .backends import DeskewResult
@@ -17,29 +17,20 @@ if TYPE_CHECKING:
 
 
 class DocScannerRuntime:
-    """Runtime helper that executes the configured deskew backends."""
+    """Runtime helper that executes the configured UVDoc deskew backend."""
 
     def __init__(self, config: "DocScannerMCPConfig") -> None:
         self.config = config
         self.console = Console.with_prefix(self.__class__.__name__, "init")
         self.console.set_verbose(config.verbose).set_debug(config.is_debug)
-        self._opencv_backend = None
         self._uvdoc_backend = None
 
-    def _get_backend(self, backend: DeskewBackend):
-        from .backends import OpenCVDeskewBackend, UVDocDeskewBackend
+    def _get_backend(self):
+        from .backends import UVDocDeskewBackend
 
-        match backend:
-            case DeskewBackend.opencv:
-                if self._opencv_backend is None:
-                    self._opencv_backend = OpenCVDeskewBackend(self.config.opencv)
-                return self._opencv_backend
-            case DeskewBackend.uvdoc:
-                if self._uvdoc_backend is None:
-                    self._uvdoc_backend = UVDocDeskewBackend(self.config.uvdoc)
-                return self._uvdoc_backend
-            case _:
-                raise ValueError(f"Unsupported backend: {backend}")
+        if self._uvdoc_backend is None:
+            self._uvdoc_backend = UVDocDeskewBackend(self.config)
+        return self._uvdoc_backend
 
     async def scan_session(
         self,
@@ -63,8 +54,7 @@ class DocScannerRuntime:
 
         image_rgb = np.array(image.convert("RGB"), dtype=np.uint8)
 
-        backend_choice = session.deskew_backend or self.config.default_backend
-        deskew_backend = self._get_backend(backend_choice)
+        deskew_backend = self._get_backend()
         result: DeskewResult = deskew_backend.deskew(image_rgb)
 
         output_image = Image.fromarray(result.image_rgb)
@@ -92,5 +82,4 @@ class DocScannerRuntime:
             documentCoordinates=coords,
             mapXYId=map_xy_id,
             mapXYShape=map_xy_shape,
-            backend=backend_choice,
         )

@@ -8,23 +8,23 @@ from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
+import torch
 from jaxtyping import Float32, UInt8
 from numpy import ndarray as NDArray
+from py_reform.models.uvdoc_model import DEFAULT_IMG_SIZE, DEFAULT_MODEL_PATH, UVDocNet
 
 from traenslenzor.doc_classifier.utils import Console
-from traenslenzor.text_extractor.flatten_image import find_document_corners
 
 from .utils import (
     build_full_image_corners,
     compute_map_xy_stride,
     find_page_corners,
-    order_points_clockwise,
     sample_map_xy,
     warp_from_corners,
 )
 
 if TYPE_CHECKING:
-    from .configs import OpenCVDeskewConfig, UVDocDeskewConfig
+    from .configs import DocScannerMCPConfig
 
 
 @dataclass(slots=True)
@@ -39,79 +39,28 @@ class DeskewResult:
     """Optional map_xy mapping output pixels -> original pixels."""
 
 
-class OpenCVDeskewBackend:
-    """Classic OpenCV deskew backend using contour detection."""
-
-    def __init__(self, config: "OpenCVDeskewConfig") -> None:
-        self.config = config
-        self.console = Console.with_prefix(self.__class__.__name__, "init")
-        self.console.set_verbose(config.verbose).set_debug(config.is_debug)
-
-    def deskew(
-        self,
-        image_rgb: UInt8[NDArray, "H W 3"],
-    ) -> DeskewResult:
-        """Deskew via contour detection and perspective warp.
-
-        Args:
-            image_rgb (ndarray[uint8]): Input RGB image, shape (H, W, 3).
-
-        Returns:
-            DeskewResult containing deskewed RGB image, corners, and optional map_xy.
-        """
-        bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
-        corners = find_document_corners(bgr)
-
-        if corners is None:
-            if not self.config.fallback_to_original:
-                raise RuntimeError("OpenCV backend could not find document corners.")
-            self.console.warn("OpenCV backend failed to find corners; using full image.")
-            corners = build_full_image_corners(bgr.shape[0], bgr.shape[1])
-
-        corners = order_points_clockwise(corners)
-        warped_bgr, _, _ = warp_from_corners(bgr, corners)
-        warped_rgb = cv2.cvtColor(warped_bgr, cv2.COLOR_BGR2RGB)
-
-        return DeskewResult(
-            image_rgb=warped_rgb,
-            corners_original=corners,
-            map_xy=None,
-        )
-
-
 class UVDocDeskewBackend:
     """UVDoc neural unwarping backend (py_reform)."""
 
-    def __init__(self, config: "UVDocDeskewConfig") -> None:
+    def __init__(self, config: "DocScannerMCPConfig") -> None:
         self.config = config
-        self.console = Console.with_prefix(self.__class__.__name__, "init")
-        self.console.set_verbose(config.verbose).set_debug(config.is_debug)
-        self._model = None
+        self.console = (
+            Console.with_prefix(self.__class__.__name__)
+            .set_verbose(config.verbose)
+            .set_debug(config.is_debug)
+        )
+
+        self._model: UVDocNet | None = None
         self._device: str | None = None
-        self._input_size: tuple[int, int] | None = None
 
     def _resolve_device(self) -> str:
         if self.config.device != "auto":
             return self.config.device
-
-        import torch
-
         return "cuda" if torch.cuda.is_available() else "cpu"
 
     def _load_model(self) -> None:
         if self._model is not None:
             return
-
-        try:
-            from py_reform.models.uvdoc_model import (
-                DEFAULT_IMG_SIZE,
-                DEFAULT_MODEL_PATH,
-                UVDocNet,
-            )
-        except Exception as exc:  # pragma: no cover - dependency missing
-            raise RuntimeError(f"py_reform UVDoc not available: {exc}") from exc
-
-        import torch
 
         self._device = self._resolve_device()
         self._model = UVDocNet(
@@ -119,9 +68,7 @@ class UVDocDeskewBackend:
         ).to(self._device)
         self._model.eval()
 
-        model_path = (
-            Path(self.config.model_path) if self.config.model_path else Path(DEFAULT_MODEL_PATH)
-        )
+        model_path = Path(DEFAULT_MODEL_PATH)
         if not model_path.exists():
             raise RuntimeError(f"UVDoc model weights not found at {model_path}")
 
@@ -134,18 +81,54 @@ class UVDocDeskewBackend:
             state_dict = ckpt
         self._model.load_state_dict(state_dict)
 
-        if self.config.input_size is not None:
-            self._input_size = (int(self.config.input_size[0]), int(self.config.input_size[1]))
-        elif isinstance(DEFAULT_IMG_SIZE, (list, tuple)) and len(DEFAULT_IMG_SIZE) == 2:
-            self._input_size = (int(DEFAULT_IMG_SIZE[0]), int(DEFAULT_IMG_SIZE[1]))
-        else:
-            raise RuntimeError(f"Unexpected UVDoc DEFAULT_IMG_SIZE: {DEFAULT_IMG_SIZE}")
-
     def deskew(
         self,
         image_rgb: UInt8[NDArray, "H W 3"],
     ) -> DeskewResult:
-        """Deskew via UVDoc neural unwarping.
+        """Deskew (dewarp) a document image via [UVDoc neural unwarping](https://arxiv.org/html/2302.02887v2).
+
+        Instead of explicitly estimating a homography from detected corners, a _dense sampling grid_ is predicted that
+        encodes how to resample the warped input image into a flat, deskewed output.
+
+        Conceptually, two artifacts are produced:
+
+        1) An **unwarped RGB image** (optionally cropped to the page rectangle).
+        2) A **mapping** that allows projecting the unwarped result (or edits on it) back onto the
+           original image coordinate system (used by :mod:`traenslenzor.doc_scanner.backtransform`).
+
+        ## UVDocNet usage and coordinate systems
+        ------------------------------------
+        - UVDocNet predicts a coarse 2-channel grid (x,y) in the same normalized coordinate system
+          used by :func:`torch.nn.functional.grid_sample`: each coordinate is in [-1, 1].
+        - The model is run on a resized image of fixed size ``DEFAULT_IMG_SIZE`` because the
+          published weights were trained with a fixed input resolution.
+        - The predicted grid is upsampled to the original image resolution and applied to the
+          **full-resolution** input using ``grid_sample`` to produce the unwarped image.
+        - ``align_corners=True`` is used consistently for both the grid upsampling and
+          ``grid_sample``. With this convention, -1 and +1 map to the centers of the first/last
+          pixels, which is why normalized coordinates are converted to pixels via ``(w - 1)`` and
+          ``(h - 1)``.
+
+        High-level procedure
+        --------------------
+        1) Normalize the input image ``image_rgb`` to float32 in [0, 1] and construct:
+           - ``orig``: the full-res tensor (1, 3, H, W) that is resampled from.
+           - ``inp``: a resized tensor (1, 3, Hm, Wm) used for UVDocNet inference.
+        2) Run UVDocNet on ``inp`` to get ``points2d``: a coarse normalized sampling grid
+           (1, 2, Gh, Gw).
+        3) Upsample ``points2d`` to (H, W) and reshape to the grid_sample layout (1, H, W, 2),
+           producing ``grid``.
+        4) Compute ``unwarped = grid_sample(orig, grid)`` to obtain an unwarped image at the same
+           resolution as the input.
+        5) Convert the normalized grid to a pixel-space mapping:
+           ``map_xy_full[y, x] = (x_in, y_in)`` where (x_in, y_in) are float pixel coordinates in
+           the **original** input image.
+        6) Optionally detect a page quadrilateral on the unwarped image (simple contour-based
+           detection) and crop/rectify it. If cropping is enabled, we also derive a corresponding
+           ``map_xy_out`` for the cropped output by mapping cropped pixel coordinates back through
+           the inverse crop homography and sampling ``map_xy_full``.
+        7) Optionally downsample ``map_xy`` according to ``max_map_pixels``. This keeps stored flow
+           fields manageable; consumers can upsample as needed.
 
         Args:
             image_rgb (ndarray[uint8]): Input RGB image, shape (H, W, 3).
@@ -160,38 +143,60 @@ class UVDocDeskewBackend:
         self._load_model()
         assert self._model is not None
         assert self._device is not None
-        assert self._input_size is not None
 
+        # --- Prepare original (full-res) source tensor ----------------------------------------
+        # image_rgb: (H, W, 3) uint8 in RGB order.
         orig_np = image_rgb.astype(np.float32) / 255.0
         h, w = orig_np.shape[:2]
 
-        orig = torch.from_numpy(orig_np).permute(2, 0, 1).unsqueeze(0).to(self._device)
+        # orig: (1, 3, H, W) float32 in [0, 1] on device; this is what we sample from.
+        orig = (
+            torch.from_numpy(orig_np).permute(2, 0, 1).unsqueeze(0).to(self._device)
+        )  # (1, 3, H, W)
+
+        # --- Prepare model input (UVDoc expects a fixed input size) ---------------------------
+        # DEFAULT_IMG_SIZE is (Wm, Hm). Resize only for inference; we later upsample the grid.
         inp_resized = Image.fromarray(image_rgb).resize(
-            tuple(self._input_size), resample=Image.Resampling.BILINEAR
+            DEFAULT_IMG_SIZE, resample=Image.Resampling.BILINEAR
         )
         inp_np = np.array(inp_resized).astype(np.float32) / 255.0
+        # inp: (1, 3, Hm, Wm) float32 in [0, 1] on device.
         inp = torch.from_numpy(inp_np).permute(2, 0, 1).unsqueeze(0).to(self._device)
 
+        # --- Predict a coarse UV sampling grid with UVDocNet ----------------------------------
+        # points2d: (B, 2, Gh, Gw) in normalized [-1, 1] image coords for grid_sample (x,y).
         with torch.no_grad():
-            points2d, _points3d = self._model(inp)
+            points2d, _points3d = self._model.forward(inp)
 
         if points2d.dim() == 3:
             points2d = points2d.unsqueeze(0)
 
+        # --- Upsample grid to full resolution and unwarp via grid_sample ----------------------
+        # grid_2ch: (1, 2, H, W) -> grid: (1, H, W, 2) for grid_sample.
         grid_2ch = F.interpolate(points2d, size=(h, w), mode="bilinear", align_corners=True)
         grid = grid_2ch.permute(0, 2, 3, 1).clamp(-1.0, 1.0)
 
+        # unwarped: (1, 3, H, W) float32 in [0, 1]; convert to (H, W, 3) uint8 RGB.
         unwarped = F.grid_sample(orig, grid, align_corners=True)
         unwarped_np = unwarped[0].permute(1, 2, 0).clamp(0.0, 1.0).cpu().numpy()
         unwarped_rgb = (unwarped_np * 255).astype(np.uint8)
 
+        # --- Convert normalized grid to pixel-space map_xy ---------
+        # map_xy_full: (H, W, 2) float32, where map_xy_full[y,x] = (x_in, y_in) in original image.
         grid_cpu = grid[0].detach().cpu()
-        x_norm = grid_cpu[:, :, 0]
-        y_norm = grid_cpu[:, :, 1]
-        x_in = (x_norm + 1.0) * 0.5 * (w - 1)
-        y_in = (y_norm + 1.0) * 0.5 * (h - 1)
-        map_xy_full = torch.stack([x_in, y_in], dim=-1).numpy().astype(np.float32)
+        map_xy_full = (
+            torch.stack(
+                [
+                    (grid_cpu[:, :, 0] + 1.0) * 0.5 * (w - 1),  # x_in
+                    (grid_cpu[:, :, 1] + 1.0) * 0.5 * (h - 1),  # y_in
+                ],
+                dim=-1,
+            )
+            .numpy()
+            .astype(np.float32)
+        )
 
+        # --- Optionally detect/crop the page on the unwarped result ---------------------------
         corners_unwarped = None
         if self.config.crop_page:
             corners_unwarped, area_ratio = find_page_corners(
@@ -205,13 +210,16 @@ class UVDocDeskewBackend:
                     unwarped_rgb.shape[0], unwarped_rgb.shape[1]
                 )
 
+        # Choose a stride so map_xy stays under the configured pixel budget.
         map_xy_stride = compute_map_xy_stride((h, w), self.config.max_map_pixels)
 
         if corners_unwarped is None:
+            # No crop: output is the full unwarped image; map_xy is a strided view of map_xy_full.
             output_rgb = unwarped_rgb
             output_size = (unwarped_rgb.shape[0], unwarped_rgb.shape[1])
             map_xy_out = map_xy_full[::map_xy_stride, ::map_xy_stride]
         else:
+            # Crop: warp the unwarped image to the detected page rectangle.
             unwarped_bgr = cv2.cvtColor(unwarped_rgb, cv2.COLOR_RGB2BGR)
             cropped_bgr, crop_matrix, output_size = warp_from_corners(
                 unwarped_bgr, corners_unwarped
@@ -220,6 +228,8 @@ class UVDocDeskewBackend:
 
             map_xy_out = None
             if self.config.generate_map_xy:
+                # Build a map_xy for the cropped output by inverting the crop homography and
+                # sampling map_xy_full in unwarped-space coordinates.
                 out_h, out_w = output_size
                 map_xy_stride = compute_map_xy_stride(output_size, self.config.max_map_pixels)
                 xs, ys = np.meshgrid(
@@ -237,6 +247,7 @@ class UVDocDeskewBackend:
 
         corners_original = None
         if corners_unwarped is not None:
+            # Map detected page corners from unwarped space back into original-image coordinates.
             corners_original = sample_map_xy(map_xy_full, corners_unwarped)
 
         if not self.config.generate_map_xy:

@@ -69,7 +69,7 @@ def backtransform_with_corners(
     )
 
     mask_src = np.full((h1, w1), 255, dtype=np.uint8)
-    mask = cv2.warpPerspective(
+    mask = cv2.warpPerspective(  # type: ignore[call-overload]
         mask_src,
         matrix,
         (w0, h0),
