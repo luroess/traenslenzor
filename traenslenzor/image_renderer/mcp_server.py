@@ -77,10 +77,14 @@ async def replace_text(
     image, and uses an AI model to intelligently replace the original text with translations
     while preserving the image's visual style and layout.
 
+    CRITICAL: This tool requires that BOTH translation AND font detection have been completed.
+    Do not call this tool until you have run the 'detect_font' tool and the 'translate' tool.
+
     Prerequisites:
         - Session must exist with the given ID
         - Image must have extracted text (via text extraction tool)
         - All text items must be translated (via translation tool)
+        - All text items must have font information (via font detection tool)
         - Original document must be available in the session
 
     Args:
