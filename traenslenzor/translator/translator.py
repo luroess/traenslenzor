@@ -63,7 +63,7 @@ def translate_all(texts: list[TextItem], lang: str) -> list[HasTranslation]:
         content = response.message.content
 
         if content:
-            # Clean up potential markdown code blocks
+            # Clean up potential JSON within markdown code blocks of llm response
             if content.startswith("```json"):
                 content = content[7:]
             elif content.startswith("```"):
@@ -71,7 +71,10 @@ def translate_all(texts: list[TextItem], lang: str) -> list[HasTranslation]:
             if content.endswith("```"):
                 content = content[:-3]
 
+            # Parse the JSON response
             translated_texts = json.loads(content.strip())
+
+            # Generate a short preview for error logging
             preview = content.strip()
             if len(preview) > 200:
                 preview = preview[:200] + "..."
