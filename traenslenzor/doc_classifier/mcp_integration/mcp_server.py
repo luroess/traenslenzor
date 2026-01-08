@@ -4,6 +4,7 @@ Exposes `classify_document` over MCP and can be run via streamable HTTP,
 mirroring the layout detector server.
 """
 
+from pathlib import Path
 from typing import Annotated
 
 from fastmcp import FastMCP
@@ -17,11 +18,11 @@ from traenslenzor.doc_classifier.mcp_integration.runtime import DocClassifierRun
 from traenslenzor.doc_classifier.utils import Console
 from traenslenzor.file_server.client import SessionClient
 from traenslenzor.file_server.session_state import SessionState
-from traenslenzor.supervisor.config import settings
 
 ADDRESS = "127.0.0.1"
 PORT = 8007
 DOC_CLASSIFIER_BASE_PATH = f"http://{ADDRESS}:{PORT}/mcp"
+_DOC_CLASSIFIER_CONFIG_PATH = Path(__file__).resolve().parents[3] / "config" / "doc-classifier.toml"
 
 doc_classifier_mcp = FastMCP(
     name="doc-classifier",
@@ -37,16 +38,26 @@ _runtime: DocClassifierRuntime | None = None
 _runtime_checkpoint: str | None = None
 
 
+def _load_doc_classifier_config() -> DocClassifierMCPConfig:
+    """Load the doc-classifier MCP config, falling back to defaults if needed."""
+    config_path = _DOC_CLASSIFIER_CONFIG_PATH
+    if not config_path.exists() or config_path.stat().st_size == 0:
+        return DocClassifierMCPConfig(checkpoint_path=None, device="auto")
+
+    try:
+        return DocClassifierMCPConfig.from_toml(config_path)
+    except Exception as exc:
+        console.error(f"Failed to load doc-classifier config at {config_path}: {exc}")
+        return DocClassifierMCPConfig(checkpoint_path=None, device="auto")
+
+
 def get_runtime() -> DocClassifierRuntime:
     global _runtime
     global _runtime_checkpoint
 
-    desired_checkpoint = settings.doc_classifier.checkpoint_path
+    config = _load_doc_classifier_config()
+    desired_checkpoint = str(config.checkpoint_path) if config.checkpoint_path else None
     if _runtime is None or desired_checkpoint != _runtime_checkpoint:
-        config = DocClassifierMCPConfig(
-            checkpoint_path=None,
-            device="auto",
-        )
         if desired_checkpoint:
             try:
                 config.checkpoint_path = PathConfig().resolve_checkpoint_path(desired_checkpoint)
@@ -75,17 +86,18 @@ _CLASSIFY_OUTPUT_SCHEMA: dict[str, object] = {
     name="classify_document",
     title="Classify document",
     description=(
-        "Classify the current document and write class probabilities to the session. "
-        "The supervisor injects `session_id` automatically; do not ask the user for it. "
-        "Returns a mapping of the top-k classes to probabilities."
+        "Classify the document and write class probabilities to the session. "
+        "Returns a mapping of the top-k classes to probabilities. Inform the user about the most probable classes."
     ),
-    tags={"doc-classifier", "session", "classification"},
+    tags={"doc-classifier", "classification"},
     annotations=ToolAnnotations(
         title="Classify document",
+        #  whether the tool is read-only
         readOnlyHint=False,
+        # whether tool destroys data
         destructiveHint=False,
+        # whether repeated calls with same args yield same result
         idempotentHint=True,
-        openWorldHint=False,
     ),
     output_schema=_CLASSIFY_OUTPUT_SCHEMA,
 )
@@ -93,9 +105,7 @@ async def classify_document(
     session_id: Annotated[
         str,
         Field(
-            description=(
-                "File server session id (injected by the supervisor; do not ask the user)."
-            ),
+            description=("File server session id."),
             pattern="^[0-9a-fA-F-]{36}$",
         ),
     ],
@@ -111,7 +121,6 @@ async def classify_document(
     runtime = get_runtime()
     session = await SessionClient.get(session_id)
     if session.extractedDocument is None:
-        # TODO: will the supervisor llm be informed properly about this error?
         msg = "Session has no extractedDocument; run the doc-scanner tool to deskew the document first."
         console.error(msg)
         raise ToolError(msg)
