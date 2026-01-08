@@ -3,10 +3,11 @@ import logging
 import cv2
 import numpy as np
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
 from PIL import Image
 
 from traenslenzor.file_server.client import FileClient, SessionClient
-from traenslenzor.file_server.session_state import ExtractedDocument, SessionState
+from traenslenzor.file_server.session_state import BBoxPoint, ExtractedDocument, SessionState
 from traenslenzor.text_extractor.flatten_image import deskew_document
 from traenslenzor.text_extractor.paddleocr import run_ocr
 
@@ -45,10 +46,15 @@ async def extract_text(session_id: str) -> str:
 
     orig_img = bytes_to_numpy_image(file_data)
 
-    flattened_img = deskew_document(orig_img)
-    if flattened_img is None:
-        logger.error("Image flattening failed, fallback to original.")
-        flattened_img = orig_img
+    flattening_result = deskew_document(orig_img)
+
+    flattened_img = orig_img
+    transformation_matrix = np.eye(3, dtype=np.float64)
+    if flattening_result is not None:
+        logger.info("Image flattening successful")
+        flattened_img, transformation_matrix, document_coordinates = flattening_result
+    else:
+        logger.error("Image flattening failed, proceeding with original image")
 
     upload_image = cv2.cvtColor(flattened_img, cv2.COLOR_BGR2RGB)
     flattened_image_id = await FileClient.put_img(
@@ -60,19 +66,21 @@ async def extract_text(session_id: str) -> str:
 
     extracted_document = ExtractedDocument(
         id=flattened_image_id,
-        # TODO: fix this shit
-        documentCoordinates=[],
+        transformation_matrix=transformation_matrix.tolist(),
+        documentCoordinates=[BBoxPoint(x=pt[0], y=pt[1]) for pt in document_coordinates],
     )
 
     res = run_ocr("en", flattened_img)
-    logger.info(res)
+
+    if res is None:
+        raise ToolError("OCR text extraction failed")
 
     if res is None:
         logger.error("OCR failed to extract text")
         return "OCR failed to extract text"
 
     def update_session(session: SessionState):
-        session.text = res
+        session.text = res  # pyright: ignore[reportAttributeAccessIssue]
         session.extractedDocument = extracted_document
 
     await SessionClient.update(session_id, update_session)
@@ -102,4 +110,5 @@ if __name__ == "__main__":
     if flattened_img is None:
         print("Error: None")
         exit(-1)
+    flattened_img = flattened_img[0]
     print(run_ocr("en", flattened_img))

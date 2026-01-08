@@ -251,8 +251,8 @@ def _short_session_id(session_id: str) -> str:
 def _count_text_items(text_items: list[TextItem] | None) -> tuple[int, int, int]:
     if not text_items:
         return 0, 0, 0
-    translated = sum(1 for item in text_items if item.translatedText)
-    fonts = sum(1 for item in text_items if item.detectedFont)
+    translated = sum(1 for item in text_items if item.type == "translated")
+    fonts = sum(1 for item in text_items if item.type in ("font_detected", "translated"))
     return len(text_items), translated, fonts
 
 
@@ -322,7 +322,7 @@ def _render_session_overview(
                 {
                     "text": item.extractedText[:40]
                     + ("..." if len(item.extractedText) > 40 else ""),
-                    "translated": (item.translatedText or "")[:40],
+                    "translated": getattr(item, "translatedText", "")[:40],
                     "confidence": f"{item.confidence:.3f}",
                 }
                 for item in session.text

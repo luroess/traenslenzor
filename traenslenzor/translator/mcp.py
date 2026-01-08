@@ -3,7 +3,11 @@ import logging
 from fastmcp import FastMCP
 
 from traenslenzor.file_server.client import SessionClient
-from traenslenzor.file_server.session_state import SessionState
+from traenslenzor.file_server.session_state import (
+    SessionState,
+    TranslationInfo,
+    add_translation,
+)
 
 ADDRESS = "127.0.0.1"
 PORT = 8005
@@ -23,8 +27,14 @@ async def translate(session_id: str) -> str:
 
     def update_session(session: SessionState):
         if session.text is not None:
+            updated_texts = []
             for t in session.text:
-                t.translatedText = t.extractedText
+                # Create translation info (reversed text as mock translation)
+                translation_info = TranslationInfo(translatedText=t.extractedText[::-1])
+                # Add translation to the text item (may return TranslatedOnlyItem or RenderReadyItem)
+                updated_item = add_translation(t, translation_info)
+                updated_texts.append(updated_item)
+            session.text = updated_texts
 
     await SessionClient.update(session_id, update_session)
     return "Translation successful"

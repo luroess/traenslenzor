@@ -10,7 +10,11 @@ from fastmcp import FastMCP
 from PIL import Image
 
 from traenslenzor.file_server.client import FileClient, SessionClient
-from traenslenzor.file_server.session_state import SessionState
+from traenslenzor.file_server.session_state import (
+    FontInfo,
+    SessionState,
+    add_font_info,
+)
 from traenslenzor.supervisor.config import settings
 
 from .font_name_detector import FontNameDetector
@@ -254,11 +258,10 @@ async def detect_font_logic(session_id: str) -> str:
         def update_session(session: SessionState):
             debug_info = []
             if session.text is not None:
+                updated_texts = []
                 for t in session.text:
-                    # Use global font name for all text items
-                    t.detectedFont = global_font_name
-
-                    # Estimate font size for each text item
+                    # Calculate font size for each text item
+                    font_size = 12  # Default fallback
                     if t.bbox and len(t.bbox) == 4:
                         # Calculate width and height from bbox points
                         # bbox is [UL, UR, LR, LL]
@@ -273,31 +276,37 @@ async def detect_font_logic(session_id: str) -> str:
 
                         # Estimate size
                         try:
-                            # Default to 1 line if not specified (could be improved by analyzing text)
-                            # num_lines = t.extractedText.count("\n") + 1 if t.extractedText else 1
-
-                            font_size = size_estimator.estimate(
+                            font_size_float = size_estimator.estimate(
                                 text_box_size=(width, height),
                                 text=t.extractedText,
                                 font_name=global_font_name,
-                                # num_lines=num_lines,
                             )
-                            t.font_size = int(font_size)
+                            font_size = int(font_size_float)
                         except Exception as e:
                             logger.error(f"Error estimating font size: {e}")
-                            t.font_size = 12  # Fallback
-                    else:
-                        t.font_size = 12  # Fallback
+                            font_size = 12  # Fallback
+
+                    # Create font info and add to text item
+                    font_info = FontInfo(
+                        detectedFont=global_font_name,
+                        font_size=font_size,
+                    )
+                    detected_item = add_font_info(t, font_info)
+                    updated_texts.append(detected_item)
 
                     # Collect debug info
                     debug_info.append(
                         {
-                            "text": t.extractedText,
-                            "bbox": [{"x": p.x, "y": p.y} for p in t.bbox] if t.bbox else None,
-                            "detectedFont": t.detectedFont,
-                            "font_size": t.font_size,
+                            "text": detected_item.extractedText,
+                            "bbox": [{"x": p.x, "y": p.y} for p in detected_item.bbox]
+                            if detected_item.bbox
+                            else None,
+                            "detectedFont": detected_item.font.detectedFont,
+                            "font_size": detected_item.font.font_size,
                         }
                     )
+
+                session.text = updated_texts
 
             # Save debug info to file
             if settings.llm.debug_mode:

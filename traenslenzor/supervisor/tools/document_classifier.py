@@ -1,4 +1,4 @@
-from traenslenzor.doc_classifier.mcp.mcp_server import (  # noqa: F401
+from traenslenzor.doc_classifier.mcp_integration.mcp_server import (  # noqa: F401
     classify_document,
     doc_classifier_mcp,
     get_runtime,
