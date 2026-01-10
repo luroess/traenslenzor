@@ -81,6 +81,7 @@ async def replace_text(
         - Session must exist with the given ID
         - Image must have extracted text (via text extraction tool)
         - All text items must be translated (via translation tool)
+        - All text items must have font information (via font detection tool)
         - Original document must be available in the session
 
     Args:

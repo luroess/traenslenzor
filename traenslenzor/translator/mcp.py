@@ -3,11 +3,8 @@ import logging
 from fastmcp import FastMCP
 
 from traenslenzor.file_server.client import SessionClient
-from traenslenzor.file_server.session_state import (
-    SessionState,
-    TranslationInfo,
-    add_translation,
-)
+from traenslenzor.file_server.session_state import SessionState
+from traenslenzor.translator.translator import translate_all
 
 ADDRESS = "127.0.0.1"
 PORT = 8005
@@ -20,24 +17,36 @@ logger = logging.getLogger(__name__)
 
 @translator.tool
 async def translate(session_id: str) -> str:
-    """Translates text.
-    Args:
-        session_id (str): ID of the current session (e.g., "c12f4b1e-8f47-4a92-b8c1-6e3e9d2f91a4").
-    """
+    """Translates text for the given session ID."""
+    try:
+        session = await SessionClient.get(session_id)
+    except Exception as e:
+        logger.error(f"Failed to get session: {e}")
+        return f"Error: Failed to get session {session_id}"
 
-    def update_session(session: SessionState):
-        if session.text is not None:
-            updated_texts = []
-            for t in session.text:
-                # Create translation info (reversed text as mock translation)
-                translation_info = TranslationInfo(translatedText=t.extractedText[::-1])
-                # Add translation to the text item (may return TranslatedOnlyItem or RenderReadyItem)
-                updated_item = add_translation(t, translation_info)
-                updated_texts.append(updated_item)
-            session.text = updated_texts
+    if not session.language:
+        return "Error: No target language set in session"
 
-    await SessionClient.update(session_id, update_session)
-    return "Translation successful"
+    if not session.text:
+        return "Error: No text to translate"
+
+    # Perform translation
+    translated_items = translate_all(session.text, session.language)
+
+    if not translated_items:
+        logger.warning("Translation returned empty list")
+        return "Error: Translation returned no items"
+
+    def update_session(s: SessionState):
+        s.text = translated_items
+
+    try:
+        await SessionClient.update(session_id, update_session)
+    except Exception as e:
+        logger.error(f"Failed to update session: {e}")
+        return "Error: Failed to update session"
+
+    return f"Translation to {session.language} successful"
 
 
 async def run():

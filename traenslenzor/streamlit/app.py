@@ -14,6 +14,8 @@ from PIL.Image import Image
 from traenslenzor.file_server.client import FileClient, SessionClient
 from traenslenzor.file_server.session_state import (
     BBoxPoint,
+    HasFontInfo,
+    HasTranslation,
     SessionProgress,
     SessionState,
     TextItem,
@@ -251,8 +253,8 @@ def _short_session_id(session_id: str) -> str:
 def _count_text_items(text_items: list[TextItem] | None) -> tuple[int, int, int]:
     if not text_items:
         return 0, 0, 0
-    translated = sum(1 for item in text_items if item.type == "translated")
-    fonts = sum(1 for item in text_items if item.type in ("font_detected", "translated"))
+    translated = sum(1 for item in text_items if isinstance(item, HasTranslation))
+    fonts = sum(1 for item in text_items if isinstance(item, HasFontInfo))
     return len(text_items), translated, fonts
 
 
@@ -322,7 +324,11 @@ def _render_session_overview(
                 {
                     "text": item.extractedText[:40]
                     + ("..." if len(item.extractedText) > 40 else ""),
-                    "translated": getattr(item, "translatedText", "")[:40],
+                    "translated": (
+                        item.translation.translatedText if hasattr(item, "translation") else ""
+                    )[:40],
+                    "font_size": item.font.font_size if hasattr(item, "font") else "",
+                    "detected_font": item.font.detectedFont if hasattr(item, "font") else "",
                     "confidence": f"{item.confidence:.3f}",
                 }
                 for item in session.text
