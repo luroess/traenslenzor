@@ -4,5 +4,5 @@
 == PaddleOCR Import Shim <paddle_shim> 
 
 #figure(caption: [])[
-  #code
+  //#code
 ]
