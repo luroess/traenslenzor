@@ -1,6 +1,6 @@
 #import "@preview/supercharged-hm:0.1.0": *
 
-== X - Document Editor
+== X - Document Editor <comp_x_document_editor>
 
 - TODO
 

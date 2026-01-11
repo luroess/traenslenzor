@@ -1,6 +1,6 @@
 #import "@preview/supercharged-hm:0.1.0": *
 
-== Document Translater
+== Document Translator <comp_document_translator>
 
 
 - TODO

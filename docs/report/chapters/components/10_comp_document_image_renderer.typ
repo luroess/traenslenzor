@@ -1,6 +1,6 @@
 #import "@preview/supercharged-hm:0.1.0": *
 
-== Document Image Renderer
+== Document Image Renderer <comp_document_image_renderer>
 
 - TODO
 

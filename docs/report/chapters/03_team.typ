@@ -1,8 +1,8 @@
 #import "@preview/supercharged-hm:0.1.0": *
 
-= Team
+= Team <team>
 
-== Reflexion
+== Reflexion <team_reflexion>
 
 #box(fill: luma(240), inset: 8pt, radius: 6pt)[
   Reflect on your work in this project (provide 3–5 bullet points each, team effort).
@@ -16,7 +16,7 @@
 
 - Lorem Ipsum
 
-== Work Packages
+== Work Packages <team_work_packages>
 
 #box(fill: luma(240), inset: 8pt, radius: 6pt)[
   Describe the work packages you've defined within the project.
@@ -35,7 +35,7 @@
     [WP4],[Essay draft with thesis, arguments, and referenced sources.],
     [WP5],[Presentation slides with visuals, charts, and rehearsed flow]
   )
-] <tab:work-packages>
+] <team_work_packages_work_packages_table>
 
 #box(fill: luma(240), inset: 8pt, radius: 6pt)[
   Describe the actual work on each work package per person.
@@ -64,15 +64,26 @@
     [Eve Miller],[WP5],[Created visuals and rehearsed timing],
     [Eve Miller],[WP2],[Checked calculations for consistency]
   )
-] <tab:student-work>
+] <team_work_packages_contributions_table>
 
-== Timeline
+== Timeline <team_timeline>
 
 #figure(caption: [Project timeline by work package])[
-  #box(fill: luma(240), inset: 8pt, radius: 6pt)[
+  #warning-note()[
+    #set align(left)
     Add a chart here (x-axis: time, y-axis: work package).  
     Options:
     - Render an external chart to `images/timeline.png` and include via `#image()`.
     - Or create a simple Gantt-like table with start/end dates.
+    - I have looked for gantt packages for typst.
+      - Pintora
+        - uses the pintora framework to render charts including gantt
+        - looks quite simple and well documented (i would favor this)
+        - https://typst.app/universe/package/pintorita/
+        - https://pintorajs.vercel.app/docs/diagrams/gantt-diagram/
+      - timeliney
+        - https://typst.app/universe/package/timeliney
+      - ganttty 
+        - https://typst.app/universe/package/gantty/
   ]
-] <fig:timeline>
+] <team_timeline_gantt>
