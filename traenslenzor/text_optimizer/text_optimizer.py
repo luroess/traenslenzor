@@ -1,17 +1,17 @@
 import logging
+from typing import Optional
 
 from ollama import Client
 
+from traenslenzor.logger import setup_logger
 from traenslenzor.supervisor.config import settings
 
 logger = logging.getLogger(__name__)
 
 client = Client(host=settings.llm.ollama_url)
 
-logger = logging.getLogger(__name__)
 
-
-def optimize_text(text: list[str], user_suggestion: str) -> list[str]:
+def optimize_text(text: list[str], user_suggestion: str) -> Optional[list[str]]:
     system = {
         "role": "system",
         "content": (
@@ -50,9 +50,12 @@ def optimize_text(text: list[str], user_suggestion: str) -> list[str]:
 
     # Call the LLM
     response = client.chat(model=settings.llm.model, messages=[system, message])
+    logger.info(f"user feeback was applied: {response}")
 
     # Extract text from response and parse into list[str]
-    raw_output = response["choices"][0]["message"]["content"]
+    raw_output = response.message.content
+    if raw_output is None:
+        return None
     lines = raw_output.strip().splitlines()
 
     # Remove numbering and keep clean text lines (optional)
@@ -66,4 +69,13 @@ def optimize_text(text: list[str], user_suggestion: str) -> list[str]:
             # fallback if numbering missing
             corrected_lines.append(line.strip())
 
+    logger.info(f"lines with user feedback applied: {corrected_lines}")
     return corrected_lines
+
+
+if __name__ == "__main__":
+    setup_logger()
+    optimize_text(
+        ["This is some very elhuant text.", "To test the function of this system"],
+        "fix the spelling error",
+    )
