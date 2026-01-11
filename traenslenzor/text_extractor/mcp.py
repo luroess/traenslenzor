@@ -15,7 +15,7 @@ ADDRESS = "127.0.0.1"
 PORT = 8002
 TEXT_EXTRACTOR_BASE_PATH = f"http://{ADDRESS}:{PORT}/mcp"
 
-text_extractor = FastMCP("Layout detector")
+text_extractor = FastMCP("Text Extractor")
 
 logger = logging.getLogger(__name__)
 

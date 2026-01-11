@@ -140,7 +140,9 @@ def _render_prompt_presets(presets: list[PromptPreset]) -> str | None:
     options = [preset.label for preset in presets]
 
     st.caption("Click a prompt to send it.")
-    selection = st.pills("Quick prompts", options, key=_prompt_presets_key())
+    selection = st.pills(
+        "Quick prompts", options, key=_prompt_presets_key(), disabled=_is_supervisor_running()
+    )
     if selection is None:
         return None
     st.session_state["prompt_presets_last"] = selection
@@ -517,6 +519,7 @@ def _collect_prompt() -> str | ChatInputValue | None:
         "Paste an image or say something",
         accept_file=True,
         file_type=["png", "jpg", "jpeg"],
+        disabled=_is_supervisor_running(),
     )
     if prompt is None and preset_prompt:
         return preset_prompt
