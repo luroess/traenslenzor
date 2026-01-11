@@ -70,7 +70,7 @@ async def extract_text(session_id: str) -> str:
         documentCoordinates=[BBoxPoint(x=pt[0], y=pt[1]) for pt in document_coordinates],
     )
 
-    res = run_ocr("en", flattened_img)
+    res = run_ocr(flattened_img)
 
     if res is None:
         raise ToolError("OCR text extraction failed")
@@ -109,9 +109,9 @@ if __name__ == "__main__":
     image_path = dir_path + "/../../test_images/skewed_image_1.jpeg"
     npimg = load_image_as_bytes(image_path)
 
-    _, flattened_img = deskew_document(npimg)
-    if flattened_img is None:
+    deskewed = deskew_document(npimg)
+    if deskewed is None:
         print("Error: None")
         exit(-1)
-    flattened_img = flattened_img[0]
-    print(run_ocr("en", flattened_img))
+    flattened_img = deskewed[0]
+    print(run_ocr(flattened_img))

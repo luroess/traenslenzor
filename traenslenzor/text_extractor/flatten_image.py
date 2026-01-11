@@ -1,16 +1,10 @@
 import logging
 import os
-<<<<<<< HEAD
-from typing import Optional, cast, List
-=======
-from typing import List, Optional, Tuple, cast
->>>>>>> 20eebb5 ([Text Extractor] formatting)
+from typing import Optional, cast
 
 import cv2
 import numpy as np
 from numpy.typing import NDArray
-
-from traenslenzor.file_server.session_state import BBoxPoint
 
 logger = logging.getLogger(__name__)
 
@@ -82,14 +76,14 @@ def deskew_document(
     return (flattend_img, matrix, pts)
 
 
-def mark_corners(image: NDArray[np.uint8], pts: List[BBoxPoint]) -> NDArray[np.uint8]:
+def mark_corners(image: NDArray[np.uint8], pts: NDArray[np.float32]) -> NDArray[np.uint8]:
     img_marked = image.copy()
     for i, pt in enumerate(pts):
-        cv2.circle(img_marked, (int(pt.x), int(pt.y)), 10, (0, 0, 255), -1)
+        cv2.circle(img_marked, (int(pt[0]), int(pt[1])), 10, (0, 0, 255), -1)
         cv2.putText(
             img_marked,
             str(i + 1),
-            (int(pt.x) + 10, int(pt.y) - 10),
+            (int(pt[0]) + 10, int(pt[1]) - 10),
             cv2.FONT_HERSHEY_SIMPLEX,
             1,
             (0, 255, 0),
@@ -97,12 +91,12 @@ def mark_corners(image: NDArray[np.uint8], pts: List[BBoxPoint]) -> NDArray[np.u
         )
     return img_marked
 
+
 if __name__ == "__main__":
     dir_path = os.path.dirname(os.path.realpath(__file__))
     image_path = dir_path + "/../../test_images/skewed_image_1.jpeg"
     img = cv2.imread(image_path)
-    flat, matrix = deskew_document(img)  # type: ignore
-    pts, flat = deskew_document(img)  # type: ignore
+    flat, _, pts = deskew_document(img)  # type: ignore
 
     if pts is not None:
         img_with_corners = mark_corners(img, pts)  # type: ignore
