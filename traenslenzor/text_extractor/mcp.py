@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
+from numpy.typing import NDArray
 from PIL import Image
 
 from traenslenzor.file_server.client import FileClient, SessionClient
@@ -50,6 +51,7 @@ async def extract_text(session_id: str) -> str:
 
     flattened_img = orig_img
     transformation_matrix = np.eye(3, dtype=np.float64)
+    document_coordinates: NDArray[np.float32] = np.array([])
     if flattening_result is not None:
         logger.info("Image flattening successful")
         flattened_img, transformation_matrix, document_coordinates = flattening_result
