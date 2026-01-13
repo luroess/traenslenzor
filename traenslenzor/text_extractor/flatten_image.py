@@ -42,7 +42,7 @@ def find_document_corners(image: NDArray[np.uint8]) -> Optional[NDArray[np.float
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # make grayscale
     grayblurred = cv2.GaussianBlur(gray, (5, 5), 0)  # reduce noise
 
-    edges = cv2.Canny(grayblurred, 50, 150)  # get edges
+    edges = cv2.Canny(grayblurred, 25, 130)  # get edges
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
     edges_refined = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=1)
 
@@ -94,7 +94,7 @@ def mark_corners(image: NDArray[np.uint8], pts: NDArray[np.float32]) -> NDArray[
 
 if __name__ == "__main__":
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    image_path = dir_path + "/../../test_images/skewed_image_1.jpeg"
+    image_path = dir_path + "/../../test_images/l1.png"
     img = cv2.imread(image_path)
     flat, _, pts = deskew_document(img)  # type: ignore
 
