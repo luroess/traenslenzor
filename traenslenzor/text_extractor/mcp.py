@@ -108,7 +108,7 @@ if __name__ == "__main__":
             return cv2.imdecode(arr, cv2.IMREAD_COLOR)
 
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    image_path = dir_path + "/../../test_images/skewed_image_1.jpeg"
+    image_path = dir_path + "/../../letter.png"
     npimg = load_image_as_bytes(image_path)
 
     deskewed = deskew_document(npimg)

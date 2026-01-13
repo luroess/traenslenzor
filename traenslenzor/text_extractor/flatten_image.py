@@ -94,7 +94,7 @@ def mark_corners(image: NDArray[np.uint8], pts: NDArray[np.float32]) -> NDArray[
 
 if __name__ == "__main__":
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    image_path = dir_path + "/../../test_images/l1.png"
+    image_path = dir_path + "/../../letter.png"
     img = cv2.imread(image_path)
     flat, _, pts = deskew_document(img)  # type: ignore
 
