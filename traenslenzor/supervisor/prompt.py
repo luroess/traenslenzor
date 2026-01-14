@@ -43,6 +43,13 @@ def has_document_been_classified(session: SessionState) -> bool:
     return session.class_probabilities is not None
 
 
+def get_best_classification(session: SessionState) -> str:
+    probs = session.class_probabilities or {}
+    if not probs:
+        return None
+    return max(probs, key=probs.get)
+
+
 def has_result_been_rendered(session: SessionState) -> bool:
     return session.renderedDocumentId is not None
 
@@ -56,7 +63,7 @@ def format_session(session_id: str, session: SessionState) -> str:
         {"✅ text was extracted from the document" if has_text_been_extracted(session) else "❌ no text was extracted from the document"}
         {"✅ the text was translated" if has_translated_text(session) else "❌ the text has not yet been translated"}
         {"✅ the font has been detected" if has_font_been_detected(session) else "❌ the font has not yet been detected"}
-        {"✅ the document has been classified" if has_document_been_classified(session) else "❌ the document has not yet been classified"}
+        {f"✅ the document has been classified as {get_best_classification(session)}" if has_document_been_classified(session) else "❌ the document has not yet been classified"}
 
         {"✅ the result has been rendered" if has_result_been_rendered(session) else "❌ the result has not yet been rendered"}
     """
@@ -80,6 +87,7 @@ async def context_aware_prompt(request: ModelRequest) -> str:
         Your task is to:
         - Translate all visible text in the provided image from the source language into the target language.
         - Produce a corresponding image with the translated text accurately placed.
+        - The user might want to translate multiple documents.
 
         Tool usage:
         - If multiple tools are available, determine the correct execution order based on tool input/output dependencies.
