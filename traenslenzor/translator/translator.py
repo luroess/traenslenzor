@@ -49,12 +49,27 @@ def translate_all(texts: list[TextItem], lang: str) -> list[HasTranslation]:
 
     system = {
         "role": "system",
-        "content": f"You are an expert translator. Translate the following list of texts into {lang}. Return ONLY a JSON array of strings, where each string is the translation of the corresponding input text. Maintain the order exactly. Do not include any other text or markdown formatting.",
+        "content": f"""
+            You are an expert translator. Translate the following list of texts into target language: '{lang}'.
+            
+            You are given existing text in this format:
+                1: Dies ist ein beispiel
+                2: Mehr Text
+
+            Your task is to **translate the input into the target language**, **while preserving the original structure and numbering**.
+            The **number of indices before and after correction must remain the same**.
+
+            Output must follow the same format as the input:
+                1: Translated line 1
+                2: Translated line 2
+
+            Do not output anything other than the translated text.
+        """,
     }
 
     message = {
         "role": "user",
-        "content": json.dumps(input_texts),
+        "content": "\n".join([f"{i}: {txt}" for i, txt in enumerate(input_texts)]),
     }
 
     content = None
@@ -63,42 +78,39 @@ def translate_all(texts: list[TextItem], lang: str) -> list[HasTranslation]:
         content = response.message.content
 
         if content:
-            # Clean up potential JSON within markdown code blocks of llm response
-            if content.startswith("```json"):
-                content = content[7:]
-            elif content.startswith("```"):
-                content = content[3:]
-            if content.endswith("```"):
-                content = content[:-3]
-
-            # Parse the JSON response
-            translated_texts = json.loads(content.strip())
-
             # Generate a short preview for error logging
             preview = content.strip()
             if len(preview) > 200:
                 preview = preview[:200] + "..."
 
-            if isinstance(translated_texts, list) and len(translated_texts) == len(texts):
+            if content is None:
+                return None
+            lines = content.strip().splitlines()
+
+            # Remove numbering and keep clean text lines (optional)
+            translated_lines = []
+            for line in lines:
+                # Expect format "1: corrected text"
+                if ":" in line:
+                    _, content = line.split(":", 1)
+                    translated_lines.append(content.strip())
+                else:
+                    # fallback if numbering missing
+                    translated_lines.append(line.strip())
+
+            if len(translated_lines) == len(texts):
                 results: list[HasTranslation] = []
                 for i, item in enumerate(texts):
-                    translation_info = TranslationInfo(translatedText=translated_texts[i])
+                    translation_info = TranslationInfo(translatedText=translated_lines[i])
                     results.append(add_translation(item, translation_info))
                 return results
             else:
-                if not isinstance(translated_texts, list):
-                    logger.warning(
-                        "Batch translation returned non-list JSON (%s). Preview: %r. Falling back to sequential.",
-                        type(translated_texts).__name__,
-                        preview,
-                    )
-                else:
-                    logger.warning(
-                        "Batch translation returned length mismatch (expected %s, got %s). Preview: %r. Falling back to sequential.",
-                        len(texts),
-                        len(translated_texts),
-                        preview,
-                    )
+                logger.warning(
+                    "Batch translation returned length mismatch (expected %s, got %s). Preview: %r. Falling back to sequential.",
+                    len(texts),
+                    len(translated_lines),
+                    preview,
+                )
 
     except json.JSONDecodeError as e:
         preview = (content or "").strip()

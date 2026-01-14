@@ -21,7 +21,7 @@ class SupervisorConfig(BaseSettings):
     llm: LLMConfig = LLMConfig()
 
     model_config = SettingsConfigDict(
-        toml_file=Path(__file__).parent.parent.parent / "config/supervisor.toml"
+        toml_file=Path(__file__).parent.parent.parent / ".configs/supervisor.toml"
     )
 
     @classmethod
