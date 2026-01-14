@@ -4,6 +4,12 @@
 
 - [uv](https://docs.astral.sh/uv/install/) - Fast Python package installer (required)
 
+- [tesseract](https://tesseract-ocr.github.io/tessdoc/Installation.html) - library for ocr (required)
+
+```
+sudo apt install tesseract-ocr
+```
+
 ## Run Project
 
 ```sh

@@ -154,7 +154,7 @@ def run_ocr(npimg: np.ndarray) -> Optional[Any]:
         return None
 
 
-def draw_text_items(npimg: np.ndarray, items: list[OCRTextItem]) -> np.ndarray:
+def __draw_text_items(npimg: np.ndarray, items: list[OCRTextItem]) -> np.ndarray:
     """
     Draw bounding boxes and extracted text on an image.
     """
@@ -198,7 +198,7 @@ if __name__ == "__main__":
     r = run_ocr(deskewed)
     if r:
         print(r)
-        rendered = draw_text_items(deskewed, r)
+        rendered = __draw_text_items(deskewed, r)
         cv2.imshow("OCR Overlay", rendered)
         cv2.waitKey(0)
         cv2.destroyAllWindows()

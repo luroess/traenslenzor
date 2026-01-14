@@ -507,7 +507,7 @@ def do_render_image(stage):
         st.caption(f"{stage.title()} document image ({file_id}).")
         st.image(img, width="stretch")
     elif reason:
-        st.caption(reason)
+        st.caption(reason or "Failed to fetch image")
 
 
 def _render_image(session: SessionState | None) -> None:
@@ -548,6 +548,7 @@ def _handle_prompt(prompt: str | ChatInputValue) -> None:
             st.warning("Only the first file will be processed.")
         uploaded = uploaded_files[0]
         session_id = _ensure_session_id()
+        _run_async(SessionClient.prepare_new_doc(session_id))
         file_id = _run_async(FileClient.put_bytes(uploaded.name, uploaded.getvalue()))
         if file_id:
             _run_async(

@@ -185,9 +185,9 @@ class SessionState(BaseModel):
     """Class probabilities set by `traenslenzor.doc_class_detector.mcp.classify_document` or `traenslenzor.doc_classifier.mcp_integration.mcp_server.classify_document`."""
 
 
-def initialize_session() -> SessionState:
+def initialize_session(lang: str | None = None) -> SessionState:
     """Create a new empty session for the file server."""
-    return SessionState()
+    return SessionState(language=lang)
 
 
 class SessionProgressStep(BaseModel):
