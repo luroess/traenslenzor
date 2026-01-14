@@ -1,10 +1,6 @@
 import argparse
-import os
 
 from traenslenzor.supervisor.config import settings
-
-# disable PADDLEOCR logger scheme
-os.environ["PADDLEOCR_DISABLE_AUTO_LOGGING_CONFIG"] = "1"
 
 
 def main():
