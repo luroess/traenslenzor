@@ -10,7 +10,7 @@ from PIL import Image
 from PIL.Image import Image as PILImage
 
 from traenslenzor.file_server.server import ADDRESS, PORT
-from traenslenzor.file_server.session_state import SessionProgress, SessionState
+from traenslenzor.file_server.session_state import SessionProgress, SessionState, initialize_session
 from traenslenzor.image_utils.image_utils import pil_to_numpy
 
 FILES_ENDPOINT = f"http://{ADDRESS}:{PORT}/files"
@@ -143,6 +143,13 @@ class SessionClient:
     async def update(session_id: str, updater: Callable[[SessionState], None]) -> SessionState:
         session = await SessionClient.get(session_id)
         updater(session)
+        await SessionClient.put(session_id, session)
+        return session
+
+    @staticmethod
+    async def prepare_new_doc(session_id: str) -> SessionState:
+        session = await SessionClient.get(session_id)
+        session = initialize_session(session.language)
         await SessionClient.put(session_id, session)
         return session
 

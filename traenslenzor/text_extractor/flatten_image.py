@@ -76,7 +76,7 @@ def deskew_document(
     return (flattend_img, matrix, pts)
 
 
-def mark_corners(image: NDArray[np.uint8], pts: NDArray[np.float32]) -> NDArray[np.uint8]:
+def __mark_corners(image: NDArray[np.uint8], pts: NDArray[np.float32]) -> NDArray[np.uint8]:
     img_marked = image.copy()
     for i, pt in enumerate(pts):
         cv2.circle(img_marked, (int(pt[0]), int(pt[1])), 10, (0, 0, 255), -1)
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     flat, _, pts = deskew_document(img)  # type: ignore
 
     if pts is not None:
-        img_with_corners = mark_corners(img, pts)  # type: ignore
+        img_with_corners = __mark_corners(img, pts)  # type: ignore
         cv2.imshow("Corners Marked", img_with_corners)
 
     if flat is not None:
