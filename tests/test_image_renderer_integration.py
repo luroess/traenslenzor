@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 from PIL import Image
 from PIL.Image import Image as PILImage
+from traenslenzor.text_extractor.paddleocr import run_ocr
 
 from traenslenzor.file_server.session_state import (
     BBoxPoint,
@@ -17,7 +18,6 @@ from traenslenzor.image_renderer.image_rendering import ImageRenderer
 from traenslenzor.image_renderer.mcp_server import get_device
 from traenslenzor.image_renderer.text_operations import get_angle_from_bbox
 from traenslenzor.text_extractor.flatten_image import deskew_document
-from traenslenzor.text_extractor.paddleocr import run_ocr
 from traenslenzor.translator.translator import translate_all
 
 # Skip tests that require model downloads when running in CI
