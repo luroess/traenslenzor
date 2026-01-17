@@ -1,4 +1,4 @@
-#import "@preview/supercharged-hm:0.1.0": *
+#import "@preview/supercharged-hm:0.1.1": *
 
 == File Server <comp_file_server>
 

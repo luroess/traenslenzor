@@ -1,4 +1,4 @@
-#import "@preview/supercharged-hm:0.1.0": *
+#import "@preview/supercharged-hm:0.1.1": *
 #import "@preview/wrap-it:0.1.1": wrap-content
 
 == Text Extractor <comp_text_extractor>
