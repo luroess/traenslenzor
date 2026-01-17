@@ -17,7 +17,7 @@
 
 = Team <team>
 
-== Reflexion <team_reflexion>
+== Reflection <team_reflexion>
 
 #box(fill: luma(240), inset: 8pt, radius: 6pt)[
   Reflect on your work in this project (provide 3–5 bullet points each, team effort).
@@ -39,32 +39,32 @@
 
 #figure(caption: [Defined work packages])[
   #table(
-    columns: 2,
+    columns: (auto, 1fr),
     align: (left, left),
     stroke: 0.5pt,
     inset: 6pt,
     table.header([*WP ID*],[*Work Package Description*]),
     [UI1],[Basic UI],
     
-    [SV1],[Experimentations with technologies.],
-    [SV2],[Supervisor Setup.],
-    [SV3],[Mock Infrastructure.],
-    [SV4],[Evaluate different llms.],
-    [SV5],[Multiple Tool Calls LLAMA 3.],
-    [SV6],[Memory],
-    [SV7],[Session Changes],
-    [SV10],[Bug Fixes],
+    [SV1],[Technology experiments.],
+    [SV2],[Supervisor setup.],
+    [SV3],[Mock infrastructure.],
+    [SV4],[Evaluate different LLMs.],
+    [SV5],[Multiple tool calls (LLaMA 3).],
+    [SV6],[Memory.],
+    [SV7],[Session changes.],
+    [SV10],[Bug fixes.],
 
     [FS1],[File Server],
     [FS2],[Session Server],
 
     [TE1],[Flatten Image],
     [TE2],[Paddle OCR],
-    [TE2],[Tesseract],
+    [TE3],[Tesseract],
 
 
-    [XDE1], [Direct Version],
-    [XDE2], [Separate LLM],
+    [XDE1],[Direct Version],
+    [XDE2],[Separate LLM],
 
   )
 ] <team_work_packages_work_packages_table>
@@ -76,88 +76,88 @@
 #contributed(
   "UI",
   [Felix Schladt\ Jan Schaible],[UI1],[
-    - Setup Streamlit UI
-    - Basic Chat Interface to interact with the Supervisor.
+    - Set up the Streamlit UI.
+    - Built a basic chat interface to interact with the supervisor.
   ]
 )
 
 #contributed(
   "Supervisor",
   [Felix Schladt\ Jan Schaible],[SV1],[
-    - Langchain vs Langgraph
-    - Compare different methods for tool calling
-    - Investigate how Information could be passed between the tools.
+    - Compared LangChain vs. LangGraph.
+    - Compared different methods for tool calling.
+    - Investigated how information could be passed between tools.
   ],
   [Felix Schladt\ Jan Schaible],[SV2],[
-    - Configure Langchain to use ollama.
-    - Use ollama api to automatically pull model if not present
-    - Setup read-eval-print loop to interact with the llm
-    - Setup llm to use tools.
+    - Configured LangChain to use Ollama.
+    - Used the Ollama API to automatically pull models if not present.
+    - Set up a read-eval-print loop (REPL) to interact with the LLM.
+    - Enabled tool calling in the LLM.
   ],
   [Felix Schladt\ Jan Schaible],[SV3],[
-    - Create a mock Server for every tool.
-    - Mock every tool so that it responds with sample data.
-    - Convert app to async to work around the python GIL @pep703
+    - Created a mock server for each tool.
+    - Mocked each tool to return sample data.
+    - Converted the app to async to work around the Python GIL @pep703.
   ],
   [Felix Schladt], [SV4], [
     // todo felix
   ],
   [Jan Schaible], [SV5], [
-    - Investigating why LLAMA 3 fails to call multiple tools back to back.
-    - Extend OLLAMA with a custom model that derives from LLAMA 3 with extended template to call tools back to back.
-    - discarded as LLAMA3 was not capable to work reliably.
+    - Investigated why LLaMA 3 fails to call multiple tools back-to-back.
+    - Extended Ollama with a custom model derived from LLaMA 3 and an updated template for back-to-back tool calls.
+    - Discarded because LLaMA 3 was not reliable enough.
   ],
   [Felix Schladt\ Jan Schaible], [SV6], [
-    - Create a tool for the llm to call so it can store important memory
-    - inject that memory into the prompt so that the llm has it freshly in the context.
-    - discarded as the llm failed to reliably store information that were relevant for later usage
+    - Created a tool the LLM can call to persist important information.
+    - Injected that memory into the prompt so the LLM has it in-context.
+    - Discarded because the LLM did not reliably store information relevant for later use.
   ],
   [Felix Schladt\ Jan Schaible], [SV7], [
-    - Implement Changes Resulting from different Session concept.
-    - Inject the session into the supervisor System prompt
+    - Implemented changes based on the updated session concept.
+    - Injected the session into the supervisor system prompt.
   ],
   [Felix Schladt\ Jan Schaible], [SV10], [
-    - Optimize Prompt
-    - Minor Bug fixes
+    - Optimized prompts.
+    - Fixed minor bugs.
   ],
 )
 
 #contributed(
   "File Server",
   [Felix Schladt\ Jan Schaible], [FS1], [
-    - Implementation of a in Memory HTTP File Server and Client.
+    - Implemented an in-memory HTTP file server and client.
   ],
   [Felix Schladt\ Jan Schaible], [FS2], [
-    - Implementation of a in Memory HTTP Session Server and Client.
+    - Implemented an in-memory HTTP session server and client.
   ],
 )
 
 #contributed(
   "Text Extractor",
   [Felix Schladt], [TE1], [
-    - Grayscale, blur, and detect edges with Canny.
+    - Converted to grayscale, applied blurring, and detected edges with Canny.
   ],
   [Felix Schladt], [TE2], [
-    - Perform OCR using Paddle.
-    - Parse results into session data structure.
+    - Performed OCR using Paddle.
+    - Parsed results into the session data structure.
   ],
   [Jan Schaible], [TE3], [
-    - Perform OCR using Tesseract.
-    - Parse results into session data structure.
+    - Performed OCR using Tesseract.
+    - Parsed results into the session data structure.
   ],
 )
 
 #contributed(
   "Document Editor",
   [Felix Schladt\ Jan Schaible], [XDE1], [
-    - Implement a tool by which the supervisor can modify the text in the session.
-    - Implement a tool by which the supervisor can get the current text from the session.
+    - Implemented a tool for the supervisor to modify session text.
+    - Implemented a tool for the supervisor to retrieve the current session text.
   ],
   [Felix Schladt\ Jan Schaible], [XDE2], [
-    - Implement a tool which optimizes the text currently stored in the session accordiging to user instructions
-    - Implement parsing
-    - Implmenet Extra llm call
-    - Implmenet mcp server for tool
+    - Implemented a tool to optimize the text stored in the session according to user instructions.
+    - Implemented parsing.
+    - Implemented an additional LLM call.
+    - Implemented an MCP server for the tool.
   ],
 )
 
@@ -176,14 +176,14 @@ gantt
   "Basic UI"       : 2026-1-10, 1w
 
   section supervisor
-  "Experimentations with technologies"       : sv1, 2025-7-10, 2w
-  "Supervisor Setup"       : sv2, after sv1, 4w
+  "Technology experiments"       : sv1, 2025-7-10, 2w
+  "Supervisor setup"       : sv2, after sv1, 4w
   "Mock Infrastructure"       : sv3, after sv2, 3w
-  "Evaluate different llms"       : sv4, after sv3, 2w
-  "Multiple Tool Calls LLAMA 3"       : sv5, after sv3, 3w
+  "Evaluate different LLMs"       : sv4, after sv3, 2w
+  "Multiple tool calls (LLaMA 3)"       : sv5, after sv3, 3w
   "Memory"       : sv6, after sv5, 4w
-  "Session Changes"       : sv7, 2025-11-5, 2w
-  "Bug Fixes"       : sv10, 2025-12-20, 2w
+  "Session changes"       : sv7, 2025-11-5, 2w
+  "Bug fixes"       : sv10, 2025-12-20, 2w
 
   section file_server
   "File Server"       : fs1, after sv4, 1w
