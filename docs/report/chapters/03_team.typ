@@ -33,10 +33,6 @@
 
 == Work Packages <team_work_packages>
 
-#box(fill: luma(240), inset: 8pt, radius: 6pt)[
-  Describe the work packages you've defined within the project.
-]
-
 #figure(caption: [Defined work packages])[
   #table(
     columns: (auto, 1fr),
@@ -149,7 +145,7 @@
 
 #contributed(
   "Document Editor",
-  [Felix Schladt\ Jan Schaible], [XDE1], [
+  [Jan Schaible], [XDE1], [
     - Implemented a tool for the supervisor to modify session text.
     - Implemented a tool for the supervisor to retrieve the current session text.
   ],
