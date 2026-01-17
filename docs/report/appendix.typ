@@ -1,7 +1,10 @@
-#import "@preview/supercharged-hm:0.1.0": *
+#import "@preview/supercharged-hm:0.1.1": *
 
 #let appendix = [
-= Appendix
+// YEP another bug, but I will fix it later.... :/
+#set heading(numbering: "a.")
+#counter(heading).update((first, second) => (first - 2, second - 3))
+
 == PaddleOCR Import Shim <paddle_shim> 
 
 #figure(caption: [PaddleOCR Import Shim (replaced by pytesseract): `traenslenzor/text_extractor/shim_langchain_backcomp.py`])[
