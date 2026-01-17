@@ -7,6 +7,6 @@
   (key: "relu", short: "ReLU", long: "Rectified Linear Unit"),
   (key: "llm", short: "LLM", long: "Large Language Model"),
   (key: "ui", short: "UI", long: "User Interface"),
+  (key: "gpu", short: "GPU", long: "Graphical Processing Unit")
   // (key: "", short: "", long: ""),
-
 )

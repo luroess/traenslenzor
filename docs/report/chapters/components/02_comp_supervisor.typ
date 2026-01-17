@@ -66,10 +66,16 @@ The supervisor is the central component of the application. It is responsible fo
 - how other tools are called
 
 === Model Selection
+#let model(m) = {rgb-raw(m, rgb("#5079ba"))}
 
-- intention
-- llama3.1
-- llama3.2
-- Other models tried
-- selection of qwen3:4b
+Choosing a suitable #gls("llm") was challenging, as the system had to run on consumer hardware without #gls("gpu") support, restricting us to smaller models. This was further complicated by the requirement that the model determine the tool invocation order dynamically at runtime using only tool descriptions and input specifications.
+Development started using the #model("gemma3:4b")@noauthor_gemma34b_nodate #gls("llm") model, which soon proved to be incompatible due to missing tool-calling abilities @schmid_google_2025.
+Instead, #model("llama3.1:8b")@noauthor_llama31_nodate was chosen, offering good langchain integration and tool-calling abilities. 
+During later development, however, it became apparent that the model could not reliably select the correct tools for execution and had difficulty following its instructions.
+A short lived switch to #model("llama3.2:3b")@noauthor_llama32_nodate proved it to also not be up to the task, though coping better in some aspects.
+To identify a suitable model capable of reliably handling user input and correctly selecting tools, a broad range of freely available models was evaluated.
+This included #model("gpt-oss:20b")@noauthor_gpt-oss_nodate, #model("gwen3:8b")@noauthor_qwen3_nodate, #model("qwen3:14b"), #model("deepseek-r1:8b")@noauthor_deepseek-r1_nodate and #model("deepseek-r1:14b").
+Though #model("gpt-oss:20b") proved very reliable and accurate, it proved quite resource hungry and usable on our development hardware.
+Instead, #model("gwen3:8b") demonstrated good reasoning capability and reliably identified the correct oder of tools to call. With further testing and prompt refinement a step down to #model("gwen3:4b") also proved to work reliably.
+Although #model("gwen3:4b") is comparatively small, its strong reasoning capabilities provide a high level of understanding, albeit at the cost of relatively long response times on our development systems.
 

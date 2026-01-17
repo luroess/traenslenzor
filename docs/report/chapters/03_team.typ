@@ -1,8 +1,11 @@
 #import "@preview/supercharged-hm:0.1.1": *
 #import "@preview/pintorita:0.1.4"
 #show raw.where(lang: "pintora"): it => pintorita.render(it.text, style: "default")
+#show figure: set block(breakable: true)
+
 
 #let contributed(component, ..contributions) = [
+  #heading(level: 3)[#component]
   #figure(caption: [Student contributions linked to #component])[
   #table(
     columns: (auto, auto, 1fr),
@@ -65,10 +68,6 @@
   )
 ] <team_work_packages_work_packages_table>
 
-#box(fill: luma(240), inset: 8pt, radius: 6pt)[
-  Describe the actual work on each work package per person.
-]
-
 #contributed(
   "UI",
   [Felix Schladt\ Jan Schaible],[UI1],[
@@ -97,6 +96,8 @@
   ],
   [Felix Schladt], [SV4], [
     // todo felix
+    - Evaluated multiple #glspl("llm") available on hugging face as replacement for LLaMA 3.
+    - Settled on qwen3 for its tool calling and comprehension abilities.
   ],
   [Jan Schaible], [SV5], [
     - Investigated why LLaMA 3 fails to call multiple tools back-to-back.
@@ -157,7 +158,7 @@
   ],
 )
 
-#pagebreak()
+#block(breakable: false)[
 
 == Timeline <team_timeline>
 
@@ -213,3 +214,4 @@ gantt
   "Release" : milestone, 2026-1-23, 0d
 ```
 ] <team_timeline_gantt>
+]
