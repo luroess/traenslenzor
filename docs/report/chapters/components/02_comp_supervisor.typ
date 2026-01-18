@@ -1,15 +1,20 @@
 #import "@preview/supercharged-hm:0.1.1": *
+#show link: underline
 
 == Supervisor <comp_supervisor>
 
-- Internal working
-- Used model etc
+The supervisor is the central component of the application.
+It is responsible for the interaction with the agent #gls("llm") and provides the #gls("llm") with callable tools.
+Even though the code isn't long, a lot of experimenting went into getting it right.
 
-The supervisor is the central component of the application. It is responsible for the interaction with the agent #gls("llm"), provides the #gls("llm") with callable tools and manages state.
+
 
 === Internal Structure 
-- how session state is provided and structured
-- langchain usage
+One of the requirements was to avoid programming a fixed sequence of tools that the process would follow once all information was gathered. Therefore, we only use Langraph indirectly via LangChain's create_agent method, which handles tool execution after an LLM call when specified.
+
+To provide the current context, we leverage LangChain's dynamic_prompt hook to inject session context into the LLM (see @sec-prompt for details).
+We opted to let the LLM inject the session_id into tool calls directly.
+Programmatic injection would have required modifying the tool definitions, which we deemed unnecessary since the LLM handles the session_id injection seamlessly.
 
 === Model Selection
 #let model(m) = {rgb-raw(m, rgb("#5079ba"))}
@@ -25,16 +30,24 @@ Though #model("gpt-oss:20b") proved very reliable and accurate, it proved quite 
 Instead, #model("gwen3:8b") demonstrated good reasoning capability and reliably identified the correct oder of tools to call. With further testing and prompt refinement a step down to #model("gwen3:4b") also proved to work reliably.
 Although #model("gwen3:4b") is comparatively small, its strong reasoning capabilities provide a high level of understanding, albeit at the cost of relatively long response times on our development systems.
 
-=== Tool Calling
+=== Prompt<sec-prompt>
+One of the requirements was to avoid including an explicit task order.
+Therefore, we structured the prompt to clearly define the task, tool usage rules, and how to handle missing information, while leaving the execution order up to the LLM.
+This system prompt is then injected, together with tool definitions and the most recent messages, into the prompt template @ollama_prompt_qwen.
+The overall goal was to make the system as autonomous as possible while ensuring predictable, user-friendly behavior.
 
-- mention set language tool
-- how other tools are called
+Some of the problems we encountered along the way included:
 
-=== Prompt
-
-- the llm must figure out the order in which to call tools from by itself
-- tool descriptions are provided by langchain in addition to the prompt
-- LLM should do as much as it can by itself but if required ask back to the user
+- *No rerender:* The LLM did not execute the render image tool after the user modified the text.  
+- *Imagined tools (LLaMA 3):* The LLM generated non-existent tools, e.g., `{"name": "language_selector"}`.  
+- *Simulated processing (LLaMA 3):* The LLM printed messages like `Rendering image...` instead of actually calling the tool.  
+- *Assumed language (LLaMA 3):* The LLM did not request the target language from the user when none had been provided and assumed a default.  
+- *Additional text (LLaMA 3):* The LLM added descriptive text around the actual tool call, e.g.:
+    ```
+    Extracting text from image...
+    {"name": "text_extractor", "parameters": {}}
+    ```
+- This list is not exhaustive and only highlights some of the more frequent issues encountered.
 
 #figure(caption: [Aggregated prompt template for #gls("llm") calls by the supervisor: `./traenslenzor/supervisor/prompt.py`])[
     #code()[```py
@@ -64,8 +77,49 @@ Although #model("gwen3:4b") is comparatively small, its strong reasoning capabil
         - Immediately call the “apply user feedback” tool with that content, without additional commentary.
 
     Context:
-        {formatted_session}
+        ✅ the current session_id is '01329c88-0373-46df-a572-6c34e4a19c24'
+        ✅ the user has selected the language english
+        ❌ the user has no document selected"
+        ...
     """
     ```]
 ]<supervisor_prompt>
 
+=== Failed approaches
+
+In this chapter, we discuss some approaches that were tried but then discarded.
+
+==== LLaMA 3
+As smaller models run faster and we aimed for a performant tool, we initially focused on using LLaMA 3.
+Some of the challenges with this approach are discussed in @sec-prompt.
+In particular, we observed that LLaMA 3 was unable to call multiple tools in succession.
+
+Upon investigation, we found that the Ollama template used to construct the final prompt did not include tool descriptions when the last message was a response from a tool (see @ollama_prompt_llama).
+We modified the template by deriving a custom model from LLaMA 3 using the Ollama interface at the beginning of the program.
+Despite this, the LLM still failed to execute multiple tools sequentially.
+
+The issue was traced to the sentence: "When you receive a tool call response, use the output to format an answer to the original user question."
+Removing this instruction allowed the LLM to call tools successfully.
+However, it then began calling tools continuously without stopping, which ultimately led us to switch to a different model.
+
+==== Memory
+As our first approach was to let the LLM handle the results returned from the tools directly, we needed some form of persistence that would keep relevant information in the context window even as the amount of data in the window grew.
+To do this, we first thought of approaches like #link("https://docs.langchain.com/oss/python/langchain/middleware/built-in#summarization")[Langchains Summerization], but this might cut relevant information.
+Therefore, we considered giving the LLM a tool to store relevant information in memory directly, which would then be injected into the context itself.
+This, however, did not work and was one of the reasons we switched to the session-based system.
+
+==== React pattern for tools
+To encourage reasoning in LLaMA, we attempted to apply the React pattern using a one-shot instruction:
+#figure(
+    caption: "One Shot Instruction",
+    ```json
+    Respond in the format {
+        "reason": "reason you are calling this tool next",
+        "name": function name,
+        "parameters": dictionary of argument name and its value
+    }...
+    ```
+)
+The goal was to prompt the model to explicitly provide a reason before invoking a tool.
+However, LLaMA did not respond to this instruction, and its tool-calling behavior remained unchanged.
+In contrast, with Qwen this measure was unnecessary, as the model inherently produces reasoning in a section preceding its output, which is then stripped by the Ollama interface.

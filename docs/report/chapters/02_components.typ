@@ -27,17 +27,6 @@ Typically the text extraction tool described in @comp_text_extractor is called a
 First, the image borders are recognized and it is deskewed to a fitting rectangle. Then utilizing an #gls("ocr") library, the text features and their location are extracted from the image.
 The resulting deskewed image and metadata is then uploaded to the file server.
 \
-#warning-note([
-  *TODO: All other components need to be added *\
-  - doc class detector
-  - font detector
-  - translator
-  - doc layout detector ???? (DO WE EVEN HAVE THIS ONE?)
-  - X - Doc Editor
-  - Doc image renderer
-])
-
-
 
 
 #warning-note()[
