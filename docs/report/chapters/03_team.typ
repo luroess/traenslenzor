@@ -28,11 +28,16 @@
 
 #strong[What went right:]
 
-- Lorem Ipsum
+- Team members were largely able to work independently.
+- Integration was mostly handled individually by team members, based on a shared understanding of what a session must contain.
 
 #strong[What went wrong:]
-
-- Lorem Ipsum
+- Some components were less related to machine learning and instead mainly involved traditional software engineering tasks.
+- (Text Extractor) Unfortunately, PaddleOCR did not produce satisfactory results; this should have been evaluated more thoroughly before being integrated into the project.
+- #[
+  (Supervisor) We should not have started with a small model (LLaMA 3) and then moved to a larger model, which required significant effort to make work on the smaller setup.
+  This might have been avoided by initially specifying a larger reference model than gemma3:1b to establish a more appropriate baseline.
+]
 
 == Work Packages <team_work_packages>
 
