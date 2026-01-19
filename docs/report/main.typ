@@ -20,6 +20,8 @@
   bibliography: bibliography("sources.bib"),
   appendix: appendix,
 )[
+  // Glossary formatting fix is pending: https://github.com/typst/packages/pull/3881
+
   // Include all chapters
   #include "/chapters/01_introduction.typ"
   #include "/chapters/02_components.typ"

@@ -22,10 +22,6 @@
 
 == Reflection <team_reflexion>
 
-#box(fill: luma(240), inset: 8pt, radius: 6pt)[
-  Reflect on your work in this project (provide 3–5 bullet points each, team effort).
-]
-
 #strong[What went right:]
 
 - Team members were largely able to work independently.
@@ -35,6 +31,7 @@
 - Some components were less related to machine learning and instead mainly involved traditional software engineering tasks.
 - (Text Extractor) Unfortunately, PaddleOCR did not produce satisfactory results; this should have been evaluated more thoroughly before being integrated into the project.
 - #[
+  #warning-note("This does not make much sense as we started with gemma3:4b")
   (Supervisor) We should not have started with a small model (LLaMA 3) and then moved to a larger model, which required significant effort to make work on the smaller setup.
   This might have been avoided by initially specifying a larger reference model than gemma3:1b to establish a more appropriate baseline.
 ]
@@ -53,7 +50,7 @@
     [SV1],[Technology experiments.],
     [SV2],[Supervisor setup.],
     [SV3],[Mock infrastructure.],
-    [SV4],[Evaluate different LLMs.],
+    [SV4],[Evaluate different #gls("llm")s.],
     [SV5],[Multiple tool calls (LLaMA 3).],
     [SV6],[Memory.],
     [SV7],[Session changes.],
@@ -68,7 +65,7 @@
 
 
     [XDE1],[Direct Version],
-    [XDE2],[Separate LLM],
+    [XDE2],[Separate #gls("llm")],
 
   )
 ] <team_work_packages_work_packages_table>
@@ -76,7 +73,7 @@
 #contributed(
   "UI",
   [Felix Schladt\ Jan Schaible],[UI1],[
-    - Set up the Streamlit UI.
+    - Set up the Streamlit #gls("ui").
     - Built a basic chat interface to interact with the supervisor.
   ]
 )
@@ -90,9 +87,9 @@
   ],
   [Felix Schladt\ Jan Schaible],[SV2],[
     - Configured LangChain to use Ollama.
-    - Used the Ollama API to automatically pull models if not present.
-    - Set up a read-eval-print loop (REPL) to interact with the LLM.
-    - Enabled tool calling in the LLM.
+    - Used the Ollama #gls("api") to automatically pull models if not present.
+    - Set up a #gls("repl") to interact with the #gls("llm").
+    - Enabled tool calling in the #gls("llm").
   ],
   [Felix Schladt\ Jan Schaible],[SV3],[
     - Created a mock server for each tool.
@@ -110,9 +107,9 @@
     - Discarded because LLaMA 3 was not reliable enough.
   ],
   [Felix Schladt\ Jan Schaible], [SV6], [
-    - Created a tool the LLM can call to persist important information.
-    - Injected that memory into the prompt so the LLM has it in-context.
-    - Discarded because the LLM did not reliably store information relevant for later use.
+    - Created a tool the #gls("llm") can call to persist important information.
+    - Injected that memory into the prompt so the #gls("llm") has it in-context.
+    - Discarded because the #gls("llm") did not reliably store information relevant for later use.
   ],
   [Felix Schladt\ Jan Schaible], [SV7], [
     - Implemented changes based on the updated session concept.
@@ -140,11 +137,11 @@
     - Converted to grayscale, applied blurring, and detected edges with Canny.
   ],
   [Felix Schladt], [TE2], [
-    - Performed OCR using Paddle.
+    - Performed #gls("ocr") using Paddle.
     - Parsed results into the session data structure.
   ],
   [Jan Schaible], [TE3], [
-    - Performed OCR using Tesseract.
+    - Performed #gls("ocr") using Tesseract.
     - Parsed results into the session data structure.
   ],
 )
@@ -158,8 +155,8 @@
   [Felix Schladt\ Jan Schaible], [XDE2], [
     - Implemented a tool to optimize the text stored in the session according to user instructions.
     - Implemented parsing.
-    - Implemented an additional LLM call.
-    - Implemented an MCP server for the tool.
+    - Implemented an additional #gls("llm") call.
+    - Implemented an #gls("mcp") server for the tool.
   ],
 )
 
