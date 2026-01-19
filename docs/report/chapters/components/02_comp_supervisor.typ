@@ -5,8 +5,7 @@
 
 The supervisor is the central component of the application.
 It is responsible for the interaction with the agent #gls("llm") and provides the #gls("llm") with callable tools.
-Even though the code isn't long, a lot of experimenting went into getting it right.
-
+Although the implementation is concise, it reflects extensive experimentation to arrive at a reliable solution.
 
 
 === Internal Structure 
@@ -89,8 +88,7 @@ Some of the problems we encountered along the way included:
 
 In this chapter, we discuss some approaches that were tried but then discarded.
 
-==== LLaMA 3
-#warning-note("Which LLaMA? We both used LLaMA3.1 and 3.2 so talking about LLaMA3 or just LLaMA is not really precise")
+==== LLaMA 3.1/3.2
 
 As smaller models run faster and we aimed for a performant tool, we initially focused on using LLaMA 3.
 Some of the challenges with this approach are discussed in @sec-prompt.

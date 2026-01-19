@@ -31,9 +31,7 @@
 - Some components were less related to machine learning and instead mainly involved traditional software engineering tasks.
 - (Text Extractor) Unfortunately, PaddleOCR did not produce satisfactory results; this should have been evaluated more thoroughly before being integrated into the project.
 - #[
-  #warning-note("This does not make much sense as we started with gemma3:4b")
-  (Supervisor) We should not have started with a small model (LLaMA 3) and then moved to a larger model, which required significant effort to make work on the smaller setup.
-  This might have been avoided by initially specifying a larger reference model than gemma3:1b to establish a more appropriate baseline.
+  (Supervisor) In retrospect, we should have evaluated more carefully which model to start with, as working with a suboptimal model consumed a considerable amount of time.
 ]
 
 == Work Packages <team_work_packages>
