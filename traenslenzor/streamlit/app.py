@@ -12,6 +12,18 @@ import numpy as np
 import streamlit as st
 from PIL import Image, ImageDraw
 
+from traenslenzor.app.session_state_tools import (
+    DEFAULT_SESSION_PICKLE_PATH,
+    apply_pending_restore,
+    apply_session_deletions,
+    build_export_payload,
+    get_session_id,
+    maybe_auto_restore_from_pickle,
+    queue_restore_payload,
+    read_pickle,
+    set_session_id,
+    write_pickle,
+)
 from traenslenzor.doc_classifier.configs.mcp_config import DocClassifierMCPConfig
 from traenslenzor.doc_classifier.configs.path_config import PathConfig
 from traenslenzor.doc_classifier.mcp_integration import mcp_server as doc_classifier_mcp_server
@@ -57,19 +69,6 @@ def _ensure_defaults() -> None:
 
 def _get_history() -> list[dict[str, str]]:
     return cast(list[dict[str, str]], st.session_state["history"])
-
-
-def _get_session_id() -> str | None:
-    return cast(str | None, st.session_state.get("last_session_id"))
-
-
-def _set_session_id(value: str | None) -> None:
-    if st.session_state.get("last_session_id") != value:
-        st.session_state.pop("cached_session", None)
-        st.session_state.pop("cached_progress", None)
-        st.session_state.pop("extracted_image_id", None)
-        st.session_state.pop("extracted_image", None)
-    st.session_state["last_session_id"] = value
 
 
 _ensure_defaults()
@@ -205,7 +204,7 @@ def _consume_pending_supervisor() -> bool:
         _get_history().append({"role": "assistant", "content": f"Supervisor failed: {exc!s}"})
         st.toast("Supervisor failed.", icon="⚠️")
     else:
-        _set_session_id(session_id)
+        set_session_id(session_id)
         st.session_state.pop("cached_session", None)  # Invalidate to fetch fresh
         st.session_state.pop("cached_progress", None)
         _get_history().append({"role": "assistant", "content": msg.content})
@@ -231,7 +230,7 @@ def _start_supervisor_run(llm_input: str) -> None:
 
 def _get_active_session(force_refresh: bool = False) -> SessionState | None:
     """Get session state, optionally forcing a fresh fetch from backend."""
-    session_id = _get_session_id()
+    session_id = get_session_id()
     if not session_id:
         st.session_state.pop("cached_session", None)
         return None
@@ -251,7 +250,7 @@ def _get_active_session(force_refresh: bool = False) -> SessionState | None:
 
 
 def _get_session_progress(force_refresh: bool = False) -> SessionProgress | None:
-    session_id = _get_session_id()
+    session_id = get_session_id()
     if not session_id:
         st.session_state.pop("cached_progress", None)
         return None
@@ -294,7 +293,7 @@ def _count_text_items(text_items: list[TextItem] | None) -> tuple[int, int, int]
 def _render_session_overview(
     session: SessionState | None, progress: SessionProgress | None
 ) -> None:
-    session_id = _get_session_id()
+    session_id = get_session_id()
     if not session_id:
         st.caption("No active session yet.")
         return
@@ -317,7 +316,10 @@ def _render_session_overview(
 
     # Header with session ID only
     with st.container(border=True):
-        st.metric("Session", _short_session_id(session_id))
+        header_cols = st.columns(2)
+        header_cols[0].metric("Session", _short_session_id(session_id))
+        active_tool = getattr(session, "activeTool", None)
+        header_cols[1].metric("Current tool", active_tool or "Idle")
 
     # Progress bar and step checklist
     progress_value = done_count / total_steps if total_steps else 0.0
@@ -346,7 +348,7 @@ def _render_session_overview(
 
         # Documents section
         st.markdown("**Documents**")
-        doc_cols = st.columns(3)
+        doc_cols = st.columns(4)
         doc_cols[0].caption("Raw")
         doc_cols[0].code(session.rawDocumentId[:13] + "..." if session.rawDocumentId else "—")
         doc_cols[1].caption("Extracted")
@@ -356,10 +358,19 @@ def _render_session_overview(
         doc_cols[2].code(
             session.renderedDocumentId[:13] + "..." if session.renderedDocumentId else "—"
         )
+        doc_cols[3].caption("Super-res")
+        superres_id = session.superResolvedDocument.id if session.superResolvedDocument else None
+        doc_cols[3].code(superres_id[:13] + "..." if superres_id else "—")
 
         if extracted_doc and extracted_doc.documentCoordinates:
             st.caption(
                 f"Extracted document coordinates: {len(extracted_doc.documentCoordinates)} points"
+            )
+
+        if session.superResolvedDocument:
+            superres = session.superResolvedDocument
+            st.caption(
+                f"Super-res model: {superres.model} (x{superres.scale}, source={superres.source})"
             )
 
         # Text items section
@@ -397,13 +408,139 @@ def _render_session_overview(
             st.json(session.model_dump(), expanded=False)
 
 
-def _render_session_sidebar_content(*, force_refresh: bool) -> None:
+def _render_session_sidebar_content(*, force_refresh: bool) -> SessionState | None:
     """Render the sidebar's Session panel using cached or refreshed state."""
     session = _get_active_session(force_refresh=force_refresh)
     progress = _get_session_progress(force_refresh=force_refresh)
 
     _render_classifier_checkpoint_selector()
     _render_session_overview(session, progress)
+    return session
+
+
+def _render_session_tools(session: SessionState | None) -> None:
+    session_id = get_session_id()
+    if session is None:
+        st.caption("Session state unavailable.")
+    if not session_id:
+        st.caption("No active session id.")
+
+    if session is not None and session_id:
+        with st.expander("Export session state", expanded=False):
+            default_path = DEFAULT_SESSION_PICKLE_PATH
+            export_path = st.text_input(
+                "Pickle path",
+                value=str(st.session_state.get("session_export_path", default_path)),
+                key="session_export_path",
+            )
+            st.caption("Exports session payload + document files (no chat history).")
+            if st.button("Save pickle", key="session_export_button"):
+                payload, skipped_files = build_export_payload(
+                    session,
+                    run_async=_run_async,
+                )
+                if skipped_files:
+                    st.error("Export failed: missing files in the file server.")
+                else:
+                    write_pickle(Path(export_path).expanduser(), payload)
+                    st.success(f"Saved session pickle to {export_path}")
+    else:
+        st.caption("Export requires an active session.")
+
+    with st.expander("Import session state", expanded=False):
+        if notice := st.session_state.pop("session_restore_notice", None):
+            st.success(notice)
+        if error := st.session_state.pop("session_restore_error", None):
+            st.error(error)
+        default_path = DEFAULT_SESSION_PICKLE_PATH
+        import_path = st.text_input(
+            "Pickle path",
+            value=str(st.session_state.get("session_import_path", default_path)),
+            key="session_import_path",
+        )
+        if st.button("Load pickle", key="session_import_button"):
+            try:
+                payload = read_pickle(Path(import_path).expanduser())
+            except Exception as exc:
+                st.error(f"Failed to load pickle: {exc}")
+                return
+            if not isinstance(payload, dict):
+                st.error("Pickle payload must be a dict.")
+                return
+
+            queue_restore_payload(
+                payload,
+            )
+
+    if session is not None and session_id:
+        with st.expander("Delete session components", expanded=False):
+            col_a, col_b = st.columns(2)
+            delete_raw = col_a.checkbox("Raw document", key="delete_raw")
+            delete_extracted = col_a.checkbox("Extracted document", key="delete_extracted")
+            delete_rendered = col_b.checkbox("Rendered document", key="delete_rendered")
+            delete_superres = col_b.checkbox("Super-res document", key="delete_superres")
+            delete_text = col_a.checkbox("Text items", key="delete_text")
+            delete_classification = col_a.checkbox(
+                "Class probabilities", key="delete_classification"
+            )
+            delete_language = col_b.checkbox("Language", key="delete_language")
+            delete_ui_history = col_b.checkbox("Chat history (UI)", key="delete_ui_history")
+            delete_image_cache = col_b.checkbox("Image cache (UI)", key="delete_ui_cache")
+            delete_files = st.checkbox(
+                "Also delete stored files",
+                value=True,
+                key="delete_files",
+            )
+
+            if st.button("Apply deletion", type="primary", key="delete_components_button"):
+                apply_session_deletions(
+                    session=session,
+                    session_id=session_id,
+                    delete_raw=delete_raw,
+                    delete_extracted=delete_extracted,
+                    delete_rendered=delete_rendered,
+                    delete_superres=delete_superres,
+                    delete_text=delete_text,
+                    delete_classification=delete_classification,
+                    delete_language=delete_language,
+                    delete_ui_history=delete_ui_history,
+                    delete_image_cache=delete_image_cache,
+                    delete_files=delete_files,
+                    run_async=_run_async,
+                    default_assistant_message=DEFAULT_ASSISTANT_MESSAGE,
+                )
+                st.rerun(scope="app")
+    else:
+        st.caption("Deletion tools require an active session.")
+
+
+def _session_signature(session: SessionState) -> tuple[object, ...]:
+    extracted = session.extractedDocument
+    superres = session.superResolvedDocument
+    return (
+        session.rawDocumentId,
+        extracted.id if extracted else None,
+        extracted.mapXYId if extracted else None,
+        session.renderedDocumentId,
+        superres.id if superres else None,
+    )
+
+
+def _maybe_rerun_on_session_change(session: SessionState | None) -> None:
+    if session is None:
+        return
+    signature = _session_signature(session)
+    last_signature = st.session_state.get("last_session_signature")
+    if last_signature is None:
+        st.session_state["last_session_signature"] = signature
+        return
+    if signature == last_signature:
+        return
+    st.session_state["last_session_signature"] = signature
+    st.session_state.pop("image_cache", None)
+    st.session_state.pop("extracted_image_id", None)
+    st.session_state.pop("extracted_image", None)
+    st.rerun(scope="app")
 
 
 def _maybe_rerun_if_supervisor_done() -> None:
@@ -417,7 +554,8 @@ def _maybe_rerun_if_supervisor_done() -> None:
 def _render_sidebar_fragment() -> None:
     """Sidebar fragment that polls for session updates while supervisor runs."""
     _maybe_rerun_if_supervisor_done()
-    _render_session_sidebar_content(force_refresh=True)
+    session = _render_session_sidebar_content(force_refresh=True)
+    _maybe_rerun_on_session_change(session)
 
 
 @st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
@@ -484,14 +622,23 @@ def _render_sidebar() -> None:
     _render_session_sidebar_content(force_refresh=False)
 
 
-def _render_chat(history: list[dict[str, str]]) -> None:
+def _render_top_right_tools(session: SessionState | None) -> None:
+    left, right = st.columns([8, 2])
+    with right:
+        with st.popover("Session tools", use_container_width=True):
+            _render_session_tools(session)
+
+
+def _render_chat(history: list[dict[str, str]], session: SessionState | None) -> None:
     st.title("TrÄenslÄnzÖr 0815 Döküment Äsißtänt")
     for message in history:
         with st.chat_message(message["role"]):
             st.write(message["content"])
     if _is_supervisor_running():
         with st.chat_message("assistant"):
-            st.status("TrÄenslönzing...", state="running", expanded=False)
+            tool_label = getattr(session, "activeTool", None) if session else None
+            status_text = f"Running tool: {tool_label}" if tool_label else "TrÄenslönzing..."
+            st.status(status_text, state="running", expanded=False)
 
 
 def _draw_document_outline(
@@ -528,7 +675,7 @@ def _draw_document_outline(
 
 def fetch_image(
     session: SessionState,
-    stage: Literal["raw", "extracted", "rendered"],
+    stage: Literal["raw", "extracted", "rendered", "superres"],
 ) -> tuple[Image.Image | None, str | None, str | None]:
     """Fetch the requested stage image and apply overlays as needed.
 
@@ -562,13 +709,25 @@ def fetch_image(
             file_id = session.renderedDocumentId
             if not file_id:
                 failure_reason = "Rendered document id is missing."
+        case "superres":
+            superres = session.superResolvedDocument
+            if superres is None:
+                failure_reason = "No super-resolved document."
+            else:
+                file_id = superres.id
+                if not file_id:
+                    failure_reason = "Super-resolved document id is missing."
     if failure_reason is None and file_id:
         cache = _get_image_cache()
         if (cached := cache.get(file_id)) is not None:
             image = cached
         else:
             try:
-                image = _run_async(FileClient.get_image(file_id))
+                timeout = 120.0 if stage == "superres" else 60.0
+                max_pixels = 0 if stage == "superres" else 50_000_000
+                image = _run_async(
+                    FileClient.get_image(file_id, timeout=timeout, max_pixels=max_pixels)
+                )
             except Exception:
                 logger.exception("Failed to fetch image for stage %s (file_id=%s)", stage, file_id)
                 failure_reason = "Failed to fetch image."
@@ -620,10 +779,10 @@ def _render_overlay_image(
 
 
 def _ensure_session_id() -> str:
-    if session_id := _get_session_id():
+    if session_id := get_session_id():
         return session_id
     session_id = _run_async(SessionClient.create(initialize_session()))
-    _set_session_id(session_id)
+    set_session_id(session_id)
     return session_id
 
 
@@ -636,6 +795,7 @@ def _render_image(session: SessionState | None) -> None:
         ("Overlay", lambda: _render_overlay_image(session)),
         ("Extracted", lambda: fetch_image(session, "extracted")),
         ("Rendered", lambda: fetch_image(session, "rendered")),
+        ("Super-res", lambda: fetch_image(session, "superres")),
     ]
 
     tabs = st.tabs([label for label, _ in tab_specs])
@@ -701,12 +861,17 @@ def _handle_prompt(prompt: str | ChatInputValue) -> None:
 def _render_layout(session: SessionState | None) -> None:
     chat_col, img_col = st.columns([1, 1], gap="large")
     with chat_col:
-        _render_chat(_get_history())
+        _render_chat(_get_history(), session)
     with img_col:
         _render_image(session)
 
 
 def main() -> None:
+    if not apply_pending_restore(run_async=_run_async):
+        maybe_auto_restore_from_pickle(
+            default_assistant_message=DEFAULT_ASSISTANT_MESSAGE,
+            run_async=_run_async,
+        )
     # Handle completed supervisor runs
     if _consume_pending_supervisor():
         st.rerun()
@@ -716,6 +881,7 @@ def main() -> None:
 
     # Main layout uses cached session; sidebar refresh updates the cache.
     active_session = _get_active_session()
+    _render_top_right_tools(active_session)
     _render_layout(active_session)
 
     prompt = _collect_prompt()
