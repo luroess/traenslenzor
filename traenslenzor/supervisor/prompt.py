@@ -51,6 +51,10 @@ def has_result_been_rendered(session: SessionState) -> bool:
     return session.renderedDocumentId is not None
 
 
+def has_super_resolved_document(session: SessionState) -> bool:
+    return session.superResolvedDocument is not None
+
+
 def format_session(session_id: str, session: SessionState) -> str:
     text_count = len(session.text) if session.text else 0
     return f"""
@@ -59,6 +63,7 @@ def format_session(session_id: str, session: SessionState) -> str:
         {"✅ the user has a document loaded" if session.rawDocumentId else "❌ the user has no document selected"}
 
         {"✅ extracted document is available" if has_extracted_document(session) else "❌ no extracted document available"}
+        {"✅ super-resolved document is available" if has_super_resolved_document(session) else "❌ no super-resolved document available"}
 
         {"✅ text was extracted from the document" if has_text_been_extracted(session) else "❌ no text was extracted from the document"}
         {f"✅ text items: {text_count}" if text_count else "❌ no text items recorded"}

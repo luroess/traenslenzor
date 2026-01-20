@@ -4,3 +4,14 @@ temperature = 0
 #ollama_url =  "http://wgserver.ddnss.ch:45876"
 ollama_url = "http://localhost:11434"
 model      = "qwen3:4b"
+
+# Ollama request options (sent per request)
+# num_ctx     = 4096
+# num_predict = 256
+num_gpu     = 1
+# num_thread  = 8
+# keep_alive  = "5m"
+
+# Ollama server env (must be set where `ollama serve` runs)
+flash_attention = true
+kv_cache_type   = "q4_0"

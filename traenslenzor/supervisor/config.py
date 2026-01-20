@@ -11,10 +11,17 @@ from pydantic_settings import (
 
 class LLMConfig(BaseModel):
     seed: int = 69
-    temperature: int = 0
+    temperature: float = 0
     ollama_url: str = "http://localhost:11434"
     model: str = "qwen3:4b"
     debug_mode: bool = False
+    num_ctx: int | None = None
+    num_predict: int | None = None
+    num_gpu: int | None = None
+    num_thread: int | None = None
+    keep_alive: int | str | None = None
+    flash_attention: bool = False
+    kv_cache_type: str | None = None
 
 
 class SupervisorConfig(BaseSettings):
