@@ -59,7 +59,6 @@ class BaseConfig(BaseSettings, Generic[TargetType]):
     @property
     def propagated_fields(self) -> dict[str, Any]:
         """Track which fields were propagated from a parent config."""
-
         return self._propagated_fields
 
     def setup_target(self, **kwargs: Any) -> TargetType:
