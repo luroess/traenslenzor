@@ -1,4 +1,4 @@
-#import "/template/lib.typ": *
+#import "../template/lib.typ": *
 
 // Minimal doc setup (optional)
 #set page(paper: "a4", margin: 2cm)
@@ -15,7 +15,7 @@
 See @fig:arch for a diagram of the overall architecture.
 
 #figure(caption: [Architecture])[
-  #image("/imgs/arch.png", width: 80%)
+  #image("../imgs/arch.png", width: 80%)
 ] <fig:arch>
 
 #box(fill: luma(240), inset: 8pt, radius: 6pt)[

@@ -1,6 +1,6 @@
 
 #import "template/lib.typ": *
-#import "glossary.typ" : glossary
+#import "glossary.typ": glossary
 
 #set text(lang: "de")
 
@@ -19,11 +19,11 @@
   toc-depth: 2,
   // displays the acronyms defined in the acronyms dictionary
   // remove to disable
-  glossary: glossary, 
+  glossary: glossary,
   // Leave empty for none
   bibliography: bibliography("sources.bib"),
   // Remove to disable, absolute path required
-  appendix: "/appendix.typ",
+  appendix: "../appendix.typ",
 )
 
 // Template usage chapter, remove before publishing
@@ -32,4 +32,5 @@
 // Add your content below in /chapters/*
 
 // Include all chapters
-#include "/chapters/01_introduction.typ"
+#include "chapters/01_introduction.typ"
+#include "chapters/02_document_scanning.typ"

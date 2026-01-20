@@ -2,7 +2,7 @@
 
 #import "@preview/drafting:0.2.0": *
 #import "@preview/glossarium:0.5.9": *
-#import "/template/libs/utils.typ": *
+#import "utils.typ": *
 
 
 // ----------------------------------------------------------------------------------

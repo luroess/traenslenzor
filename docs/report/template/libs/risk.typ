@@ -1,9 +1,9 @@
 // Copyright 2024 Felix Schladt https://github.com/FelixSchladt
 
-#import "/template/colors.typ": *
+#import "../colors.typ": *
 
-#import "/template/libs/tablestyle.typ": *
-#import "/template/libs/requirements.typ": *
+#import "tablestyle.typ": *
+#import "requirements.typ": *
 
 
 #let risiko(
