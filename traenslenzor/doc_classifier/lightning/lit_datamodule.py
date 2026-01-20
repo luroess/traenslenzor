@@ -1,7 +1,6 @@
 """LightningDataModule wrapper around RVL-CDIP with configurable transforms."""
 
 import os
-import warnings
 from typing import Any, Callable
 
 import numpy as np
@@ -15,15 +14,6 @@ from typing_extensions import Self
 from ..data_handling.huggingface_rvl_cdip_ds import RVLCDIPConfig
 from ..data_handling.transforms import TrainTransformConfig, ValTransformConfig
 from ..utils import BaseConfig, Console, Stage
-
-# Suppress PyTorch's internal pin_memory deprecation warning (PyTorch 2.9+)
-# This warning comes from DataLoader's internal implementation
-warnings.filterwarnings(
-    "ignore",
-    message=r"The argument 'device' of Tensor\.pin_memory\(\) is deprecated",
-    category=DeprecationWarning,
-    module=r"torch\.utils\.data\._utils\.pin_memory",
-)
 
 
 def collate_hf_batch(batch: list[dict[str, Any]]) -> tuple[torch.Tensor, torch.Tensor]:
