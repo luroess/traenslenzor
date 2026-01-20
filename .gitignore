@@ -240,3 +240,5 @@ debug/
 
 # Generated test images
 **/test_images/
+.codex/
+.scale_batch_size_*.ckpt
