@@ -1,0 +1,3 @@
+checkpoint_path = "resnet50-epoch=5-val_loss=0.52.ckpt"
+is_mock         = false
+device          = "auto"
