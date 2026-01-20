@@ -42,6 +42,25 @@ class ExtractedDocument(BaseModel):
     """File id for the optional map_xy array mapping output pixels to original image pixels (may be downsampled)."""
     mapXYShape: tuple[int, int, int] | None = None
     """Shape metadata for map_xy as (H, W, 2) when available (downsampled shapes are allowed)."""
+    mapXYZId: str | None = None
+    """File id for the optional UVDoc 3D grid (coarse) when available."""
+    mapXYZShape: tuple[int, int, int] | None = None
+    """Shape metadata for map_xyz as (Gh, Gw, 3) when available."""
+
+
+class SuperResolvedDocument(BaseModel):
+    """Super-resolved document metadata."""
+
+    id: str
+    """File id for the super-resolved image."""
+    sourceId: str
+    """Source image file id used for super-resolution."""
+    source: Literal["raw", "deskewed", "rendered"]
+    """Source type used for super-resolution."""
+    model: str
+    """Super-resolution model name."""
+    scale: int
+    """Upscaling factor used for super-resolution."""
 
 
 class SessionState(BaseModel):
@@ -49,6 +68,8 @@ class SessionState(BaseModel):
 
     rawDocumentId: str | None = None
     """Raw document file id set by `traenslenzor.supervisor.tools.document_loader.document_loader`."""
+    activeTool: str | None = None
+    """Name of the tool currently running for this session, if any."""
     extractedDocument: ExtractedDocument | None = None
     """Deskewed document metadata."""
     renderedDocumentId: str | None = None
@@ -59,6 +80,8 @@ class SessionState(BaseModel):
     """Target language set by `traenslenzor.supervisor.tools.set_target_lang.set_target_language`."""
     class_probabilities: dict[str, float] | None = None
     """Class probabilities set by `traenslenzor.doc_class_detector.mcp.classify_document` or `traenslenzor.doc_classifier.mcp_integration.mcp_server.classify_document`."""
+    superResolvedDocument: SuperResolvedDocument | None = None
+    """Super-resolved document metadata."""
 
 
 def initialize_session() -> SessionState:
