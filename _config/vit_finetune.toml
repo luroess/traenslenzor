@@ -1,9 +1,9 @@
-seed      = 42
-is_debug  = false
-verbose   = true
-run_name  = "resnet50-finetune-rvlcdip"
-stage     = "train"
-from_ckpt = "resnet50-epoch=2-val_loss=0.93.ckpt"
+seed     = 42
+is_debug = false
+verbose  = true
+run_name = "vit-b16-finetune-rvlcdip"
+stage    = "train"
+# from_ckpt = "resnet50-epoch=2-val_loss=0.93.ckpt"
 
 [trainer_config]
 is_debug          = false
@@ -13,6 +13,7 @@ strategy          = "auto"
 max_epochs        = 10
 log_every_n_steps = 10
 use_wandb         = true
+gradient_clip_val = 1.0
 
     [trainer_config.callbacks]
     use_model_checkpoint    = true
@@ -26,32 +27,33 @@ use_wandb         = true
     use_rich_model_summary  = true
     rich_summary_max_depth  = 1
     # Enable backbone fine-tuning for gradual unfreezing
-    use_backbone_finetuning    = true
+    use_backbone_finetuning    = false
     backbone_unfreeze_at_epoch = 2
     backbone_train_bn          = true
-    gradient_clip_val          = 1.0
+    use_train_heavy_switch     = true
+    train_heavy_switch_epoch   = 8
 
     [trainer_config.wandb_config]
     project = "doc-class-detector"
     entity  = "traenslenzor"
-    tags    = ["resnet50", "finetune"]
+    tags    = ["vit-b16", "finetune"]
 
 [module_config]
-backbone        = "resnet50"
+backbone        = "vit_b_16"
 train_head_only = true
 use_pretrained  = true       # Use ImageNet pretrained weights
 
     [module_config.optimizer]
     learning_rate     = 5.13e-4 # smaller base LR for pretrained backbone
-    weight_decay      = 1e-5
-    backbone_lr_scale = 0.1
+    weight_decay      = 2.57e-5
+    backbone_lr_scale = 0.05
 
     [module_config.scheduler]
-    max_lr           = 0.0003  # peak LR
+    max_lr           = 2.8e-4 # peak LR
     base_momentum    = 0.85
     max_momentum     = 0.95
     div_factor       = 25.0
-    final_div_factor = 10000.0
+    final_div_factor = 5000.0
     pct_start        = 0.3
     anneal_strategy  = "cos"
 
@@ -65,6 +67,21 @@ verbose            = true
     split = "train"
 
         [datamodule_config.train_ds.transform_config]
-        transform_type = "finetune_plus"
+        transform_type = "train"
         img_size       = 224
-        convert_to_rgb = true            # keep 3-channel input for pretrained ResNet
+        convert_to_rgb = true    # keep 3-channel input for pretrained ViT
+        normalization_mode = "imagenet"
+
+    [datamodule_config.val_ds]
+        [datamodule_config.val_ds.transform_config]
+        transform_type       = "val"
+        img_size             = 224
+        convert_to_rgb       = true
+        normalization_mode   = "imagenet"
+
+    [datamodule_config.test_ds]
+        [datamodule_config.test_ds.transform_config]
+        transform_type       = "val"
+        img_size             = 224
+        convert_to_rgb       = true
+        normalization_mode   = "imagenet"

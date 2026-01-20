@@ -152,8 +152,6 @@ batch_size = 32
 # type: <class 'int'>
 num_workers = 15
 # type: <class 'bool'>
-pin_memory = true
-# type: <class 'bool'>
 is_debug = false
 # type: <class 'bool'>
 verbose = true

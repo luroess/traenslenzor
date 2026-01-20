@@ -1,16 +1,19 @@
 seed     = 42
 is_debug = false
-verbose  = false
+verbose  = true
+run_name = "resnet50-finetune-rvlcdip"
 stage    = "train"
+# from_ckpt = "resnet50-epoch=2-val_loss=0.93.ckpt"
 
 [trainer_config]
 is_debug          = false
 fast_dev_run      = false
 accelerator       = "auto"
 strategy          = "auto"
-max_epochs        = 8
+max_epochs        = 10
 log_every_n_steps = 10
 use_wandb         = true
+gradient_clip_val = 1.0
 
     [trainer_config.callbacks]
     use_model_checkpoint    = true
@@ -23,33 +26,34 @@ use_wandb         = true
     tqdm_refresh_rate       = 10
     use_rich_model_summary  = true
     rich_summary_max_depth  = 1
-    # Enable backbone fine-tuning for gradual unfreezing
     use_backbone_finetuning    = true
     backbone_unfreeze_at_epoch = 2
-    backbone_train_bn          = true
-    gradient_clip_val          = 1.0
+    backbone_train_bn        = true
+    use_train_heavy_switch   = true
+    train_heavy_switch_epoch = 8
 
     [trainer_config.wandb_config]
     project = "doc-class-detector"
     entity  = "traenslenzor"
-    tags    = ["vit-b16", "finetune"]
+    tags    = ["resnet50", "finetune"]
 
 [module_config]
-num_classes     = 16
-backbone        = "vit_b_16"
-train_head_only = true       # Start head-only; unfreeze at epoch 2
-use_pretrained  = true       # Use ImageNet pretrained weights
+backbone        = "resnet50"
+train_head_only = true
+use_pretrained  = true      # Use ImageNet pretrained weights
 
     [module_config.optimizer]
-    learning_rate     = 3e-5 # smaller base LR for pretrained backbone
-    weight_decay      = 1e-4
-    backbone_lr_scale = 0.01 # Lower LR for bassckbone vs head
+    learning_rate     = 5.13e-4 # smaller base LR for pretrained backbone
+    weight_decay      = 2.57e-5
+    backbone_lr_scale = 0.05
 
     [module_config.scheduler]
-    max_lr           = 5e-5  # peak LR
-    div_factor       = 25.0  # initial LR = max_lr/25 = 1.2e-5
-    final_div_factor = 1e4   # final LR ≈ 1.2e-9
-    pct_start        = 0.3   # 30% warm-up
+    max_lr           = 2.8e-4  # peak LR
+    base_momentum    = 0.85
+    max_momentum     = 0.95
+    div_factor       = 25.0
+    final_div_factor = 10000.0
+    pct_start        = 0.15
     anneal_strategy  = "cos"
 
 [datamodule_config]
@@ -65,3 +69,18 @@ verbose            = true
         transform_type = "finetune_plus"
         img_size       = 224
         convert_to_rgb = true            # keep 3-channel input for pretrained ResNet
+        normalization_mode = "imagenet"
+
+    [datamodule_config.val_ds]
+        [datamodule_config.val_ds.transform_config]
+        transform_type       = "val"
+        img_size             = 224
+        convert_to_rgb       = true
+        normalization_mode   = "imagenet"
+
+    [datamodule_config.test_ds]
+        [datamodule_config.test_ds.transform_config]
+        transform_type       = "val"
+        img_size             = 224
+        convert_to_rgb       = true
+        normalization_mode   = "imagenet"

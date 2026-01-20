@@ -1,0 +1,71 @@
+seed     = 42
+is_debug = false
+verbose  = true
+run_name = "resnet50-scratch-rvlcdip"
+stage    = "train"
+# from_ckpt = "resnet50-epoch=2-val_loss=0.93.ckpt"
+
+[trainer_config]
+is_debug          = false
+fast_dev_run      = false
+accelerator       = "auto"
+strategy          = "auto"
+max_epochs        = 10
+log_every_n_steps = 10
+use_wandb         = true
+gradient_clip_val = 1.0
+
+    [trainer_config.callbacks]
+    use_model_checkpoint     = true
+    checkpoint_save_top_k    = 1
+    use_early_stopping       = true
+    early_stopping_patience  = 3
+    use_lr_monitor           = true
+    use_rich_progress_bar    = false
+    use_tqdm_progress_bar    = true
+    tqdm_refresh_rate        = 10
+    use_rich_model_summary   = true
+    rich_summary_max_depth   = 1
+    use_backbone_finetuning  = false
+    backbone_train_bn        = true
+    use_train_heavy_switch   = true
+    train_heavy_switch_epoch = 8
+
+    [trainer_config.wandb_config]
+    project = "doc-class-detector"
+    entity  = "traenslenzor"
+    tags    = ["resnet50", "scratch"]
+
+[module_config]
+backbone        = "resnet50"
+train_head_only = false
+use_pretrained  = false
+
+    [module_config.optimizer]
+    learning_rate     = 5.13e-4
+    weight_decay      = 2.57e-5
+    backbone_lr_scale = 1.0
+
+    [module_config.scheduler]
+    max_lr           = 2.8e-4
+    base_momentum    = 0.85
+    max_momentum     = 0.95
+    div_factor       = 25.0
+    final_div_factor = 10000.0
+    pct_start        = 0.15
+    anneal_strategy  = "cos"
+
+[datamodule_config]
+batch_size         = 56
+persistent_workers = true
+is_debug           = false
+verbose            = true
+
+    [datamodule_config.train_ds]
+    split = "train"
+
+        [datamodule_config.train_ds.transform_config]
+        # Start with train augmentations; callback switches to train_heavy at epoch 8
+        transform_type = "train"
+        img_size       = 224
+        convert_to_rgb = true
