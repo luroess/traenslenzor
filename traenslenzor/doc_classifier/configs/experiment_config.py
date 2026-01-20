@@ -137,6 +137,43 @@ class ExperimentConfig(BaseConfig[Trainer]):
             self.trainer_config.update_wandb_config(self)
         return self
 
+    def _prepare_wandb_resume(self) -> None:
+        if not self.trainer_config.use_wandb:
+            return
+
+        wandb_cfg = self.trainer_config.wandb_config
+        if not wandb_cfg.has_resume_target():
+            return
+
+        console = Console.with_prefix(self.__class__.__name__, "wandb_resume")
+        console.set_verbose(self.verbose).set_debug(self.is_debug)
+
+        run_id, run = wandb_cfg.resolve_resume_run()
+        if run_id is None:
+            console.warn("W&B resume requested but no run id was resolved.")
+            return
+
+        if wandb_cfg.resume is None:
+            wandb_cfg.resume = "allow"
+
+        if run is not None:
+            run_entity = getattr(run, "entity", None)
+            run_project = getattr(run, "project", None)
+            if run_entity and wandb_cfg.entity is None:
+                wandb_cfg.entity = run_entity
+            if run_project and wandb_cfg.project != run_project:
+                console.warn(
+                    f"W&B project mismatch: config '{wandb_cfg.project}' vs run '{run_project}'."
+                )
+
+        if self.from_ckpt is None:
+            ckpt_path = wandb_cfg.download_resume_checkpoint(run=run, root_dir=self.paths.wandb)
+            if ckpt_path is not None:
+                console.log(f"Resuming from W&B checkpoint: {ckpt_path}")
+                self.from_ckpt = ckpt_path
+            else:
+                console.warn("No checkpoint downloaded; continuing without from_ckpt.")
+
     def setup_target(  # type: ignore[override]
         self,
         setup_stage: Stage | str = Stage.TRAIN,
@@ -151,6 +188,7 @@ class ExperimentConfig(BaseConfig[Trainer]):
         console.log(f"Stage: {setup_stage}, Seed: {self.seed}")
 
         console.log("Creating Trainer...")
+        self._prepare_wandb_resume()
         trainer = self.trainer_config.setup_target(self, trial=trial)
 
         resolved_stage = Stage.from_str(setup_stage)
