@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 from PIL import Image
@@ -17,6 +18,10 @@ from traenslenzor.doc_scanner.backtransform import (
 )
 from traenslenzor.doc_scanner.configs import DocScannerMCPConfig
 from traenslenzor.doc_scanner.runtime import DocScannerRuntime
+from traenslenzor.doc_scanner.superres import (
+    ensure_openvino_text_sr_model,
+    super_resolve_text_image,
+)
 from traenslenzor.file_server.client import FileClient, SessionClient
 from traenslenzor.file_server.session_state import SessionState, initialize_session
 
@@ -47,6 +52,18 @@ class CLIDocScannerConfig(DocScannerMCPConfig):
         default=None,
         description="Optional output path for the backtransform composite image (PNG).",
     )
+    superres: bool = Field(
+        default=False,
+        description="Enable OpenVINO text super-resolution on the selected source image.",
+    )
+    superres_source: Literal["raw", "deskewed", "rendered"] = Field(
+        default="deskewed",
+        description="Source image to super-resolve (raw, deskewed, rendered).",
+    )
+    superres_output_path: Path | None = Field(
+        default=None,
+        description="Optional output path for the super-resolved image (PNG).",
+    )
     config_path: Path | None = Field(
         default=None,
         description="Optional path to a doc-scanner TOML config file.",
@@ -58,6 +75,7 @@ class CLIDocScannerConfig(DocScannerMCPConfig):
         validate_assignment=True,
         protected_namespaces=(),
         cli_parse_args=True,
+        cli_implicit_flags=True,
         env_prefix="DOC_SCANNER_",
         toml_file=Path(__file__).resolve().parents[2] / "config" / "doc-scanner.toml",
     )
@@ -95,6 +113,17 @@ def _resolve_backtransform_composite_path(
     return base.with_name(f"{base.stem}_backtransform_composite.png")
 
 
+def _resolve_superres_output_path(
+    file_path: Path,
+    output_path: Path,
+    superres_output_path: Path | None,
+) -> Path:
+    if superres_output_path is not None:
+        return superres_output_path
+    base = output_path if output_path is not None else file_path
+    return base.with_name(f"{base.stem}_superres.png")
+
+
 def _load_base_config(cli_config: CLIDocScannerConfig, console: Console) -> DocScannerMCPConfig:
     config_path = cli_config.config_path
     if config_path is None and _DEFAULT_CONFIG_PATH.exists():
@@ -126,6 +155,9 @@ def _build_runtime_config(cli_config: CLIDocScannerConfig, console: Console) -> 
             "backtransform_path",
             "backtransform_mask_path",
             "backtransform_composite_path",
+            "superres",
+            "superres_source",
+            "superres_output_path",
             "config_path",
         },
         exclude_unset=True,
@@ -245,6 +277,46 @@ async def _run_cli(cli_config: CLIDocScannerConfig) -> None:
             composite_path.parent.mkdir(parents=True, exist_ok=True)
             Image.fromarray(composite).save(composite_path, format="PNG")
             console.log(f"Backtransform composite saved to {composite_path}")
+
+    if cli_config.superres:
+        console.log("Preparing super-resolution input.")
+        superres_source = cli_config.superres_source
+        source_img = None
+        source_label = superres_source
+
+        if superres_source == "raw":
+            source_img = input_img
+        elif superres_source == "deskewed":
+            source_img = output_img
+        else:
+            session = await SessionClient.get(session_id)
+            if session.renderedDocumentId:
+                source_img = await FileClient.get_image(session.renderedDocumentId)
+            if source_img is None:
+                console.warn("No rendered image available; skipping super-resolution.")
+
+        if source_img is not None:
+            console.log("Ensuring OpenVINO SR model files are available.")
+            model_files = await ensure_openvino_text_sr_model(
+                models_dir=config.superres_models_dir,
+                allow_download=config.superres_allow_download,
+            )
+
+            console.log(f"Running super-resolution on {source_label} image.")
+            source_rgb = np.array(source_img.convert("RGB"), dtype=np.uint8)
+            sr_result = super_resolve_text_image(
+                source_rgb,
+                xml_path=model_files.xml,
+                bin_path=model_files.bin,
+                device=config.superres_device,
+            )
+
+            superres_path = _resolve_superres_output_path(
+                file_path, output_path, cli_config.superres_output_path
+            )
+            superres_path.parent.mkdir(parents=True, exist_ok=True)
+            Image.fromarray(sr_result.image_rgb).save(superres_path, format="PNG")
+            console.log(f"Super-resolved image saved to {superres_path}")
 
     console.plog(extracted.model_dump())
 
