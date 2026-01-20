@@ -4,7 +4,7 @@ Provides a configurable wrapper to instantiate PyTorch Lightning trainers.
 """
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, ClassVar, Optional
 
 import pytorch_lightning as pl
 import torch
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 class TrainerFactoryConfig(BaseConfig):
     """Configuration for constructing a PyTorch Lightning trainer."""
 
-    target: type[pl.Trainer] = Field(default_factory=lambda: pl.Trainer, exclude=True)
+    target: ClassVar[type[pl.Trainer]] = pl.Trainer
 
     is_debug: bool = False
     """Set fast_dev_run to True, use CPU, set num_workers to 0, don't create model_checkpoints if True"""
@@ -137,9 +137,11 @@ class TrainerFactoryConfig(BaseConfig):
             .set_debug(experiment.is_debug)
         )
 
-        if not self.wandb_config.name:
+        if not self.wandb_config.name and not self.wandb_config.has_resume_target():
             self.wandb_config.name = experiment.run_name
             console.log(f"Set W&B run name: {experiment.run_name}")
+        elif not self.wandb_config.name and self.wandb_config.has_resume_target():
+            console.log("W&B resume requested; leaving run name unset to preserve run metadata.")
 
         stage = getattr(experiment, "stage", None)
         if stage is not None:

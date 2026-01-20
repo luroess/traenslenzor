@@ -198,9 +198,9 @@ class BackboneType(StrEnum):
 class DocClassifierConfig(BaseConfig["DocClassifierModule"]):
     """Lightning module configuration for document classification."""
 
-    target: type["DocClassifierModule"] = Field(
-        default_factory=lambda: DocClassifierModule, exclude=True
-    )
+    @property
+    def target(self) -> type["DocClassifierModule"]:
+        return DocClassifierModule
 
     model_params: AlexNetParams | None = None
     """Model-specific parameters (e.g. for AlexNet)."""

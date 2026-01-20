@@ -22,7 +22,6 @@ from captum.attr import (  # type: ignore[import-untyped]
     Occlusion,
 )
 from jaxtyping import Float, Int64
-from pydantic import Field
 from torch import Tensor, nn
 from torch.nn import functional as F
 
@@ -329,10 +328,6 @@ class InterpretabilityConfig(BaseConfig["AttributionEngine"]):
     spatial resolution for AlexNet, ResNet-50, and ViT-B/16 backbones.
     """
 
-    target: type["AttributionEngine"] = Field(
-        default_factory=lambda: AttributionEngine,
-        exclude=True,
-    )
     method: AttributionMethod = AttributionMethod.GRAD_CAM
     """Attribution algorithm to apply."""
 

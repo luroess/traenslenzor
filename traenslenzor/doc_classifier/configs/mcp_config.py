@@ -6,8 +6,9 @@ still allowing a real checkpoint to be plugged in later.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal
 
 import torch
 from pydantic import Field, field_validator
@@ -20,16 +21,16 @@ if TYPE_CHECKING:
     from traenslenzor.doc_classifier.mcp_integration.runtime import DocClassifierRuntime
 
 
-def _runtime_target() -> type["DocClassifierRuntime"]:
+def _build_runtime(config: "DocClassifierMCPConfig", **_: Any) -> "DocClassifierRuntime":
     from traenslenzor.doc_classifier.mcp_integration.runtime import DocClassifierRuntime
 
-    return DocClassifierRuntime
+    return DocClassifierRuntime(config)
 
 
 class DocClassifierMCPConfig(BaseConfig["DocClassifierRuntime"]):
     """Factory config that creates a :class:`DocClassifierRuntime` instance."""
 
-    target: type["DocClassifierRuntime"] = Field(default_factory=_runtime_target, exclude=True)
+    target: ClassVar[Callable[["DocClassifierMCPConfig"], "DocClassifierRuntime"]] = _build_runtime
 
     lit_module_config: DocClassifierConfig = Field(
         default_factory=DocClassifierConfig,

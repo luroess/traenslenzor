@@ -88,7 +88,9 @@ def _default_ds(split: Stage) -> RVLCDIPConfig:
 class DocDataModuleConfig(BaseConfig["DocDataModule"]):
     """Configuration for :class:`DocDataModule`."""
 
-    target: type["DocDataModule"] = Field(default_factory=lambda: DocDataModule, exclude=True)
+    @property
+    def target(self) -> type["DocDataModule"]:
+        return DocDataModule
 
     batch_size: int = 32
     """Batch size for DataLoaders."""

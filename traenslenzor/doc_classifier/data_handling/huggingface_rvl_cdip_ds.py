@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Callable
 import numpy as np
 from datasets import Dataset as HFDataset
 from datasets import load_dataset
-from pydantic import Field, Tag
+from pydantic import Field, Tag, field_validator
 
 from traenslenzor.doc_classifier.configs.path_config import PathConfig
 
@@ -11,6 +11,7 @@ from ..utils import BaseConfig, Console, Stage
 from .transforms import (
     FineTunePlusTransformConfig,
     FineTuneTransformConfig,
+    TrainHeavyTransformConfig,
     TrainTransformConfig,
     ValTransformConfig,
 )
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
 
 TransformConfigUnion = Annotated[
     Annotated[TrainTransformConfig, Tag("train")]
+    | Annotated[TrainHeavyTransformConfig, Tag("train_heavy")]
     | Annotated[FineTuneTransformConfig, Tag("finetune")]
     | Annotated[FineTunePlusTransformConfig, Tag("finetune_plus")]
     | Annotated[ValTransformConfig, Tag("val")],
@@ -30,8 +32,6 @@ TransformConfigUnion = Annotated[
 
 class RVLCDIPConfig(BaseConfig[HFDataset]):
     """Configuration for loading the RVL-CDIP document classification dataset."""
-
-    target: type[HFDataset] = Field(default=HFDataset, exclude=True)
 
     hf_hub_name: str = Field(default="chainyo/rvl-cdip")
     """Hugging Face Hub dataset identifier for RVL-CDIP (uses modern Parquet format)."""
@@ -53,6 +53,26 @@ class RVLCDIPConfig(BaseConfig[HFDataset]):
 
     verbose: bool = Field(default=False)
     """Toggle verbose console output."""
+
+    @field_validator("transform_config", mode="before")
+    @classmethod
+    def _resolve_transform_config(cls, value: object) -> object:
+        if value is None or not isinstance(value, str):
+            return value
+
+        match value:
+            case "train":
+                return TrainTransformConfig()
+            case "train_heavy":
+                return TrainHeavyTransformConfig()
+            case "finetune":
+                return FineTuneTransformConfig()
+            case "finetune_plus":
+                return FineTunePlusTransformConfig()
+            case "val":
+                return ValTransformConfig()
+            case _:
+                raise ValueError(f"Unknown transform_config choice '{value}'.")
 
     def setup_target(self) -> HFDataset:
         """Load the RVL-CDIP HuggingFace Dataset.

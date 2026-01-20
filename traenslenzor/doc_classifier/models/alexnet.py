@@ -1,6 +1,5 @@
 import torch
 from jaxtyping import Float
-from pydantic import Field
 from torch import nn
 
 from ..utils import BaseConfig
@@ -9,9 +8,12 @@ from ..utils import BaseConfig
 class AlexNetParams(BaseConfig["AlexNet"]):
     """Parameter configuration for AlexNet."""
 
-    target: type["AlexNet"] = Field(default_factory=lambda: AlexNet, exclude=True)
+    @property
+    def target(self) -> type["AlexNet"]:
+        return AlexNet
+
     num_classes: int
-    dropout: float = 0.4
+    dropout: float = 0.3
     in_channels: int = 1
     """Number of input channels. Set to 1 for grayscale; set to 3 for RGB."""
 

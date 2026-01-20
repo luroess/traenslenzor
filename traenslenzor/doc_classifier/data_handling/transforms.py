@@ -5,6 +5,7 @@ pipelines optimized for grayscale document images (RVL-CDIP dataset).
 
 Three pipeline types are provided:
 - TrainTransformConfig: Heavy augmentation for training from scratch
+- TrainHeavyTransformConfig: Extra-heavy augmentation for continued training
 - FineTuneTransformConfig: Light augmentation for fine-tuning pretrained models
 - FineTunePlusTransformConfig: Moderate augmentation for fine-tuning with extra regularization
 - ValTransformConfig: Deterministic transforms for validation/testing
@@ -27,8 +28,6 @@ class TransformConfig(BaseConfig[A.Compose]):
 
     All transform configs should inherit from this and implement setup_target().
     """
-
-    target: type[A.Compose] = Field(default=A.Compose, exclude=True)
 
     transform_type: str = Field(default="base")
     """Discriminator field for identifying transform type in serialized configs."""
@@ -151,6 +150,102 @@ class TrainTransformConfig(TransformConfig):
                 ),
                 A.RandomGamma(gamma_limit=(80, 120), p=0.3),
                 # Channel handling
+                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.NoOp()),
+                self._normalization_transform(),
+                ToTensorV2(),
+            ]
+        )
+
+
+class TrainHeavyTransformConfig(TransformConfig):
+    """Extra-heavy augmentation pipeline for continued training.
+
+    Adds stronger geometric distortions, compression/downscale artifacts,
+    heavier noise, and occlusions to improve robustness.
+    """
+
+    transform_type: Literal["train_heavy"] = Field(default="train_heavy")
+    """Discriminator field identifying this as an extra-heavy training config."""
+
+    def setup_target(self) -> A.Compose:  # type: ignore[override]
+        """Create extra-heavy training augmentation pipeline.
+
+        Returns:
+            A.Compose: Training pipeline with extra-heavy augmentation.
+        """
+        return A.Compose(
+            [
+                *self._resize_and_pad(),
+                # Stronger geometric augmentations (still document-friendly)
+                A.ShiftScaleRotate(
+                    shift_limit=0.03,
+                    scale_limit=0.08,
+                    rotate_limit=7,
+                    border_mode=0,
+                    p=0.5,
+                ),
+                A.Affine(
+                    scale=(0.92, 1.08),
+                    translate_percent=(0.02, 0.06),
+                    rotate=(-7, 7),
+                    shear=(-7, 7),
+                    border_mode=0,
+                    p=0.4,
+                ),
+                A.Perspective(scale=(0.03, 0.08), p=0.35),
+                A.OneOf(
+                    [
+                        A.GridDistortion(num_steps=5, distort_limit=0.03, p=1.0),
+                        A.OpticalDistortion(distort_limit=0.03, p=1.0),
+                        A.ElasticTransform(alpha=1.0, sigma=50, p=1.0),
+                    ],
+                    p=0.2,
+                ),
+                # Noise and blur (scanner + camera artifacts)
+                A.OneOf(
+                    [
+                        A.GaussNoise(std_range=(0.02, 0.12), p=1.0),
+                        A.MultiplicativeNoise(multiplier=(0.9, 1.1), p=1.0),
+                    ],
+                    p=0.5,
+                ),
+                A.OneOf(
+                    [
+                        A.GaussianBlur(blur_limit=(3, 7), p=1.0),
+                        A.MotionBlur(blur_limit=5, p=1.0),
+                    ],
+                    p=0.3,
+                ),
+                # Compression and scaling artifacts
+                A.OneOf(
+                    [
+                        A.ImageCompression(quality_range=(30, 80), p=1.0),
+                        A.Downscale(scale_range=(0.4, 0.9), p=1.0),
+                    ],
+                    p=0.3,
+                ),
+                # Contrast and local histogram changes
+                A.RandomBrightnessContrast(
+                    brightness_limit=0.25,
+                    contrast_limit=0.25,
+                    p=0.5,
+                ),
+                A.RandomGamma(gamma_limit=(70, 130), p=0.3),
+                A.CLAHE(clip_limit=(1.0, 3.0), tile_grid_size=(8, 8), p=0.2),
+                # Occlusions
+                A.OneOf(
+                    [
+                        A.CoarseDropout(
+                            num_holes_range=(1, 4),
+                            hole_height_range=(0.03, 0.12),
+                            hole_width_range=(0.03, 0.12),
+                            fill=0,
+                            p=1.0,
+                        ),
+                        A.GridDropout(ratio=0.2, random_offset=True, p=1.0),
+                    ],
+                    p=0.2,
+                ),
                 (A.ToRGB(p=1.0) if self.convert_to_rgb else A.NoOp()),
                 self._normalization_transform(),
                 ToTensorV2(),
