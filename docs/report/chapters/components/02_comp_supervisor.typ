@@ -88,6 +88,18 @@ Some of the problems we encountered along the way included:
 
 In this chapter, we discuss some approaches that were tried but then discarded.
 
+==== Successive Tool Unlock
+
+In the initial prototyping phase of the project, the key question was how a reliable tool call order could be ensured.
+As no restrictions on how this should be achieved were specified in the initial project presentation and task description, we evaluated multiple variants to reliably achieve a fixed tool calling order.
+
+Most successful, and well compatible with LangChain, proved a dynamic addition of tools as soon as the required prerequisites were met.
+This addressed multiple issues we would otherwise face, including incorrect calling order by the #gls("llm") and incorrect call parameters, and it proved reliable in practice.
+Using this method, a fully functional supervisor mockup was implemented in the initial phase of the project.
+
+Once presented during the first update meeting, the requirements around the supervisor and tool calling were adjusted without prior notice in a way that made this solution no longer applicable.
+As a result, we had to discard the working implementation and move to a different approach, which required additional effort and workarounds to reach comparable reliability.
+
 ==== LLaMA 3.1/3.2
 
 As smaller models run faster and we aimed for a performant tool, we initially focused on using LLaMA 3.
