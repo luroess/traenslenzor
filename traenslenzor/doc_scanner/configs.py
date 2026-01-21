@@ -20,10 +20,9 @@ class DocScannerMCPConfig(BaseConfig["DocScannerRuntime"]):
         toml_file=Path(__file__).resolve().parents[2] / "config" / "doc-scanner.toml",
     )
 
-    target: type[DocScannerRuntime] = Field(
-        default_factory=lambda: DocScannerRuntime,
-        exclude=True,
-    )
+    @property
+    def target(self) -> type[DocScannerRuntime]:
+        return DocScannerRuntime
 
     num_filter: int = Field(default=32, ge=32, le=32)
     """Number of filters for UVDocNet."""

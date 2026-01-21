@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, ClassVar, Literal
+from typing import Any, Literal
 
 from pydantic import Field
 from pytorch_lightning.loggers import WandbLogger
@@ -13,7 +13,9 @@ from .path_config import PathConfig
 class WandbConfig(BaseConfig):
     """Wrapper around Lightning's [WandbLogger](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.loggers.wandb.html)."""
 
-    target: ClassVar[type[WandbLogger]] = WandbLogger
+    @property
+    def target(self) -> type[WandbLogger]:
+        return WandbLogger
 
     name: str | None = Field(default=None, description="Display name for the run.")
     project: str = Field(default="doc-class-detector", description="W&B project name.")

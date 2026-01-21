@@ -39,12 +39,13 @@ class NoTarget:
 
 
 class BaseConfig(BaseSettings, Generic[TargetType]):
-    target: ClassVar[Any] = NoTarget
-    """Callable target used by `setup_target`.
+    @property
+    def target(self) -> Any:
+        """Callable target used by `setup_target`.
 
-    This is intentionally a class-level attribute (not a Pydantic field) to keep it out of
-    TOML serialization and pydantic-settings CLI help output.
-    """
+        Defaults to ``NoTarget``; subclasses should override as a property.
+        """
+        return NoTarget
 
     model_config = SettingsConfigDict(
         arbitrary_types_allowed=True,

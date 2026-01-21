@@ -4,7 +4,7 @@ Provides a configurable wrapper to instantiate PyTorch Lightning trainers.
 """
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, ClassVar, Optional
+from typing import TYPE_CHECKING, Optional
 
 import pytorch_lightning as pl
 import torch
@@ -25,7 +25,9 @@ if TYPE_CHECKING:
 class TrainerFactoryConfig(BaseConfig):
     """Configuration for constructing a PyTorch Lightning trainer."""
 
-    target: ClassVar[type[pl.Trainer]] = pl.Trainer
+    @property
+    def target(self) -> type[pl.Trainer]:
+        return pl.Trainer
 
     is_debug: bool = False
     """Set fast_dev_run to True, use CPU, set num_workers to 0, don't create model_checkpoints if True"""
