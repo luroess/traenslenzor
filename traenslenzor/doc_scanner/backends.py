@@ -296,7 +296,6 @@ class UVDocDeskewBackend:
         if corners_unwarped is None:
             # No crop: output is the full unwarped image; map_xy is a strided view of map_xy_full.
             output_rgb = unwarped_rgb
-            output_size = (unwarped_rgb.shape[0], unwarped_rgb.shape[1])
             map_xy_out = map_xy_full[::map_xy_stride, ::map_xy_stride]
         else:
             # Crop: warp the unwarped image to the detected page rectangle.

@@ -20,7 +20,6 @@ from traenslenzor.file_server.session_state import SessionState
 from traenslenzor.supervisor.llm import llm
 from traenslenzor.supervisor.prompt import context_aware_prompt
 from traenslenzor.supervisor.state import SupervisorState, ToolCall
-from traenslenzor.supervisor.tools.mcp import format_tool_label
 from traenslenzor.supervisor.tools.tools import get_tools
 
 logger = logging.getLogger(__name__)
@@ -55,30 +54,14 @@ class LLMIOLogger(BaseCallbackHandler):
 async def wrap_tools(
     request: ToolCallRequest, handler: Callable[[ToolCallRequest], ToolMessage | Command]
 ) -> Command:
-    state = cast(SupervisorState, request.state)
-    session_id = state.get("session_id")
-    tool_label = format_tool_label(request.tool_call["name"])
-
-    async def _set_active_tool(label: str | None) -> None:
-        if not session_id:
-            return
-        try:
-            await SessionClient.update(session_id, lambda s: setattr(s, "activeTool", label))
-        except Exception:
-            logger.exception("Failed to update active tool status.")
-
-    await _set_active_tool(tool_label)
-
-    try:
-        result = await handler(request)  # type: ignore
-    finally:
-        await _set_active_tool(None)
+    result = await handler(request)  # type: ignore
     if isinstance(result, ToolMessage):
         result = Command(
             update={
                 "messages": [result],
             }
         )
+    state = cast(SupervisorState, request.state)
     result.update["tool_history"] = [ToolCall(request.tool_call["name"], request.tool_call["args"])]  # type: ignore
 
     logger.info("Tool history")

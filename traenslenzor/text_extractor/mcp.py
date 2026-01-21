@@ -3,18 +3,20 @@ import logging
 import cv2
 import numpy as np
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
+from numpy.typing import NDArray
 from PIL import Image
 
 from traenslenzor.file_server.client import FileClient, SessionClient
-from traenslenzor.file_server.session_state import ExtractedDocument, SessionState
+from traenslenzor.file_server.session_state import BBoxPoint, ExtractedDocument, SessionState
 from traenslenzor.text_extractor.flatten_image import deskew_document
-from traenslenzor.text_extractor.paddleocr import run_ocr
+from traenslenzor.text_extractor.ocr import run_ocr
 
 ADDRESS = "127.0.0.1"
 PORT = 8002
 TEXT_EXTRACTOR_BASE_PATH = f"http://{ADDRESS}:{PORT}/mcp"
 
-text_extractor = FastMCP("Layout detector")
+text_extractor = FastMCP("Text Extractor")
 
 logger = logging.getLogger(__name__)
 
@@ -73,29 +75,31 @@ async def extract_text(session_id: str) -> str:
             logger.error("Uploading of extracted document image failed")
             return "Uploading of extracted document image failed"
 
-        extracted_document = ExtractedDocument(
-            id=flattened_image_id,
-            # TODO: fix this shit
-            documentCoordinates=[],
-        )
+    extracted_document = ExtractedDocument(
+        id=flattened_image_id,
+        transformation_matrix=transformation_matrix.tolist(),
+        documentCoordinates=[BBoxPoint(x=pt[0], y=pt[1]) for pt in document_coordinates],
+    )
 
-        orig_img = flattened_img
+    res = run_ocr(flattened_img)
 
-    # TODO: set detected language from session state
-    res = run_ocr("en", orig_img)
-    logger.info(res)
+    if res is None:
+        raise ToolError("OCR text extraction failed")
 
     if res is None:
         logger.error("OCR failed to extract text")
         return "OCR failed to extract text"
 
     def update_session(session: SessionState):
-        session.text = res
-        if extracted_document is not None:
-            session.extractedDocument = extracted_document
+        session.text = res  # pyright: ignore[reportAttributeAccessIssue]
+        session.extractedDocument = extracted_document
 
     await SessionClient.update(session_id, update_session)
-    return "Text extraction successful"
+
+    if res is None:
+        return "Extracted no text from image"
+
+    return "\n".join([f"{index}: {text.extractedText}" for index, text in enumerate(res)])
 
 
 async def run():
@@ -113,12 +117,12 @@ if __name__ == "__main__":
             return cv2.imdecode(arr, cv2.IMREAD_COLOR)
 
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    image_path = dir_path + "/../../test_images/skewed_image_1.jpeg"
+    image_path = dir_path + "/../../letter.png"
     npimg = load_image_as_bytes(image_path)
-    # run_ocr("en", npimg)
 
-    flattened_img = deskew_document(npimg)
-    if flattened_img is None:
+    deskewed = deskew_document(npimg)
+    if deskewed is None:
         print("Error: None")
         exit(-1)
-    print(run_ocr("en", flattened_img))
+    flattened_img = deskewed[0]
+    print(run_ocr(flattened_img))

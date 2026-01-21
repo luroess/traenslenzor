@@ -21,7 +21,7 @@ def has_translated_text(session: SessionState) -> bool:
     if session.text is None:
         return False
     for text in session.text:
-        if text.translatedText is not None:
+        if text.type in ["translated", "render_ready"]:
             return True
     return False
 
@@ -38,13 +38,20 @@ def has_font_been_detected(session: SessionState) -> bool:
     if session.text is None:
         return False
     for text in session.text:
-        if text.detectedFont is not None or text.font_size is not None:
+        if text.type in ("font_detected", "render_ready"):
             return True
     return False
 
 
 def has_document_been_classified(session: SessionState) -> bool:
     return session.class_probabilities is not None
+
+
+def get_best_classification(session: SessionState) -> str:
+    probs = session.class_probabilities or {}
+    if not probs:
+        return None
+    return max(probs, key=probs.get)
 
 
 def has_result_been_rendered(session: SessionState) -> bool:
@@ -69,7 +76,7 @@ def format_session(session_id: str, session: SessionState) -> str:
         {f"✅ text items: {text_count}" if text_count else "❌ no text items recorded"}
         {"✅ the text was translated" if has_translated_text(session) else "❌ the text has not yet been translated"}
         {"✅ the font has been detected" if has_font_been_detected(session) else "❌ the font has not yet been detected"}
-        {"✅ the document has been classified" if has_document_been_classified(session) else "❌ the document has not yet been classified"}
+        {f"✅ the document has been classified as {get_best_classification(session)}" if has_document_been_classified(session) else "❌ the document has not yet been classified"}
 
         {"✅ the result has been rendered" if has_result_been_rendered(session) else "❌ the result has not yet been rendered"}
     """
@@ -89,15 +96,27 @@ async def context_aware_prompt(request: ModelRequest) -> str:
     return f"""
     Task:
         You are an image translation assistant.
-        Your task is to translate all visible text in an image from the source language into the target language and produce a corresponding translated image.
 
-        When multiple tools are available, determine the execution order based on the required inputs and outputs of each tool, ensuring that all required parameters are available before a tool is invoked.
+        Your task is to:
+        - Translate all visible text in the provided image from the source language into the target language.
+        - Produce a corresponding image with the translated text accurately placed.
+        - The user might want to translate multiple documents.
 
-        Do not describe internal reasoning, planned actions, or tool usage.
+        Tool usage:
+        - If multiple tools are available, determine the correct execution order based on tool input/output dependencies.
+        - Invoke a tool only when all required parameters are available.
+        - Do not describe internal reasoning, planning, or tool usage.
 
-        If required information is missing (e.g. target language or document), ask the user a concise clarifying question before proceeding.
+        Missing information:
+        - If required information (e.g., target language or image) is missing, ask the user a single concise clarifying question before proceeding.
 
-        After completing the translation, state the document type the image represents.
+        Output requirements:
+        - After completing the image render for the first time, state the document type represented by the image.
+        - Ask if the user would like to change something.
+
+        User feedback to the rendered image:
+        - If the user provides feedback, treat the input as exact argument for the “apply user feedback” tool.
+        - Immediately call the “apply user feedback” tool with that content, without additional commentary.
 
     Context:
         {formatted_session}

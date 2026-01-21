@@ -8,6 +8,8 @@ from fastapi.responses import StreamingResponse
 from uvicorn import Config, Server
 
 from traenslenzor.file_server.session_state import (
+    HasFontInfo,
+    HasTranslation,
     ProgressStage,
     SessionProgress,
     SessionProgressStep,
@@ -91,8 +93,8 @@ async def get_session_progress(session_id: str):
 def _compute_session_progress(session_id: str, session: SessionState) -> SessionProgress:
     text_items = session.text or []
     text_count = len(text_items)
-    translated = sum(bool(item.translatedText) for item in text_items)
-    fonted = sum(bool(item.detectedFont) for item in text_items)
+    translated = sum(isinstance(item, HasTranslation) for item in text_items)
+    fonted = sum(isinstance(item, HasFontInfo) for item in text_items)
 
     def detail(count: int) -> str | None:
         return None if not text_count else f"{count}/{text_count}"

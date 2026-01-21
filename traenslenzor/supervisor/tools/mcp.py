@@ -3,8 +3,9 @@ from langchain_mcp_adapters.client import Connection, MultiServerMCPClient
 from traenslenzor.doc_classifier.mcp_integration.mcp_server import DOC_CLASSIFIER_BASE_PATH
 from traenslenzor.doc_scanner.mcp import DOC_SCANNER_BASE_PATH
 from traenslenzor.font_detector.mcp import FONT_DETECTOR_BASE_PATH
-from traenslenzor.image_renderer.mcp import IMAGE_RENDERER_BASE_PATH
+from traenslenzor.image_renderer.mcp_server import IMAGE_RENDERER_BASE_PATH
 from traenslenzor.text_extractor.mcp import TEXT_EXTRACTOR_BASE_PATH
+from traenslenzor.text_optimizer.mcp import TEXT_OPTIMIZER_PATH
 from traenslenzor.translator.mcp import TRANSLATOR_PATH
 
 MCP_SERVERS: dict[str, Connection] = {
@@ -32,28 +33,11 @@ MCP_SERVERS: dict[str, Connection] = {
         "transport": "streamable_http",
         "url": DOC_SCANNER_BASE_PATH,
     },
+    "text_optimizer": {
+        "transport": "streamable_http",
+        "url": TEXT_OPTIMIZER_PATH,
+    },
 }
-
-
-_SERVER_LABELS: dict[str, str] = {
-    "text_extractor": "Text Extractor",
-    "image_renderer": "Image Renderer",
-    "translator": "Translator",
-    "font_detector": "Font Detector",
-    "document_classifier": "Doc Classifier",
-    "doc_scanner": "Doc Scanner",
-}
-
-
-def format_tool_label(tool_name: str) -> str:
-    """Format a tool name for display."""
-    for sep in ("::", "/", "."):
-        if sep in tool_name:
-            server, tool = tool_name.split(sep, 1)
-            server_label = _SERVER_LABELS.get(server, server.replace("_", " ").title())
-            tool_label = tool.replace("_", " ").strip()
-            return f"{server_label} · {tool_label}"
-    return tool_name.replace("_", " ").strip()
 
 
 async def get_mcp_tools():

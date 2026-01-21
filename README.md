@@ -4,6 +4,14 @@
 
 - [uv](https://docs.astral.sh/uv/install/) - Fast Python package installer (required)
 
+- [tesseract](https://tesseract-ocr.github.io/tessdoc/Installation.html) - Library for ocr (required)
+    ```
+    sudo apt install tesseract-ocr
+    ```
+
+- [ollama](https://ollama.com/) – Used for hosting the LLM.  
+  If Ollama is running on a port other than the default (`11434`), update the `ollama_url` setting in `.configs/supervisor.toml` accordingly.
+
 ## Run Project
 
 ```sh

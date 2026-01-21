@@ -12,7 +12,7 @@ import numpy as np
 import streamlit as st
 from PIL import Image, ImageDraw
 
-from traenslenzor.app.session_state_tools import (
+from traenslenzor.streamlit.session_state_tools import (
     DEFAULT_SESSION_PICKLE_PATH,
     apply_pending_restore,
     apply_session_deletions,
@@ -31,6 +31,8 @@ from traenslenzor.doc_scanner.visualize import draw_grid_overlay
 from traenslenzor.file_server.client import FileClient, SessionClient
 from traenslenzor.file_server.session_state import (
     BBoxPoint,
+    HasFontInfo,
+    HasTranslation,
     SessionProgress,
     SessionState,
     TextItem,
@@ -164,7 +166,9 @@ def _render_prompt_presets(presets: list[PromptPreset]) -> str | None:
     options = [preset.label for preset in presets]
 
     st.caption("Click a prompt to send it.")
-    selection = st.pills("Quick prompts", options, key=_prompt_presets_key())
+    selection = st.pills(
+        "Quick prompts", options, key=_prompt_presets_key(), disabled=_is_supervisor_running()
+    )
     if selection is None:
         return None
     st.session_state["prompt_presets_last"] = selection
@@ -285,8 +289,8 @@ def _format_document_corners(points: list[BBoxPoint] | None) -> str:
 def _count_text_items(text_items: list[TextItem] | None) -> tuple[int, int, int]:
     if not text_items:
         return 0, 0, 0
-    translated = sum(1 for item in text_items if item.translatedText)
-    fonts = sum(1 for item in text_items if item.detectedFont)
+    translated = sum(1 for item in text_items if isinstance(item, HasTranslation))
+    fonts = sum(1 for item in text_items if isinstance(item, HasFontInfo))
     return len(text_items), translated, fonts
 
 
@@ -316,10 +320,7 @@ def _render_session_overview(
 
     # Header with session ID only
     with st.container(border=True):
-        header_cols = st.columns(2)
-        header_cols[0].metric("Session", _short_session_id(session_id))
-        active_tool = getattr(session, "activeTool", None)
-        header_cols[1].metric("Current tool", active_tool or "Idle")
+        st.metric("Session", _short_session_id(session_id))
 
     # Progress bar and step checklist
     progress_value = done_count / total_steps if total_steps else 0.0
@@ -386,7 +387,11 @@ def _render_session_overview(
                 {
                     "text": item.extractedText[:40]
                     + ("..." if len(item.extractedText) > 40 else ""),
-                    "translated": (item.translatedText or "")[:40],
+                    "translated": (
+                        item.translation.translatedText if hasattr(item, "translation") else ""
+                    )[:40],
+                    "font_size": item.font.font_size if hasattr(item, "font") else "",
+                    "detected_font": item.font.detectedFont if hasattr(item, "font") else "",
                     "confidence": f"{item.confidence:.3f}",
                 }
                 for item in session.text
@@ -629,16 +634,14 @@ def _render_top_right_tools(session: SessionState | None) -> None:
             _render_session_tools(session)
 
 
-def _render_chat(history: list[dict[str, str]], session: SessionState | None) -> None:
+def _render_chat(history: list[dict[str, str]]) -> None:
     st.title("TrÄenslÄnzÖr 0815 Döküment Äsißtänt")
     for message in history:
         with st.chat_message(message["role"]):
             st.write(message["content"])
     if _is_supervisor_running():
         with st.chat_message("assistant"):
-            tool_label = getattr(session, "activeTool", None) if session else None
-            status_text = f"Running tool: {tool_label}" if tool_label else "TrÄenslönzing..."
-            st.status(status_text, state="running", expanded=False)
+            st.status("TrÄenslönzing...", state="running", expanded=False)
 
 
 def _draw_document_outline(
@@ -689,12 +692,15 @@ def fetch_image(
     file_id: str | None = None
     image: Image.Image | None = None
     failure_reason: str | None = None
+    document_coordinates = None
 
     match stage:
         case "raw":
             file_id = session.rawDocumentId
             if not file_id:
                 failure_reason = "No raw document."
+            if session.extractedDocument:
+                document_coordinates = session.extractedDocument.documentCoordinates
         case "extracted":
             extracted = session.extractedDocument
             if extracted is None:
@@ -739,6 +745,10 @@ def fetch_image(
                     st.session_state["extracted_image"] = image
             elif failure_reason is None:
                 failure_reason = "Image not found."
+
+    #
+    if image is not None and stage == "raw" and document_coordinates:
+        image = _draw_document_outline(image, document_coordinates)
 
     return image, file_id, failure_reason
 
@@ -786,27 +796,36 @@ def _ensure_session_id() -> str:
     return session_id
 
 
+@st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
+def do_render_image(stage: str, label: str) -> None:
+    session = _get_active_session()
+    if stage == "overlay":
+        img, file_id, reason = _render_overlay_image(session)
+    else:
+        img, file_id, reason = fetch_image(session, stage)
+    if img is not None:
+        st.caption(f"{label} document image ({file_id}).")
+        st.image(img, width="stretch")
+    elif reason:
+        st.caption(reason or "Failed to fetch image")
+
+
 def _render_image(session: SessionState | None) -> None:
     if session is None:
         return
 
     tab_specs = [
-        ("Raw", lambda: fetch_image(session, "raw")),
-        ("Overlay", lambda: _render_overlay_image(session)),
-        ("Extracted", lambda: fetch_image(session, "extracted")),
-        ("Rendered", lambda: fetch_image(session, "rendered")),
-        ("Super-res", lambda: fetch_image(session, "superres")),
+        ("Raw", "raw"),
+        ("Overlay", "overlay"),
+        ("Extracted", "extracted"),
+        ("Rendered", "rendered"),
+        ("Super-res", "superres"),
     ]
 
     tabs = st.tabs([label for label, _ in tab_specs])
-    for (label, handler), tab in zip(tab_specs, tabs):
+    for (label, stage), tab in zip(tab_specs, tabs):
         with tab:
-            img, file_id, reason = handler()
-            if img is not None:
-                st.caption(f"{label} document image ({file_id}).")
-                st.image(img, width="stretch")
-            elif reason:
-                st.caption(reason)
+            do_render_image(stage, label)
 
 
 def _collect_prompt() -> str | ChatInputValue | None:
@@ -816,6 +835,7 @@ def _collect_prompt() -> str | ChatInputValue | None:
         "Paste an image or say something",
         accept_file=True,
         file_type=["png", "jpg", "jpeg"],
+        disabled=_is_supervisor_running(),
     )
     if prompt is None and preset_prompt:
         return preset_prompt
@@ -836,6 +856,7 @@ def _handle_prompt(prompt: str | ChatInputValue) -> None:
             st.warning("Only the first file will be processed.")
         uploaded = uploaded_files[0]
         session_id = _ensure_session_id()
+        _run_async(SessionClient.prepare_new_doc(session_id))
         file_id = _run_async(FileClient.put_bytes(uploaded.name, uploaded.getvalue()))
         if file_id:
             _run_async(
@@ -861,7 +882,7 @@ def _handle_prompt(prompt: str | ChatInputValue) -> None:
 def _render_layout(session: SessionState | None) -> None:
     chat_col, img_col = st.columns([1, 1], gap="large")
     with chat_col:
-        _render_chat(_get_history(), session)
+        _render_chat(_get_history())
     with img_col:
         _render_image(session)
 

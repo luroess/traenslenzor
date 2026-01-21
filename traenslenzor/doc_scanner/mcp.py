@@ -96,7 +96,7 @@ _EXTRACTED_DOCUMENT_SCHEMA: dict[str, object] = {
         "mapXYZId",
         "mapXYZShape",
     ],
-    "additionalProperties": False,
+    "additionalProperties": True,
 }
 _DESKEW_OUTPUT_SCHEMA: dict[str, object] = {
     "type": "object",
@@ -270,14 +270,7 @@ async def super_resolve_document(
             default="deskewed",
             description="Which image to upscale: raw, deskewed, or rendered.",
         ),
-    ] = "deskewed",
-    allow_download: Annotated[
-        bool | None,
-        Field(
-            default=None,
-            description="Override download permission for the SR model (default: config).",
-        ),
-    ] = None,
+    ] = "deskewed"
 ) -> dict[str, object]:
     """Super-resolve the session document and update the session state."""
     console.log("Loading session for super-resolution.")
@@ -306,7 +299,7 @@ async def super_resolve_document(
     console.log("Ensuring OpenVINO SR model files are available.")
     model_files = await ensure_openvino_text_sr_model(
         models_dir=config.superres_models_dir,
-        allow_download=config.superres_allow_download if allow_download is None else allow_download,
+        allow_download=config.superres_allow_download,
     )
 
     console.log("Running text-image-super-resolution-0001.")
