@@ -75,16 +75,14 @@ class DocScannerRuntime:
 
         map_xyz_id = None
         map_xyz_shape = None
-        transformation_matrix = None
-        if context_level == "full":
-            transformation_matrix = result.transformation_matrix
-            if result.map_xyz is not None:
-                map_xyz_id = await FileClient.put_numpy_array(
-                    f"{session_id}_map_xyz.npy", result.map_xyz
-                )
-                if map_xyz_id is None:
-                    raise RuntimeError("Failed to upload map_xyz array")
-                map_xyz_shape = result.map_xyz.shape
+        transformation_matrix = result.transformation_matrix
+        if context_level == "full" and result.map_xyz is not None:
+            map_xyz_id = await FileClient.put_numpy_array(
+                f"{session_id}_map_xyz.npy", result.map_xyz
+            )
+            if map_xyz_id is None:
+                raise RuntimeError("Failed to upload map_xyz array")
+            map_xyz_shape = result.map_xyz.shape
 
         coords = []
         if result.corners_original is not None:

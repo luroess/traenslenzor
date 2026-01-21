@@ -217,6 +217,10 @@ class UVDocDeskewBackend:
                 corners_unwarped = build_full_image_corners(
                     unwarped_rgb.shape[0], unwarped_rgb.shape[1]
                 )
+        if corners_unwarped is None:
+            corners_unwarped = build_full_image_corners(
+                unwarped_rgb.shape[0], unwarped_rgb.shape[1]
+            )
 
         # Choose a stride so map_xy stays under the configured pixel budget.
         map_xy_stride = compute_map_xy_stride((h, w), self.config.max_map_pixels)
