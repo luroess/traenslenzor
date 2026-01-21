@@ -8,6 +8,7 @@ from PIL import Image
 from PIL.Image import Image as PILImage
 
 import traenslenzor.image_utils.image_utils as ImageUtils
+from traenslenzor.doc_scanner.backtransform import backtransform_with_map_xy
 from traenslenzor.file_server.session_state import RenderReadyItem
 from traenslenzor.image_renderer.inpainting import Inpainter
 from traenslenzor.image_renderer.text_operations import create_mask, draw_texts
@@ -100,7 +101,12 @@ class ImageRenderer:
         return ImageUtils.np_img_to_pil(result)
 
     def transform_image(
-        self, image: PILImage, matrix: NDArray[np.float64], original_size: tuple[int, int]
+        self,
+        image: PILImage,
+        matrix: NDArray[np.float64] | None,
+        original_size: tuple[int, int],
+        *,
+        map_xy: NDArray[np.float32] | None = None,
     ) -> PILImage:
         """
         Apply a transformation matrix to the image.
@@ -108,10 +114,27 @@ class ImageRenderer:
         Args:
             image: PIL Image to transform
             matrix: 3x3 homogeneous transformation matrix
+            map_xy: Optional flow field mapping output pixels to original pixels
+            original_size: Output canvas size (width, height)
 
         Returns:
             Transformed PIL Image with transparent background
         """
+        if map_xy is not None:
+            extracted_rgb = np.array(image.convert("RGB"), dtype=np.uint8)
+            output_shape = (original_size[1], original_size[0])
+            back, mask = backtransform_with_map_xy(
+                extracted_rgb,
+                map_xy,
+                output_shape,
+                upsample=True,
+            )
+            overlay = Image.fromarray(back).convert("RGBA")
+            overlay.putalpha(Image.fromarray((mask.astype(np.uint8) * 255), mode="L"))
+            return overlay
+
+        if matrix is None:
+            raise ValueError("transform_image requires map_xy or a transformation matrix.")
 
         # Create mask (255 where image exists)
         mask = np.ones((image.height, image.width), dtype=np.uint8) * 255
