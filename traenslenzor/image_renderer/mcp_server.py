@@ -167,7 +167,9 @@ async def replace_text(
     original_size = (original_image.width, original_image.height)
 
     inverse_matrix = (
-        np.linalg.inv(np.array(transformation_matrix)) if transformation_matrix is not None else None
+        np.linalg.inv(np.array(transformation_matrix))
+        if transformation_matrix is not None
+        else None
     )
     final_image = renderer.transform_image(
         result_image,

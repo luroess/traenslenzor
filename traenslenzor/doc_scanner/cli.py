@@ -248,22 +248,21 @@ async def _run_cli(cli_config: CLIDocScannerConfig) -> None:
 
     if backtransform_img is not None and backtransform_mask is not None:
         back_path, mask_path = _resolve_backtransform_paths(
-            file_path, output_path, cli_config.backtransform_path, cli_config.backtransform_mask_path
+            file_path,
+            output_path,
+            cli_config.backtransform_path,
+            cli_config.backtransform_mask_path,
         )
         back_path.parent.mkdir(parents=True, exist_ok=True)
         Image.fromarray(backtransform_img).save(back_path, format="PNG")
         mask_path.parent.mkdir(parents=True, exist_ok=True)
-        Image.fromarray((backtransform_mask.astype(np.uint8) * 255)).save(
-            mask_path, format="PNG"
-        )
+        Image.fromarray((backtransform_mask.astype(np.uint8) * 255)).save(mask_path, format="PNG")
         console.log(f"Backtransformed image saved to {back_path}")
         console.log(f"Backtransform mask saved to {mask_path}")
 
         session = await SessionClient.get(session_id)
         raw_img = (
-            await FileClient.get_image(session.rawDocumentId)
-            if session.rawDocumentId
-            else None
+            await FileClient.get_image(session.rawDocumentId) if session.rawDocumentId else None
         )
         if raw_img is None:
             console.warn("Failed to fetch raw image for composite backtransform.")

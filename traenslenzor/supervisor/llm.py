@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 try:
     # check ollama server
-    requests.get(settings.llm.ollama_url)
+    requests.get(settings.llm.ollama_url, timeout=2)
 except Exception:
     print("Error: Ollama server not running")
     exit(-1)
