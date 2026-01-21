@@ -36,14 +36,12 @@ class DocScannerRuntime:
         self,
         session_id: str,
         *,
-        deskew_mode: str | None = None,
         context_level: str = "standard",
     ) -> ExtractedDocument:
         """Deskew the session's raw document and upload results.
 
         Args:
             session_id (str): File server session id.
-            deskew_mode (str | None): Optional override for the UVDoc deskew mode.
             context_level (str): Controls how much metadata to persist (standard/full).
 
         Returns:
@@ -60,7 +58,7 @@ class DocScannerRuntime:
         image_rgb = np.array(image.convert("RGB"), dtype=np.uint8)
 
         deskew_backend = self._get_backend()
-        result: DeskewResult = deskew_backend.deskew(image_rgb, deskew_mode=deskew_mode)
+        result: DeskewResult = deskew_backend.deskew(image_rgb)
 
         output_image = Image.fromarray(result.image_rgb)
         output_id = await FileClient.put_img(f"{session_id}_deskewed.png", output_image)

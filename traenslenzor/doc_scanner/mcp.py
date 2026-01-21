@@ -185,13 +185,6 @@ async def deskew_document(
             pattern="^[0-9a-fA-F-]{36}$",
         ),
     ],
-    deskew_mode: Annotated[
-        Literal["uv2d", "uv3d"] | None,
-        Field(
-            default=None,
-            description="Optional override for deskew mode (uv2d or uv3d).",
-        ),
-    ] = None,
     context_level: Annotated[
         Literal["minimal", "standard", "full"],
         Field(
@@ -214,7 +207,6 @@ async def deskew_document(
     try:
         extracted = await runtime.scan_session(
             session_id,
-            deskew_mode=deskew_mode,
             context_level=context_level,
         )
     except Exception as exc:
@@ -270,7 +262,7 @@ async def super_resolve_document(
             default="deskewed",
             description="Which image to upscale: raw, deskewed, or rendered.",
         ),
-    ] = "deskewed"
+    ] = "deskewed",
 ) -> dict[str, object]:
     """Super-resolve the session document and update the session state."""
     console.log("Loading session for super-resolution.")

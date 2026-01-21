@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -86,8 +86,6 @@ class UVDocDeskewBackend:
     def deskew(
         self,
         image_rgb: UInt8[NDArray, "H W 3"],
-        *,
-        deskew_mode: Literal["uv2d", "uv3d"] | None = None,
     ) -> DeskewResult:
         """Deskew (dewarp) a document image via [UVDoc neural unwarping](https://arxiv.org/html/2302.02887v2).
 
@@ -120,20 +118,18 @@ class UVDocDeskewBackend:
            - ``inp``: a resized tensor (1, 3, Hm, Wm) used for UVDocNet inference.
         2) Run UVDocNet on ``inp`` to get ``points2d``: a coarse normalized sampling grid
            (1, 2, Gh, Gw).
-        3) If ``deskew_mode="uv3d"``: derive a surface-aware reparameterization from the predicted
-           3D grid by computing arc-length coordinates along the mesh, then resample the 2D grid
-           onto a uniform (s, t) lattice. Otherwise, directly upsample ``points2d``.
-        4) Reshape the resulting sampling grid to the grid_sample layout (1, H, W, 2).
-        5) Compute ``unwarped = grid_sample(orig, grid)`` to obtain an unwarped image at the same
+        3) Upsample ``points2d`` to full resolution and reshape the sampling grid to the
+           grid_sample layout (1, H, W, 2).
+        4) Compute ``unwarped = grid_sample(orig, grid)`` to obtain an unwarped image at the same
            resolution as the input.
-        6) Convert the normalized grid to a pixel-space mapping:
+        5) Convert the normalized grid to a pixel-space mapping:
            ``map_xy_full[y, x] = (x_in, y_in)`` where (x_in, y_in) are float pixel coordinates in
            the **original** input image.
-        7) Optionally detect a page quadrilateral on the unwarped image (simple contour-based
+        6) Optionally detect a page quadrilateral on the unwarped image (simple contour-based
            detection) and crop/rectify it. If cropping is enabled, we also derive a corresponding
            ``map_xy_out`` for the cropped output by mapping cropped pixel coordinates back through
            the inverse crop homography and sampling ``map_xy_full``.
-        8) Optionally downsample ``map_xy`` according to ``max_map_pixels``. This keeps stored flow
+        7) Optionally downsample ``map_xy`` according to ``max_map_pixels``. This keeps stored flow
            fields manageable; consumers can upsample as needed.
 
         Args:
@@ -181,80 +177,10 @@ class UVDocDeskewBackend:
 
         map_xyz = points3d[0].permute(1, 2, 0).detach().cpu().numpy().astype(np.float32)
 
-        mode = deskew_mode or self.config.deskew_mode
-
-        def _smooth_1d(arr: np.ndarray, k: int = 5) -> np.ndarray:
-            if arr.size < k:
-                return arr
-            pad = k // 2
-            padded = np.pad(arr, (pad, pad), mode="edge")
-            kernel = np.ones(k, dtype=np.float32) / float(k)
-            return np.convolve(padded, kernel, mode="valid")
-
-        def _build_uv3d_grid(
-            uv_points: torch.Tensor,
-            xyz_points: torch.Tensor,
-            out_hw: tuple[int, int],
-        ) -> torch.Tensor | None:
-            """Reparameterize the 2D sampling grid using arc-lengths on the 3D mesh."""
-            gh, gw = uv_points.shape[2], uv_points.shape[3]
-            if gh < 2 or gw < 2:
-                return None
-
-            xyz = xyz_points[0].permute(1, 2, 0).detach().cpu().numpy().astype(np.float32)
-
-            diffs_x = np.linalg.norm(xyz[:, 1:, :] - xyz[:, :-1, :], axis=-1)
-            cum_x = np.concatenate(
-                [np.zeros((gh, 1), dtype=np.float32), np.cumsum(diffs_x, axis=1)], axis=1
-            )
-            denom_x = cum_x[:, -1:] + 1e-6
-            s_rows = cum_x / denom_x
-            s = np.median(s_rows, axis=0)
-            s = _smooth_1d(s)
-            s = np.maximum.accumulate(s)
-            s = (s - s[0]) / (s[-1] - s[0] + 1e-6)
-
-            diffs_y = np.linalg.norm(xyz[1:, :, :] - xyz[:-1, :, :], axis=-1)
-            cum_y = np.concatenate(
-                [np.zeros((1, gw), dtype=np.float32), np.cumsum(diffs_y, axis=0)], axis=0
-            )
-            denom_y = cum_y[-1:, :] + 1e-6
-            t_cols = cum_y / denom_y
-            t = np.median(t_cols, axis=1)
-            t = _smooth_1d(t)
-            t = np.maximum.accumulate(t)
-            t = (t - t[0]) / (t[-1] - t[0] + 1e-6)
-
-            if not np.isfinite(s).all() or not np.isfinite(t).all():
-                return None
-
-            out_h, out_w = out_hw
-            s_target = np.linspace(0.0, 1.0, out_w, dtype=np.float32)
-            t_target = np.linspace(0.0, 1.0, out_h, dtype=np.float32)
-
-            j_idx = np.interp(s_target, s, np.arange(gw, dtype=np.float32))
-            i_idx = np.interp(t_target, t, np.arange(gh, dtype=np.float32))
-
-            j_grid, i_grid = np.meshgrid(j_idx, i_idx)
-            x_idx = (j_grid / max(gw - 1, 1)) * 2.0 - 1.0
-            y_idx = (i_grid / max(gh - 1, 1)) * 2.0 - 1.0
-
-            index_grid = np.stack([x_idx, y_idx], axis=-1).astype(np.float32)
-            index_grid_t = torch.from_numpy(index_grid).unsqueeze(0).to(self._device)
-            uv_dense = F.grid_sample(uv_points, index_grid_t, align_corners=True)
-            return uv_dense.permute(0, 2, 3, 1).clamp(-1.0, 1.0)
-
-        grid = None
-        if mode == "uv3d":
-            grid = _build_uv3d_grid(points2d, points3d, (h, w))
-            if grid is None:
-                self.console.warn("UVDoc 3D reparameterization failed; falling back to 2D grid.")
-
-        if grid is None:
-            # --- Upsample grid to full resolution and unwarp via grid_sample ------------------
-            # grid_2ch: (1, 2, H, W) -> grid: (1, H, W, 2) for grid_sample.
-            grid_2ch = F.interpolate(points2d, size=(h, w), mode="bilinear", align_corners=True)
-            grid = grid_2ch.permute(0, 2, 3, 1).clamp(-1.0, 1.0)
+        # --- Upsample grid to full resolution and unwarp via grid_sample ------------------
+        # grid_2ch: (1, 2, H, W) -> grid: (1, H, W, 2) for grid_sample.
+        grid_2ch = F.interpolate(points2d, size=(h, w), mode="bilinear", align_corners=True)
+        grid = grid_2ch.permute(0, 2, 3, 1).clamp(-1.0, 1.0)
 
         # unwarped: (1, 3, H, W) float32 in [0, 1]; convert to (H, W, 3) uint8 RGB.
         unwarped = F.grid_sample(orig, grid, align_corners=True)
