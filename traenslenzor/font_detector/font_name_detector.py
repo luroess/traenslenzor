@@ -45,7 +45,7 @@ class FontNameDetector:
         print(f"Loading custom font classifier from {self.checkpoint_path} on {self.device}...")
 
         # Load checkpoint
-        checkpoint = torch.load(self.checkpoint_path, map_location=self.device)
+        checkpoint = torch.load(self.checkpoint_path, map_location=self.device, weights_only=False)
         self._classes = checkpoint["classes"]
         num_classes = len(self._classes)
 
