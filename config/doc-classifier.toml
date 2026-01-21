@@ -1,3 +1,30 @@
-checkpoint_path = "resnet50-epoch=5-val_loss=0.52.ckpt"
-is_mock         = false
-device          = "auto"
+is_mock             = false
+checkpoint_path     = "alexnet-epoch=15-val_loss=0.03.ckpt"
+device              = "cuda"
+img_size            = 224
+normalization_mode  = "imagenet"
+convert_to_rgb      = true
+apply_normalization = true
+seed                = 42
+is_debug            = false
+verbose             = true
+
+[lit_module_config]
+num_classes     = 16
+backbone        = "alexnet"
+train_head_only = false
+use_pretrained  = true
+
+    [lit_module_config.optimizer]
+    learning_rate     = 0.0005
+    weight_decay      = 0.0001
+    backbone_lr_scale = 1.0
+
+    [lit_module_config.scheduler]
+    max_lr           = 0.001
+    base_momentum    = 0.85
+    max_momentum     = 0.95
+    div_factor       = 25.0
+    final_div_factor = 10000.0
+    pct_start        = 0.3
+    anneal_strategy  = "cos"

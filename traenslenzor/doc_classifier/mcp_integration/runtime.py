@@ -119,7 +119,7 @@ class DocClassifierRuntime:
 
         try:
             params = DocClassifierConfig(**ckpt["hyper_parameters"])
-        except Exception as exc:  # pragma: no cover
+        except Exception as exc:
             raise ToolError(f"Failed to parse hyper_parameters: {exc}") from exc
 
         module = DocClassifierModule.load_from_checkpoint(
