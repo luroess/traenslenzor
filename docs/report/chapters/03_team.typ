@@ -44,7 +44,7 @@
     inset: 6pt,
     table.header([*WP ID*],[*Work Package Description*]),
     [UI1],[Basic UI],
-    
+
     [SV1],[Technology experiments.],
     [SV2],[Supervisor setup.],
     [SV3],[Mock infrastructure.],
@@ -61,9 +61,18 @@
     [TE2],[Paddle OCR],
     [TE3],[Tesseract],
 
+    [DT1],[Initial testing with single-batch translation.],
+    [DT2],[Tried different #gls("llm") models for translation quality.],
+    [DT3],[Batch translation implementation with numbered output parsing.],
+
 
     [XDE1],[Direct Version],
     [XDE2],[Separate #gls("llm")],
+
+    [IR1],[LaMa inpainting setup and testing],
+    [IR2],[Text operations module],
+    [IR3],[Rotation and transformation support],
+    [IR4],[MCP server integration],
 
   )
 ] <team_work_packages_work_packages_table>
@@ -145,6 +154,22 @@
 )
 
 #contributed(
+  "Document Translator",
+  [Benedikt Köhler\ Lukas Röß], [DT1], [
+    - Validated translation quality on single-batch inputs.
+    - Confirmed numbering preservation is required for correct mapping.
+  ],
+  [Benedikt Köhler\ Lukas Röß], [DT2], [
+    - Compared different #gls("llm") models for translation quality.
+    - Selected the most reliable model for the batch workflow.
+  ],
+  [Benedikt Köhler\ Lukas Röß], [DT3], [
+    - Implemented a batch translation prompt that preserves line numbering.
+    - Parsed and mapped translated lines back onto text items.
+  ],
+)
+
+#contributed(
   "Document Editor",
   [Jan Schaible], [XDE1], [
     - Implemented a tool for the supervisor to modify session text.
@@ -158,7 +183,30 @@
   ],
 )
 
-#block(breakable: false)[
+#contributed(
+  "Document Image Renderer",
+  [Benedikt Köhler], [IR1], [
+    - Integrated the LaMa inpainting model with auto-download.
+    - Evaluated PyTorch JIT and ONNX deployment strategies.
+    - Implemented lazy model initialization for efficient resource usage.
+    - Added unit tests and snapshot references for both backends.
+  ],
+  [Benedikt Köhler], [IR2], [
+    - Extracted mask creation and text drawing into a dedicated module.
+    - Implemented font handling with fallback support.
+  ],
+  [Benedikt Köhler], [IR3], [
+    - Added rotation angle calculation from bounding box coordinates.
+    - Implemented perspective transformation using OpenCV.
+    - Created compositing logic to paste results onto originals.
+  ],
+  [Benedikt Köhler], [IR4], [
+    - Built the FastMCP server exposing the replace_text tool.
+    - Added session validation and structured error handling.
+  ],
+)
+
+#pagebreak()
 
 == Timeline <team_timeline>
 
@@ -198,7 +246,9 @@ gantt
   "Tool Mock"       : 2025-7-10, 1w
 
   section document_translator
-  "Tool Mock"       : 2025-7-10, 1w
+  "Single-batch testing"       : dt1, 2025-10-25, 1w
+  "LLM model comparison"       : dt2, after dt1, 1w
+  "Batch implementation"       : dt3, after dt2, 1w
 
   section document_class_detector
   "Tool Mock"       : 2025-7-10, 1w
@@ -208,10 +258,12 @@ gantt
   "Separate LLM"       : xde2, after xde1, 2w
 
   section document_image_renderer
-  "Tool Mock"       : 2025-7-10, 1w
+  "LaMa inpainting setup"       : ir1, 2025-10-25, 1w
+  "Text operations module"       : ir2, after ir1, 2w
+  "Rotation and transformation"       : ir3, 2025-12-2, 2w
+  "MCP server integration"       : ir4, after ir3, 1w
 
   section Release
   "Release" : milestone, 2026-1-23, 0d
 ```
 ] <team_timeline_gantt>
-]

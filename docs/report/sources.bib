@@ -121,3 +121,18 @@
     pages = "416--421",
     abstract = "This paper reviews numerous OCR programs and libraries employed for optical character recognition tasks. Tesser- act OCR, an open-source program that supports multiple lan- guages and image formats, is highlighted for its accuracy and adaptability. Python-based libraries like EasyOCR, MMOCR, and PaddleOCR are also mentioned, which provide user-friendly interfaces and trained models for text extraction, detection, and recognition. EasyOCR emphasizes ease of use and sim- plicity, while MMOCR and PaddleOCR offer comprehensive OCR capabilities and support for a wide range of languages. According to our study, which evaluates various OCR libraries, Tesseract OCR performs remarkably well in terms of accuracy for Indian languages like Malayalam. We focused on five OCR libraries{---}Tesseract OCR, MMOCR, PaddleOCR, EasyOCR, and Keras OCR{---}and tested them across several languages, including English, Hindi, Arabic, Tamil, and Malayalam. During our comparison, we found that Tesseract OCR was the only library that supported the Malayalam language. While the other libraries did not support Malayalam, Tesseract OCR performed well across all tested languages, achieving accuracy rates of 92{\%} in English, 93{\%} in Hindi, 78{\%} in Tamil, 74{\%} in Arabic, and 93{\%} in Malayalam."
 }
+
+@online{suvorovResolutionrobustLargeMask2021,
+  title = {Resolution-Robust {{Large Mask Inpainting}} with {{Fourier Convolutions}}},
+  author = {Suvorov, Roman and Logacheva, Elizaveta and Mashikhin, Anton and Remizova, Anastasia and Ashukha, Arsenii and Silvestrov, Aleksei and Kong, Naejin and Goka, Harshith and Park, Kiwoong and Lempitsky, Victor},
+  date = {2021-11-11},
+  eprint = {2109.07161},
+  eprinttype = {arXiv},
+  eprintclass = {cs},
+  doi = {10.48550/arXiv.2109.07161},
+  url = {http://arxiv.org/abs/2109.07161},
+  urldate = {2025-10-19},
+  abstract = {Modern image inpainting systems, despite the significant progress, often struggle with large missing areas, complex geometric structures, and high-resolution images. We find that one of the main reasons for that is the lack of an effective receptive field in both the inpainting network and the loss function. To alleviate this issue, we propose a new method called large mask inpainting (LaMa). LaMa is based on i) a new inpainting network architecture that uses fast Fourier convolutions (FFCs), which have the image-wide receptive field; ii) a high receptive field perceptual loss; iii) large training masks, which unlocks the potential of the first two components. Our inpainting network improves the state-of-the-art across a range of datasets and achieves excellent performance even in challenging scenarios, e.g. completion of periodic structures. Our model generalizes surprisingly well to resolutions that are higher than those seen at train time, and achieves this at lower parameter\&time costs than the competitive baselines. The code is available at \textbackslash url\{https://github.com/saic-mdal/lama\}.},
+  pubstate = {prepublished},
+  keywords = {Computer Science - Computer Vision and Pattern Recognition,Electrical Engineering and Systems Science - Image and Video Processing},
+}

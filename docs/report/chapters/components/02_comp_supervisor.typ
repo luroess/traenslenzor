@@ -15,7 +15,7 @@ To provide the current context, we leverage LangChain's dynamic_prompt hook to i
 We opted to let the #gls("llm") inject the `session_id` into tool calls directly.
 Programmatic injection would have required modifying the tool definitions, which we deemed unnecessary since the #gls("llm") handles the `session_id` injection seamlessly.
 
-=== Model Selection
+=== Model Selection <sec-llm-config>
 #let model(m) = {rgb-raw(m, rgb("#5079ba"))}
 
 Choosing a suitable #gls("llm") was challenging, as the system had to run on consumer hardware without #gls("gpu") support, restricting us to smaller models. This was further complicated by the requirement that the model determine the tool invocation order dynamically at runtime using only tool descriptions and input specifications.

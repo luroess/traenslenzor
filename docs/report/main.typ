@@ -16,7 +16,7 @@
   toc-depth: 2,
   language: "en",
   version: none,
-  glossary: glossary, 
+  glossary: glossary,
   bibliography: bibliography("sources.bib"),
   appendix: appendix,
 )[
