@@ -21,7 +21,6 @@ from traenslenzor.doc_scanner.superres import (
 )
 from traenslenzor.file_server.client import FileClient, SessionClient
 from traenslenzor.file_server.session_state import SessionState, SuperResolvedDocument
-from traenslenzor.supervisor.prompt import context_aware_prompt
 
 ADDRESS = "127.0.0.1"
 PORT = 8004
@@ -39,71 +38,38 @@ DocScannerMCPConfig.model_rebuild(_types_namespace={"DocScannerRuntime": DocScan
 _runtime: DocScannerRuntime | None = None
 _runtime_config_signature: dict[str, object] | None = None
 
-_EXTRACTED_DOCUMENT_SCHEMA: dict[str, object] = {
-    "type": "object",
-    "description": "Deskewed document metadata produced by the doc-scanner.",
-    "properties": {
-        "id": {
-            "type": "string",
-            "description": "File id of the deskewed (extracted) document image.",
-        },
-        "documentCoordinates": {
-            "type": "array",
-            "description": (
-                "Four corner points of the document in original image pixel coordinates "
-                "(order: UL, UR, LR, LL)."
-            ),
-            "items": {
-                "type": "object",
-                "properties": {
-                    "x": {
-                        "type": "number",
-                        "description": "X coordinate in original image pixels.",
-                    },
-                    "y": {
-                        "type": "number",
-                        "description": "Y coordinate in original image pixels.",
-                    },
-                },
-                "required": ["x", "y"],
-                "additionalProperties": False,
-            },
-        },
-        "mapXYId": {
-            "type": ["string", "null"],
-            "description": "File id of the map_xy flow field.",
-        },
-        "mapXYShape": {
-            "type": ["array", "null"],
-            "items": {"type": "integer"},
-            "description": "Shape of map_xy as [H, W, 2].",
-        },
-        "mapXYZId": {
-            "type": ["string", "null"],
-            "description": "File id of the UVDoc 3D grid.",
-        },
-        "mapXYZShape": {
-            "type": ["array", "null"],
-            "items": {"type": "integer"},
-            "description": "Shape of map_xyz as [Gh, Gw, 3].",
-        },
-    },
-    "required": [
-        "id",
-        "documentCoordinates",
-        "mapXYId",
-        "mapXYShape",
-        "mapXYZId",
-        "mapXYZShape",
-    ],
-    "additionalProperties": True,
-}
 _DESKEW_OUTPUT_SCHEMA: dict[str, object] = {
     "type": "object",
     "properties": {
         "extractedDocument": {
-            **_EXTRACTED_DOCUMENT_SCHEMA,
+            "type": "object",
             "description": "Extracted document metadata from the deskew operation.",
+            "properties": {
+                "documentCoordinates": {
+                    "type": "array",
+                    "description": (
+                        "Four corner points of the document in original image pixel coordinates "
+                        "(order: UL, UR, LR, LL)."
+                    ),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "x": {
+                                "type": "number",
+                                "description": "X coordinate in original image pixels.",
+                            },
+                            "y": {
+                                "type": "number",
+                                "description": "Y coordinate in original image pixels.",
+                            },
+                        },
+                        "required": ["x", "y"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["documentCoordinates"],
+            "additionalProperties": False,
         }
     },
     "required": ["extractedDocument"],
@@ -186,15 +152,14 @@ async def deskew_document(
         ),
     ],
     context_level: Annotated[
-        Literal["minimal", "standard", "full"],
+        Literal["minimal", "full"],
         Field(
-            default="standard",
+            default="minimal",
             description=(
-                "Controls how much extraction context to include in the response "
-                "(minimal, standard, full)."
+                "Controls how much extraction context to include in the response (minimal, full)."
             ),
         ),
-    ] = "standard",
+    ] = "minimal",
 ) -> dict[str, object]:
     """Deskew the session document and update the session state.
 
@@ -218,15 +183,9 @@ async def deskew_document(
 
     await SessionClient.update(session_id, update_session)
 
-    payload = extracted.model_dump()
-    if context_level == "minimal":
-        payload["mapXYId"] = None
-        payload["mapXYShape"] = None
-        payload["mapXYZId"] = None
-        payload["mapXYZShape"] = None
-    elif context_level == "standard":
-        payload["mapXYZId"] = None
-        payload["mapXYZShape"] = None
+    payload = {
+        "documentCoordinates": extracted.documentCoordinates,
+    }
 
     return {"extractedDocument": payload}
 
@@ -279,7 +238,7 @@ async def super_resolve_document(
     if not source_id:
         msg = f"Session has no {source} document to super-resolve. Call deskew_document() first."
         console.error(msg)
-        raise ToolError(context_aware_prompt(msg))
+        raise ToolError(msg)
 
     console.log(f"Downloading {source} image {source_id}.")
     image = await FileClient.get_image(source_id)

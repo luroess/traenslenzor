@@ -28,7 +28,7 @@ class PathConfig(SingletonConfig):
     )
     optuna_study_uri: str = Field(default=".logs/optuna/{study_name}.db")
     """Uri for Optuna study storage (SQLite). The `{study_name}` placeholder is replaced within the Optuna Config."""
-    configs_dir: Path = Field(default_factory=lambda: Path("_config"))
+    configs_dir: Path = Field(default_factory=lambda: Path(".configs"))
     """Directory containing exported experiment/configuration files (TOML, etc.)."""
 
     @classmethod

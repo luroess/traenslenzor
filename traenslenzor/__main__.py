@@ -21,9 +21,6 @@ def main():
     from traenslenzor.logger import setup_logger
 
     setup_logger()
-    from traenslenzor.supervisor.llm import log_llm_config
-
-    log_llm_config()
     app.run()
 
 

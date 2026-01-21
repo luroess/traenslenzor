@@ -69,11 +69,9 @@ class FileClient:
     @staticmethod
     async def get_numpy_array(
         file_id: str,
-        *,
-        timeout: float | None = 60.0,
     ) -> Optional[NDArray[np.float32]]:
         """Download a .npy file and return as a numpy array, or None if not found."""
-        file_bytes = await FileClient.get_raw_bytes(file_id, timeout=timeout)
+        file_bytes = await FileClient.get_raw_bytes(file_id)
 
         if file_bytes is None:
             return None
@@ -85,11 +83,9 @@ class FileClient:
     @staticmethod
     async def get_raw_bytes(
         file_id: str,
-        *,
-        timeout: float | None = 60.0,
     ) -> Optional[bytes]:
         """Download a file and return its bytes, or None if not found."""
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient() as client:
             resp = await client.get(f"{FILES_ENDPOINT}/{file_id}")
 
         if resp.status_code == 404:
@@ -101,17 +97,14 @@ class FileClient:
     @staticmethod
     async def get_image(
         file_id: str,
-        *,
-        timeout: float | None = 60.0,
         max_pixels: int = 50_000_000,
     ) -> PILImage | None:
         """Download a image and return as a PILImage, or None if not found."""
-        file_bytes = await FileClient.get_raw_bytes(file_id, timeout=timeout)
+        file_bytes = await FileClient.get_raw_bytes(file_id)
 
         if file_bytes is None:
             return None
-        # We intentionally relax PIL's pixel guard for trusted, internal superresolution
-        # outputs that can exceed default limits; restore immediately after loading.
+        # Need to relax PIL's pixel guard for superresolution
         # Allow unlimited when max_pixels=0.
         original_max_pixels = Image.MAX_IMAGE_PIXELS
         Image.MAX_IMAGE_PIXELS = None if max_pixels <= 0 else max_pixels
@@ -130,12 +123,10 @@ class FileClient:
     @staticmethod
     async def get_image_as_numpy(
         file_id: str,
-        *,
-        timeout: float | None = 60.0,
         max_pixels: int = 50_000_000,
     ) -> NDArray[np.float32] | None:
         """Download a image and return as a PILImage, or None if not found."""
-        img = await FileClient.get_image(file_id, timeout=timeout, max_pixels=max_pixels)
+        img = await FileClient.get_image(file_id, max_pixels=max_pixels)
 
         if img is None:
             return None

@@ -33,6 +33,8 @@ class DeskewResult:
 
     image_rgb: UInt8[NDArray, "H W 3"]
     """Deskewed RGB image."""
+    transformation_matrix: Float32[NDArray, "3 3"] | None
+    """Approximate homography mapping original -> deskewed output."""
     corners_original: Float32[NDArray, "4 2"] | None
     """Document corners in original image coordinates (UL, UR, LR, LL)."""
     map_xy: Float32[NDArray, "H W 2"] | None
@@ -255,11 +257,29 @@ class UVDocDeskewBackend:
             # Map detected page corners from unwarped space back into original-image coordinates.
             corners_original = sample_map_xy(map_xy_full, corners_unwarped)
 
+        transformation_matrix = None
+        if corners_original is not None:
+            out_h, out_w = output_rgb.shape[:2]
+            output_corners = np.array(
+                [
+                    [0.0, 0.0],
+                    [float(out_w - 1), 0.0],
+                    [float(out_w - 1), float(out_h - 1)],
+                    [0.0, float(out_h - 1)],
+                ],
+                dtype=np.float32,
+            )
+            transformation_matrix = cv2.getPerspectiveTransform(
+                corners_original.astype(np.float32),
+                output_corners,
+            ).astype(np.float32)
+
         if not self.config.generate_map_xy:
             map_xy_out = None
 
         return DeskewResult(
             image_rgb=output_rgb,
+            transformation_matrix=transformation_matrix,
             corners_original=corners_original,
             map_xy=map_xy_out,
             map_xyz=map_xyz,

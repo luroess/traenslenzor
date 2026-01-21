@@ -12,18 +12,6 @@ import numpy as np
 import streamlit as st
 from PIL import Image, ImageDraw
 
-from traenslenzor.streamlit.session_state_tools import (
-    DEFAULT_SESSION_PICKLE_PATH,
-    apply_pending_restore,
-    apply_session_deletions,
-    build_export_payload,
-    get_session_id,
-    maybe_auto_restore_from_pickle,
-    queue_restore_payload,
-    read_pickle,
-    set_session_id,
-    write_pickle,
-)
 from traenslenzor.doc_classifier.configs.mcp_config import DocClassifierMCPConfig
 from traenslenzor.doc_classifier.configs.path_config import PathConfig
 from traenslenzor.doc_classifier.mcp_integration import mcp_server as doc_classifier_mcp_server
@@ -40,6 +28,18 @@ from traenslenzor.file_server.session_state import (
 )
 from traenslenzor.logger import setup_logger
 from traenslenzor.streamlit.prompt_presets import PromptPreset, get_prompt_presets
+from traenslenzor.streamlit.session_state_tools import (
+    DEFAULT_SESSION_PICKLE_PATH,
+    apply_pending_restore,
+    apply_session_deletions,
+    build_export_payload,
+    get_session_id,
+    maybe_auto_restore_from_pickle,
+    queue_restore_payload,
+    read_pickle,
+    set_session_id,
+    write_pickle,
+)
 from traenslenzor.supervisor.supervisor import run as run_supervisor
 
 if TYPE_CHECKING:
@@ -729,11 +729,8 @@ def fetch_image(
             image = cached
         else:
             try:
-                timeout = 120.0 if stage == "superres" else 60.0
                 max_pixels = 0 if stage == "superres" else 50_000_000
-                image = _run_async(
-                    FileClient.get_image(file_id, timeout=timeout, max_pixels=max_pixels)
-                )
+                image = _run_async(FileClient.get_image(file_id, max_pixels=max_pixels))
             except Exception:
                 logger.exception("Failed to fetch image for stage %s (file_id=%s)", stage, file_id)
                 failure_reason = "Failed to fetch image."

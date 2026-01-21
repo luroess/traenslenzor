@@ -21,7 +21,8 @@ def order_points_clockwise(
     Returns:
         ndarray[float32]: Ordered points with shape (4, 2).
 
-    NOTE: Adapted from ``traenslenzor/text_extractor/flatten_image.py::_order_points`` by Felix Schlandt`` - difference:
+    NOTE: Adapted from ``traenslenzor/text_extractor/flatten_image.py::_order_points`` by Felix Schlandt``
+    - difference: Use sums and diffs instead of argmin/argmax on x+y and x-y.
     """
     pts_arr = np.asarray(pts, dtype=np.float32)
     if pts_arr.shape[0] != 4:

@@ -40,32 +40,39 @@ async def extract_text(session_id: str) -> str:
         logger.error(f"No raw document available for session : {session_id}")
         return "No raw document available for this session"
 
-    file_data = None
+    file_data = await FileClient.get_raw_bytes(session.rawDocumentId)
     using_existing_extracted = False
+    extracted_document = None
 
     if session.extractedDocument is not None and session.extractedDocument.id:
-        file_data = await FileClient.get_raw_bytes(session.extractedDocument.id)
-        if file_data is not None:
+        extracted_data = await FileClient.get_raw_bytes(session.extractedDocument.id)
+        if extracted_data is not None:
+            file_data = extracted_data
             using_existing_extracted = True
+            extracted_document = session.extractedDocument
+            logger.info("Using previously extracted document for OCR")
         else:
             logger.error("Stored extracted document missing; falling back to raw document.")
 
     if file_data is None:
-        file_data = await FileClient.get_raw_bytes(session.rawDocumentId)
-        if file_data is None:
-            logger.error("Invalid file id, no such document found")
-            return f"Document not found: {session.rawDocumentId}"
-    else:
-        logger.info("Using previously extracted document for OCR")
+        logger.error("Invalid file id, no such document found")
+        return f"Document not found: {session.rawDocumentId}"
 
     orig_img = bytes_to_numpy_image(file_data)
 
-    extracted_document = None
-    if not using_existing_extracted:
-        flattened_img = deskew_document(orig_img)
-        if flattened_img is None:
-            logger.error("Image flattening failed, fallback to original.")
-            flattened_img = orig_img
+    if using_existing_extracted:
+        flattened_img = orig_img
+    else:
+        flattening_result = deskew_document(orig_img)
+
+        flattened_img = orig_img
+        transformation_matrix = np.eye(3, dtype=np.float64)
+        document_coordinates: NDArray[np.float32] = np.array([])
+        if flattening_result is not None:
+            logger.info("Image flattening successful")
+            flattened_img, transformation_matrix, document_coordinates = flattening_result
+        else:
+            logger.error("Image flattening failed, proceeding with original image")
 
         upload_image = cv2.cvtColor(flattened_img, cv2.COLOR_BGR2RGB)
         flattened_image_id = await FileClient.put_img(
@@ -75,11 +82,15 @@ async def extract_text(session_id: str) -> str:
             logger.error("Uploading of extracted document image failed")
             return "Uploading of extracted document image failed"
 
-    extracted_document = ExtractedDocument(
-        id=flattened_image_id,
-        transformation_matrix=transformation_matrix.tolist(),
-        documentCoordinates=[BBoxPoint(x=pt[0], y=pt[1]) for pt in document_coordinates],
-    )
+        extracted_document = ExtractedDocument(
+            id=flattened_image_id,
+            transformation_matrix=transformation_matrix.tolist(),
+            documentCoordinates=[BBoxPoint(x=pt[0], y=pt[1]) for pt in document_coordinates],
+        )
+
+    if extracted_document is None:
+        logger.error("Extracted document metadata missing.")
+        return "Extracted document metadata missing."
 
     res = run_ocr(flattened_img)
 
