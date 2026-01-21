@@ -1,0 +1,7 @@
+verbose                 = true
+is_debug                = false
+device                  = "auto"
+crop_page               = true
+generate_map_xy         = true
+superres_device         = "cuda"
+superres_allow_download = true

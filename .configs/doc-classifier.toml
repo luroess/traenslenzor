@@ -1,0 +1,10 @@
+is_mock             = false
+checkpoint_path     = "alexnet-epoch=15-val_loss=0.03.ckpt"
+device              = "cuda"
+img_size            = 224
+normalization_mode  = "dataset"
+convert_to_rgb      = false
+apply_normalization = true
+seed                = 42
+is_debug            = false
+verbose             = true
