@@ -28,14 +28,14 @@ class FileClient:
         async with aiofiles.open(path, "rb") as f:
             file_data = await f.read()
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.post(FILES_ENDPOINT, files={"file": (path.name, file_data)})
 
         return None if not resp.is_success else str(resp.json().get("id"))
 
     @staticmethod
     async def put_bytes(name: str, data: bytes) -> Optional[str]:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.post(
                 FILES_ENDPOINT,
                 files={"file": (name, data)},
@@ -47,10 +47,15 @@ class FileClient:
         """Upload a file and return its UUID string, or None on failure."""
 
         buffer = BytesIO()
-        img.save(buffer, format="PNG")
+        # Ensure DPI and other metadata are saved if present
+        kwargs = {}
+        if "dpi" in img.info:
+            kwargs["dpi"] = img.info["dpi"]
+
+        img.save(buffer, format="PNG", **kwargs)
         buffer.seek(0)
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.post(FILES_ENDPOINT, files={"file": (img_name, buffer.getvalue())})
 
         if not resp.is_success:
@@ -61,7 +66,7 @@ class FileClient:
     @staticmethod
     async def get_raw_bytes(file_id: str) -> Optional[bytes]:
         """Download a file and return its bytes, or None if not found."""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.get(f"{FILES_ENDPOINT}/{file_id}")
 
         if resp.status_code == 404:
@@ -93,7 +98,7 @@ class FileClient:
     @staticmethod
     async def rem(file_id: str) -> bool:
         """Remove a file; return True if deleted, False if not found."""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.delete(f"{FILES_ENDPOINT}/{file_id}")
 
         if resp.status_code == 404:
@@ -107,7 +112,7 @@ class SessionClient:
     async def create(session: SessionState) -> str:
         """Create a session and return its UUID string, or None on failure."""
         print("Creating new session")
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.post(SESSION_ENDPOINT, json=session.model_dump())
         if not resp.is_success:
             raise Exception("Failed to create a new session.")
@@ -116,7 +121,7 @@ class SessionClient:
     @staticmethod
     async def get(session_id: str) -> SessionState:
         """Retrieve a session by ID."""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.get(f"{SESSION_ENDPOINT}/{session_id}")
         if not resp.is_success:
             raise Exception(f"Failed to get session with id '{session_id}'.")
@@ -125,7 +130,7 @@ class SessionClient:
     @staticmethod
     async def put(session_id: str, session: SessionState) -> SessionState:
         """Replace an existing session."""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.put(f"{SESSION_ENDPOINT}/{session_id}", json=session.model_dump())
         if not resp.is_success:
             raise Exception(f"Failed to update session with id '{session_id}'.")
@@ -134,7 +139,7 @@ class SessionClient:
     @staticmethod
     async def delete(session_id: str) -> None:
         """Delete a session. Returns True if successful."""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.delete(f"{SESSION_ENDPOINT}/{session_id}")
         if not resp.is_success:
             raise Exception(f"Failed to delete session with id '{session_id}'.")
@@ -155,7 +160,7 @@ class SessionClient:
 
     @staticmethod
     async def get_progress(session_id: str) -> SessionProgress:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.get(f"{SESSION_ENDPOINT}/{session_id}/progress")
         if not resp.is_success:
             raise Exception(f"Failed to get session progress for id '{session_id}'.")

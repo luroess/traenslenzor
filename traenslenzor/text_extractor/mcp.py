@@ -1,3 +1,4 @@
+import io
 import logging
 
 import cv2
@@ -45,6 +46,16 @@ async def extract_text(session_id: str) -> str:
         logger.error("Invalid file id, no such document found")
         return f"Document not found: {session.rawDocumentId}"
 
+    # Extract DPI from original image if available
+    original_dpi = None
+    try:
+        with Image.open(io.BytesIO(file_data)) as pil_img:
+            original_dpi = pil_img.info.get("dpi")
+            if original_dpi:
+                logger.info(f"Detected original DPI: {original_dpi}")
+    except Exception as e:
+        logger.warning(f"Failed to extract DPI from original document: {e}")
+
     orig_img = bytes_to_numpy_image(file_data)
 
     flattening_result = deskew_document(orig_img)
@@ -59,9 +70,13 @@ async def extract_text(session_id: str) -> str:
         logger.error("Image flattening failed, proceeding with original image")
 
     upload_image = cv2.cvtColor(flattened_img, cv2.COLOR_BGR2RGB)
-    flattened_image_id = await FileClient.put_img(
-        f"{session_id}_deskewed.png", Image.fromarray(upload_image)
-    )
+
+    # Create PIL image and restore DPI metadata
+    pil_upload_image = Image.fromarray(upload_image)
+    if original_dpi:
+        pil_upload_image.info["dpi"] = original_dpi
+
+    flattened_image_id = await FileClient.put_img(f"{session_id}_deskewed.png", pil_upload_image)
     if flattened_image_id is None:
         logger.error("Uploading of extracted document image failed")
         return "Uploading of extracted document image failed"
