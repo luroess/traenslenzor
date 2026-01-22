@@ -172,7 +172,8 @@
   ],
   [Benedikt Köhler\ Lukas Röß], [DT3], [
     - Implemented a batch translation prompt that preserves line numbering.
-    - Parsed and mapped translated lines back onto text items.
+    - Implemented robust regex-based response parsing with individual retry logic for text items missing from the batch response.
+    - Added a sequential fallback mechanism for complete batch failures to ensure reliability.
   ],
 )
 
