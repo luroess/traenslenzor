@@ -3,8 +3,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Iterator
 from concurrent.futures import Future
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, TypeVar, cast
 
@@ -53,12 +54,25 @@ T = TypeVar("T")
 
 ENABLE_SESSION_POLLING = True
 ENABLE_SUPERVISOR_POLLING = True
-_SUPERVISOR_POLL_INTERVAL_SECONDS = 2
+_SUPERVISOR_POLL_INTERVAL_SECONDS = 10.0
 
 DEFAULT_ASSISTANT_MESSAGE = (
     "Document Assistant Ready! I can help you with document operations. Please provide a document:"
 )
-_DOC_CLASSIFIER_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "doc-classifier.toml"
+_DOC_CLASSIFIER_CONFIG_PATH = (
+    Path(__file__).resolve().parents[2] / ".configs" / "doc-classifier.toml"
+)
+
+
+@contextmanager
+def _allow_large_images(max_pixels: int | None) -> Iterator[None]:
+    """Temporarily relax Pillow's decompression bomb limit."""
+    original_max_pixels = Image.MAX_IMAGE_PIXELS
+    Image.MAX_IMAGE_PIXELS = None if max_pixels is None else max_pixels
+    try:
+        yield
+    finally:
+        Image.MAX_IMAGE_PIXELS = original_max_pixels
 
 
 def _ensure_defaults() -> None:
@@ -70,6 +84,7 @@ def _ensure_defaults() -> None:
 
 
 def _get_history() -> list[dict[str, str]]:
+    """Return the chat history stored in session state."""
     return cast(list[dict[str, str]], st.session_state["history"])
 
 
@@ -84,11 +99,13 @@ class AsyncRunner:
     """Run async callables on a persistent event loop in a background thread."""
 
     def __init__(self) -> None:
+        """Start a background event loop thread for async tasks."""
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(target=self._run_loop, daemon=True)
         self._thread.start()
 
     def _run_loop(self) -> None:
+        """Run the event loop forever on the background thread."""
         asyncio.set_event_loop(self._loop)
         self._loop.run_forever()
 
@@ -133,6 +150,7 @@ def _submit_async(coro: Awaitable[T]) -> Future[T]:
 
 
 def _prompt_presets_key() -> str:
+    """Return a unique key for prompt preset widgets."""
     nonce = st.session_state.get("prompt_presets_nonce", 0)
     return f"prompt_presets__{nonce}"
 
@@ -140,23 +158,18 @@ def _prompt_presets_key() -> str:
 def _load_doc_classifier_config() -> DocClassifierMCPConfig:
     """Load the doc-classifier MCP config, creating a default file if needed."""
     config_path = _DOC_CLASSIFIER_CONFIG_PATH
-    if not config_path.exists() or config_path.stat().st_size == 0:
-        config = DocClassifierMCPConfig(checkpoint_path=None, device="auto")
-        config.save_toml(config_path)
-        return config
+    if not config_path.exists():
+        try:
+            return DocClassifierMCPConfig(checkpoint_path=None, device="auto")
+        except Exception:
+            pass
 
     try:
         return DocClassifierMCPConfig.from_toml(config_path)
     except Exception:
         logger.exception("Failed to load doc-classifier config at %s. Using defaults.", config_path)
         config = DocClassifierMCPConfig(checkpoint_path=None, device="auto")
-        config.save_toml(config_path)
         return config
-
-
-def _save_doc_classifier_config(config: DocClassifierMCPConfig) -> None:
-    """Persist the doc-classifier MCP config to disk."""
-    config.save_toml(_DOC_CLASSIFIER_CONFIG_PATH)
 
 
 def _render_prompt_presets(presets: list[PromptPreset]) -> str | None:
@@ -183,14 +196,45 @@ def _get_pending_supervisor_future() -> Future[tuple["BaseMessage", str | None]]
     )
 
 
+def _sync_supervisor_running_flag() -> None:
+    """Keep `supervisor_running` consistent with the pending future.
+
+    This is defensive: Streamlit reruns, cache restores, or transient failures can
+    leave `supervisor_running` stuck in the wrong state. We recompute it from the
+    actual `pending_supervisor_future` to avoid:
+    - the UI showing "running" when no background task exists,
+    - polling fragments running forever after a restart,
+    - stale futures (or exceptions when checking `.done()`) leaving the app in a
+      permanently busy state.
+
+    If the future is missing or invalid, we clear it and set the flag to False.
+    """
+    future = _get_pending_supervisor_future()
+    if future is None:
+        st.session_state["supervisor_running"] = False
+        return
+    try:
+        st.session_state["supervisor_running"] = not future.done()
+    except Exception:
+        st.session_state.pop("pending_supervisor_future", None)
+        st.session_state["supervisor_running"] = False
+
+
 def _is_supervisor_running() -> bool:
     """Check whether the supervisor is still running."""
     return bool(st.session_state.get("supervisor_running", False))
 
 
 def _get_image_cache() -> dict[str, Image.Image]:
+    """Return the in-memory image cache used across render stages."""
     cache = st.session_state.setdefault("image_cache", {})
     return cast(dict[str, Image.Image], cache)
+
+
+def _get_map_xy_cache() -> dict[str, np.ndarray]:
+    """Return the cache for map_xy overlays to avoid repeated downloads."""
+    cache = st.session_state.setdefault("map_xy_cache", {})
+    return cast(dict[str, np.ndarray], cache)
 
 
 def _consume_pending_supervisor() -> bool:
@@ -244,6 +288,10 @@ def _get_active_session(force_refresh: bool = False) -> SessionState | None:
         cached = st.session_state.get("cached_session")
         if cached is not None:
             return cast(SessionState, cached)
+    else:
+        cached = st.session_state.get("cached_session")
+        if cached is None:
+            cached = None
 
     try:
         session = _run_async(SessionClient.get(session_id))
@@ -254,6 +302,7 @@ def _get_active_session(force_refresh: bool = False) -> SessionState | None:
 
 
 def _get_session_progress(force_refresh: bool = False) -> SessionProgress | None:
+    """Fetch session progress, optionally forcing a backend refresh."""
     session_id = get_session_id()
     if not session_id:
         st.session_state.pop("cached_progress", None)
@@ -263,6 +312,10 @@ def _get_session_progress(force_refresh: bool = False) -> SessionProgress | None
         cached = st.session_state.get("cached_progress")
         if cached is not None:
             return cast(SessionProgress, cached)
+    else:
+        cached = st.session_state.get("cached_progress")
+        if cached is None:
+            cached = None
 
     try:
         progress = _run_async(SessionClient.get_progress(session_id))
@@ -273,12 +326,14 @@ def _get_session_progress(force_refresh: bool = False) -> SessionProgress | None
 
 
 def _short_session_id(session_id: str) -> str:
+    """Return a short, user-friendly session id for display."""
     if len(session_id) <= 12:
         return session_id
     return f"{session_id[:8]}...{session_id[-4:]}"
 
 
 def _format_document_corners(points: list[BBoxPoint] | None) -> str:
+    """Format document corner points into a compact, multi-line string."""
     if not points or len(points) < 4:
         return "—"
     labels = ("UL", "UR", "LR", "LL")
@@ -287,6 +342,7 @@ def _format_document_corners(points: list[BBoxPoint] | None) -> str:
 
 
 def _count_text_items(text_items: list[TextItem] | None) -> tuple[int, int, int]:
+    """Count total text items plus translated/font-detected counts."""
     if not text_items:
         return 0, 0, 0
     translated = sum(1 for item in text_items if isinstance(item, HasTranslation))
@@ -297,6 +353,7 @@ def _count_text_items(text_items: list[TextItem] | None) -> tuple[int, int, int]
 def _render_session_overview(
     session: SessionState | None, progress: SessionProgress | None
 ) -> None:
+    """Render the session summary panel in the sidebar."""
     session_id = get_session_id()
     if not session_id:
         st.caption("No active session yet.")
@@ -413,17 +470,8 @@ def _render_session_overview(
             st.json(session.model_dump(), expanded=False)
 
 
-def _render_session_sidebar_content(*, force_refresh: bool) -> SessionState | None:
-    """Render the sidebar's Session panel using cached or refreshed state."""
-    session = _get_active_session(force_refresh=force_refresh)
-    progress = _get_session_progress(force_refresh=force_refresh)
-
-    _render_classifier_checkpoint_selector()
-    _render_session_overview(session, progress)
-    return session
-
-
 def _render_session_tools(session: SessionState | None) -> None:
+    """Render session import/export and cleanup tools."""
     session_id = get_session_id()
     if session is None:
         st.caption("Session state unavailable.")
@@ -520,6 +568,7 @@ def _render_session_tools(session: SessionState | None) -> None:
 
 
 def _session_signature(session: SessionState) -> tuple[object, ...]:
+    """Build a signature for key session assets to detect changes."""
     extracted = session.extractedDocument
     superres = session.superResolvedDocument
     return (
@@ -532,6 +581,10 @@ def _session_signature(session: SessionState) -> tuple[object, ...]:
 
 
 def _maybe_rerun_on_session_change(session: SessionState | None) -> None:
+    """Rerun the app if key session assets changed to refresh caches/UI.
+
+    This ensures updated document IDs or overlays are reflected immediately.
+    """
     if session is None:
         return
     signature = _session_signature(session)
@@ -543,6 +596,7 @@ def _maybe_rerun_on_session_change(session: SessionState | None) -> None:
         return
     st.session_state["last_session_signature"] = signature
     st.session_state.pop("image_cache", None)
+    st.session_state.pop("map_xy_cache", None)
     st.session_state.pop("extracted_image_id", None)
     st.session_state.pop("extracted_image", None)
     st.rerun(scope="app")
@@ -553,6 +607,16 @@ def _maybe_rerun_if_supervisor_done() -> None:
     future = _get_pending_supervisor_future()
     if future is not None and future.done():
         st.rerun(scope="app")
+
+
+def _render_session_sidebar_content(*, force_refresh: bool) -> SessionState | None:
+    """Render the sidebar's Session panel using cached or refreshed state."""
+    session = _get_active_session(force_refresh=force_refresh)
+    progress = _get_session_progress(force_refresh=force_refresh)
+
+    _render_classifier_checkpoint_selector()
+    _render_session_overview(session, progress)
+    return session
 
 
 @st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
@@ -610,14 +674,13 @@ def _render_classifier_checkpoint_selector() -> None:
         return
 
     config.checkpoint_path = Path(selected_rel)
-    _save_doc_classifier_config(config)
     doc_classifier_mcp_server.reset_runtime()
 
 
 def _render_sidebar() -> None:
     """Render sidebar with optional polling."""
     st.subheader("Session")
-    if ENABLE_SESSION_POLLING:
+    if ENABLE_SESSION_POLLING and _is_supervisor_running():
         _render_sidebar_fragment()
         return
 
@@ -628,13 +691,15 @@ def _render_sidebar() -> None:
 
 
 def _render_top_right_tools(session: SessionState | None) -> None:
-    left, right = st.columns([8, 2])
+    """Render the top-right popover with session tools."""
+    _, right = st.columns([8, 2])
     with right:
         with st.popover("Session tools", use_container_width=True):
             _render_session_tools(session)
 
 
 def _render_chat(history: list[dict[str, str]]) -> None:
+    """Render the chat history and the running indicator."""
     st.title("TrÄenslÄnzÖr 0815 Döküment Äsißtänt")
     for message in history:
         with st.chat_message(message["role"]):
@@ -680,7 +745,7 @@ def fetch_image(
     session: SessionState,
     stage: Literal["raw", "extracted", "rendered", "superres"],
 ) -> tuple[Image.Image | None, str | None, str | None]:
-    """Fetch the requested stage image and apply overlays as needed.
+    """Fetch the requested stage image and return it with cache support.
 
     Args:
         session: Active session state.
@@ -729,8 +794,11 @@ def fetch_image(
             image = cached
         else:
             try:
+                timeout = 10.0 if stage == "superres" else None
                 max_pixels = 0 if stage == "superres" else 50_000_000
-                image = _run_async(FileClient.get_image(file_id, max_pixels=max_pixels))
+                image = _run_async(
+                    FileClient.get_image(file_id, timeout=timeout, max_pixels=max_pixels)
+                )
             except Exception:
                 logger.exception("Failed to fetch image for stage %s (file_id=%s)", stage, file_id)
                 failure_reason = "Failed to fetch image."
@@ -752,31 +820,47 @@ def fetch_image(
 
 def _render_overlay_image(
     session: SessionState,
+    *,
+    allow_refresh: bool,
 ) -> tuple[Image.Image | None, str | None, str | None]:
-    """Render the raw image with polygon and map_xy grid overlays."""
+    """Render the raw image with polygon and optional map_xy grid overlays.
+
+    When allow_refresh is False, only cached assets are used to avoid heavy I/O.
+    """
     file_id = session.rawDocumentId
     if not file_id:
         return None, None, "No raw document."
 
-    try:
-        image = _run_async(FileClient.get_image(file_id))
-    except Exception:
-        logger.exception("Failed to fetch raw image for overlay (file_id=%s)", file_id)
-        return None, file_id, "Failed to fetch image."
+    image: Image.Image | None = None
+    if not allow_refresh:
+        image = _get_image_cache().get(file_id)
 
     if image is None:
-        return None, file_id, "Image not found."
+        try:
+            image = _run_async(FileClient.get_image(file_id))
+        except Exception:
+            logger.exception("Failed to fetch raw image for overlay (file_id=%s)", file_id)
+            return None, file_id, "Failed to fetch image."
+
+        if image is None:
+            return None, file_id, "Image not found."
+        image.load()
+        _get_image_cache()[file_id] = image
 
     extracted = session.extractedDocument
     if extracted and extracted.documentCoordinates:
         image = _draw_document_outline(image, extracted.documentCoordinates)
 
-    if extracted and extracted.mapXYId:
-        try:
-            map_xy = _run_async(FileClient.get_numpy_array(extracted.mapXYId))
-        except Exception:
-            logger.exception("Failed to fetch map_xy overlay (file_id=%s)", extracted.mapXYId)
-            map_xy = None
+    if extracted and extracted.mapXYId and allow_refresh:
+        map_xy = _get_map_xy_cache().get(extracted.mapXYId)
+        if map_xy is None:
+            try:
+                map_xy = _run_async(FileClient.get_numpy_array(extracted.mapXYId))
+            except Exception:
+                logger.exception("Failed to fetch map_xy overlay (file_id=%s)", extracted.mapXYId)
+                map_xy = None
+            if map_xy is not None:
+                _get_map_xy_cache()[extracted.mapXYId] = map_xy
         if map_xy is not None:
             np_img = np.array(image.convert("RGB"))
             np_img = draw_grid_overlay(np_img, map_xy, step=40)
@@ -786,6 +870,7 @@ def _render_overlay_image(
 
 
 def _ensure_session_id() -> str:
+    """Ensure there is an active file-server session id."""
     if session_id := get_session_id():
         return session_id
     session_id = _run_async(SessionClient.create(initialize_session()))
@@ -793,21 +878,50 @@ def _ensure_session_id() -> str:
     return session_id
 
 
-@st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
-def do_render_image(stage: str, label: str) -> None:
-    session = _get_active_session()
+def _render_image_stage(
+    stage: str,
+    label: str,
+    *,
+    session: SessionState | None,
+    allow_refresh: bool,
+    allow_session_refresh: bool,
+) -> None:
+    """Render a single image stage with optional refresh/caching rules."""
+    if allow_session_refresh or session is None:
+        session = _get_active_session()
+    if session is None:
+        st.caption("No active session.")
+        return
     if stage == "overlay":
-        img, file_id, reason = _render_overlay_image(session)
+        img, file_id, reason = _render_overlay_image(session, allow_refresh=allow_refresh)
     else:
         img, file_id, reason = fetch_image(session, stage)
     if img is not None:
         st.caption(f"{label} document image ({file_id}).")
-        st.image(img, width="stretch")
+        if stage == "superres":
+            max_pixels = img.width * img.height
+            with _allow_large_images(max_pixels):
+                st.image(img, width="stretch")
+        else:
+            st.image(img, width="stretch")
     elif reason:
         st.caption(reason or "Failed to fetch image")
 
 
+@st.fragment(run_every=_SUPERVISOR_POLL_INTERVAL_SECONDS)
+def _render_image_stage_polling(stage: str, label: str) -> None:
+    """Polling fragment that renders an image stage without refresh-heavy work."""
+    _render_image_stage(
+        stage,
+        label,
+        session=None,
+        allow_refresh=False,
+        allow_session_refresh=True,
+    )
+
+
 def _render_image(session: SessionState | None) -> None:
+    """Render the image area with stage tabs and polling-aware updates."""
     if session is None:
         return
 
@@ -822,10 +936,20 @@ def _render_image(session: SessionState | None) -> None:
     tabs = st.tabs([label for label, _ in tab_specs])
     for (label, stage), tab in zip(tab_specs, tabs):
         with tab:
-            do_render_image(stage, label)
+            if _is_supervisor_running():
+                _render_image_stage_polling(stage, label)
+            else:
+                _render_image_stage(
+                    stage,
+                    label,
+                    session=session,
+                    allow_refresh=True,
+                    allow_session_refresh=False,
+                )
 
 
 def _collect_prompt() -> str | ChatInputValue | None:
+    """Collect user input from chat or prompt presets."""
     presets = get_prompt_presets()
     preset_prompt = _render_prompt_presets(presets)
     prompt = st.chat_input(
@@ -840,6 +964,7 @@ def _collect_prompt() -> str | ChatInputValue | None:
 
 
 def _handle_prompt(prompt: str | ChatInputValue) -> None:
+    """Handle user prompt and file uploads, then start supervisor as needed."""
     user_text = prompt if isinstance(prompt, str) else prompt.text
     uploaded_files = [] if isinstance(prompt, str) else list(prompt.files)
 
@@ -877,6 +1002,7 @@ def _handle_prompt(prompt: str | ChatInputValue) -> None:
 
 
 def _render_layout(session: SessionState | None) -> None:
+    """Render the main two-column layout (chat + images)."""
     chat_col, img_col = st.columns([1, 1], gap="large")
     with chat_col:
         _render_chat(_get_history())
@@ -885,11 +1011,13 @@ def _render_layout(session: SessionState | None) -> None:
 
 
 def main() -> None:
+    """Streamlit app entrypoint: restore state, render UI, handle input."""
     if not apply_pending_restore(run_async=_run_async):
         maybe_auto_restore_from_pickle(
             default_assistant_message=DEFAULT_ASSISTANT_MESSAGE,
             run_async=_run_async,
         )
+    _sync_supervisor_running_flag()
     # Handle completed supervisor runs
     if _consume_pending_supervisor():
         st.rerun()
