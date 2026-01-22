@@ -7,11 +7,13 @@ The supervisor is the central component of the application.
 It is responsible for the interaction with the agent #gls("llm") and provides the #gls("llm") with callable tools.
 Although the implementation is concise, it reflects extensive experimentation to arrive at a reliable solution.
 
+Substantial time was spent tuning the #gls("llm") prompt, and it remained one of the most sensitive parts of the system.
+Even minor refinements intended to improve alignment could introduce subtle regressions, so each change required careful testing and multiple rounds of iteration.
 
 === Internal Structure 
 One of the requirements was to avoid programming a fixed sequence of tools that the process would follow once all information was gathered. Therefore, we only use LanGraph indirectly via LangChain's create_agent method, which handles tool execution after an #gls("llm") call when specified.
 
-To provide the current context, we leverage LangChain's dynamic_prompt hook to inject session context into the #gls("llm") (see @sec-prompt for details).
+To provide the current context, we leverage LangChain's `dynamic_prompt` hook to inject session context into the #gls("llm") (see @sec-prompt for details).
 We opted to let the #gls("llm") inject the `session_id` into tool calls directly.
 Programmatic injection would have required modifying the tool definitions, which we deemed unnecessary since the #gls("llm") handles the `session_id` injection seamlessly.
 
