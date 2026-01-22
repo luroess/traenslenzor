@@ -77,3 +77,9 @@ verbose            = true
         # Aggressive augmentation for scratch training
         transform_type = "val"
         convert_to_rgb = false
+
+    [datamodule_config.test_ds]
+        [datamodule_config.test_ds.transform_config]
+        # Aggressive augmentation for scratch training
+        transform_type = "val"
+        convert_to_rgb = false
