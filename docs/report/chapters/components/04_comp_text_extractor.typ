@@ -24,7 +24,7 @@
   ]<fig-ocr-result>],
   [
 The Text Extractor component is responsible for extracting the text and the areas where the text is contained in the document.
-For this a #gls("ocr") library is utilized.
+For this, a #gls("ocr") library is utilized.
 
 == Document Deskew
 The goal of document deskewing is to find a document in an image and straighten it so it looks like it was scanned from the top.
@@ -34,18 +34,21 @@ From this, the code finds contours in the image and looks at the largest ones, a
 Each contour is simplified, and if it has four corner points, is convex, and covers a large part of the image, it is treated as the document boundary.
 
 After the document corners are found, they are put into a fixed order (top-left, top-right, bottom-right, bottom-left).
-Then we estimate the width and height of the document and computes a perspective transform.
+Then, we estimate the width and height of the document and compute a perspective transform.
 This transform is used to warp the image so the document becomes rectangular and straight.
 The final output is the deskewed image, along with the corner points and the transformation matrix, which can be used for #gls("ocr").
 
 === PaddleOCR
 
 A first version of the text extractor was realized using PaddleOCR.
-Integrating PaddleOCR into the application proved difficult due to it not being compatible with the used Langchain version 1.0.0. 
+Integrating PaddleOCR into the application proved difficult due to it not being compatible with the used LangChain version 1.0.0.
 As the incompatibility arose only due to two incorrect import paths in a single file, a small shim wrapper[@paddle_shim] requiring import prior to the PaddleOCR library import sufficed to fix the issue.
 
-A further issue arose in conjunction with PaddleOCR. After running the text extraction tool call, log messages kept not showing anymore. 
-The Paddle framework resets the application wide log level configuration. The culprit could be identified and fixed through a pull request in the Paddle framework. Until the changes would be downstreamed into PaddleOCR, the log level is reset after execution of the text extractor module@noauthor_paddlepaddlepaddle_nodate.
+A further issue arose in conjunction with PaddleOCR.
+After running the text extraction tool call, log messages kept not showing anymore.
+The Paddle framework resets the application-wide log level configuration.
+The culprit could be identified and fixed through a pull request in the Paddle framework.
+Until the changes are downstreamed into PaddleOCR, the log level is reset after execution of the text extractor module@noauthor_paddlepaddlepaddle_nodate.
 ])
 
 #wrap-content(
@@ -56,17 +59,19 @@ The Paddle framework resets the application wide log level configuration. The cu
     #image("/imgs/paddle_ocr_boxes.png")
   ],
   [
-    Lastly, a more important and harder to solve problem arose with PaddleOCR.
-    Though text recognition worked well, the bounding boxes reported by PaddleOCR proved to be inaccurate. This lead to varied results when rendering the final image by the text renderer.
-    This issue, also experienced by other groups in the lecture, proved not to be easily fixable.
-    Therefore the decision was made to integrate a different #gls("ocr") library with hopefully better results.
+  Lastly, a more important and harder to solve problem arose with PaddleOCR.
+  Though text recognition worked well, the bounding boxes reported by PaddleOCR proved to be inaccurate.
+  This led to varied results when rendering the final image with the text renderer.
+  This issue, also experienced by other groups in the lecture, proved not to be easily fixable.
+  Therefore, the decision was made to integrate a different #gls("ocr") library with hopefully better results.
 
-    === PyTesseract
-    PyTesseract was selected as a replacement for PaddleOCR based on a comparison of open-source OCR libraries @ocr-comparison.
-    The detection quality meets the requirements of our use case and produces the results shown in @fig-ocr-result.
-    A key challenge was adapting the OCR output to our internal data structures.
-    Since Tesseract provides word-level results, we aggregate words into line-level text items by grouping them by page, block, paragraph, and line identifiers, and further splitting them when large horizontal gaps or vertical misalignment indicate separate columns or snippets.
-    Each resulting segment is merged into a single OCRTextItem with concatenated text, an averaged confidence score, and a bounding box enclosing all included words.
+  === PyTesseract
+  PyTesseract was selected as a replacement for PaddleOCR based on a comparison of open-source OCR libraries @ocr-comparison.
+  The detection quality meets the requirements of our use case and produces the results shown in @fig-ocr-result.
+  A key challenge was adapting the OCR output to our internal data structures.
+  Since Tesseract provides word-level results, we aggregate words into line-level text items by grouping them by page, block, paragraph, and line identifiers, and further splitting them when large horizontal gaps or vertical misalignment indicate separate columns or snippets.
+  Each resulting segment is merged into a single OCRTextItem with concatenated text, an averaged confidence score, and a bounding box enclosing all included words.
+
   ]
 )
 

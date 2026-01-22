@@ -18,12 +18,12 @@
     #image("/imgs/sample_straight.jpg", height: 17em)
   ]<fig-example-straight>],
   [
-    The Translänzor document assistant can translate multiple document images in succession by copying them directly into the chat, similar to existing tools.
-    It can also load images from locations relative to its working directory.
-    The system detects text blocks, translates them into another language, and preserves the original font, size, position, and orientation.
-    In addition, users can modify text within the image via chat input, and the supervisor (#gls("llm")) incorporates these changes, rerendering the image if necessary.
-    The system also recognizes document types, providing output that maintains the structure and appearance of the original, as illustrated in @fig-example-translation and @fig-example-straight.
-
+  The Translenzor Document Assistant can translate documents in place through a convenient chat-based user interface.
+  It is modeled after similar applications such as Google Translate. 
+  Users can upload images directly in the chat or load images from locations relative to the working directory. 
+  The system detects text blocks, translates them into another language, and preserves the original font, size, position, and orientation. 
+  In addition, users can modify text within the image via chat input, and the supervisor (#gls("llm")) incorporates these changes, re-rendering the image if necessary.
+  The system also recognizes document types, producing output that maintains the structure and appearance of the original, as illustrated in @fig-example-translation and @fig-example-straight.
   ]
 )
 
