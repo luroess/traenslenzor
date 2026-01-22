@@ -60,21 +60,21 @@ The model achieved high accuracy on the specific synthetic validation set, demon
 ==== Font Size Estimation (MLP)
 For font size estimation, separate Multi-Layer Perceptrons (MLPs) were trained for each of the five fonts. Each model was trained on 10,000 synthetic text box samples using a 34-dimensional feature vector (containing dimensions, text length, and log-transformed statistics). The models converged effectively, achieving an average Mean Absolute Error (MAE) of less than 0.9 points across all fonts on the synthetic test set.
 
-#box(fill: luma(245), inset: 6pt, radius: 4pt)[
-  Results are taken from `traenslenzor/font_detector/checkpoints/training_summary.json`.
-]
-#table(
-  columns: (auto, auto, auto, auto),
-  inset: 5pt,
-  align: center,
-  [*Font*], [*MAE*], [*RMSE*], [*Epoch*],
-  [Roboto-Regular], [0.88 pt], [1.41 pt], [46],
-  [RobotoMono-Regular], [0.87 pt], [1.32 pt], [74],
-  [Inter-Regular], [0.81 pt], [1.38 pt], [46],
-  [Lato-Regular], [0.81 pt], [1.33 pt], [68],
-  [IBMPlexSans-Regular], [0.82 pt], [1.33 pt], [62],
-  table.hline(),
-  [*Average*], [*0.84 pt*], [*1.35 pt*], [-],
+#figure(
+  table(
+    columns: (auto, auto, auto, auto),
+    inset: 5pt,
+    align: center,
+    [*Font*], [*MAE*], [*RMSE*], [*Epoch*],
+    [Roboto-Regular], [0.88 pt], [1.41 pt], [46],
+    [RobotoMono-Regular], [0.87 pt], [1.32 pt], [74],
+    [Inter-Regular], [0.81 pt], [1.38 pt], [46],
+    [Lato-Regular], [0.81 pt], [1.33 pt], [68],
+    [IBMPlexSans-Regular], [0.82 pt], [1.33 pt], [62],
+    table.hline(),
+    [*Average*], [*0.84 pt*], [*1.35 pt*], [-],
+  ),
+  caption: [Results are taken from `traenslenzor/font_detector/checkpoints/training_summary.json`.],
 )
 
 === Final Evaluation <font_eval_final>
@@ -102,16 +102,16 @@ The following results compare the ground truth (`scientific_publication_metadata
   )
 ]
 
-**Analysis:**
+#figure(
+  image("../../imgs/scientific_publication_Lato_session_details.png", width: 90%),
+  caption: [Session details view showing detected font properties],
+) <fig:font_det_session>
+
+==== Analysis
 - **Size Accuracy:** The ink-measurement logic proved effective, bringing the body text error down to negligible levels (~1pt). Section headers were slightly underestimated, likely due to their sparse ink density relative to their bounding box height.
 - **Font Identification:** The system correctly identified the font as **Lato-Regular** with **42.87% confidence**. While the confidence score is lower than ideal (likely due to the image quality and the dense scientific layout), the classification was correct.
 
 #figure(
   image("../../imgs/scientific_publication_Lato_with_detection_box.png", width: 90%),
-  caption: [Detection bounding boxes on the scientific publication sample.],
+  caption: [Used scientific publication sample for final evaluation with detected bounding box],
 ) <fig:font_det_box>
-
-#figure(
-  image("../../imgs/scientific_publication_Lato_session_details.png", width: 90%),
-  caption: [Session details view showing detected font properties.],
-) <fig:font_det_session>
