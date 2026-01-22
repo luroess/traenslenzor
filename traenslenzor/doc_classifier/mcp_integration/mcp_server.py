@@ -22,7 +22,9 @@ from traenslenzor.file_server.session_state import SessionState
 ADDRESS = "127.0.0.1"
 PORT = 8007
 DOC_CLASSIFIER_BASE_PATH = f"http://{ADDRESS}:{PORT}/mcp"
-_DOC_CLASSIFIER_CONFIG_PATH = Path(__file__).resolve().parents[3] / "config" / "doc-classifier.toml"
+_DOC_CLASSIFIER_CONFIG_PATH = (
+    Path(__file__).resolve().parents[3] / ".configs" / "doc-classifier.toml"
+)
 
 doc_classifier_mcp = FastMCP(
     name="doc-classifier",

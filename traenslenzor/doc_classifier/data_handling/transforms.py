@@ -14,6 +14,7 @@ Three pipeline types are provided:
 from typing import TYPE_CHECKING, Literal
 
 import albumentations as A
+import torch
 from albumentations.pytorch import ToTensorV2
 from pydantic import Field
 
@@ -81,6 +82,36 @@ class TransformConfig(BaseConfig[A.Compose]):
             return A.NoOp()
         mean, std = self._resolve_mean_std()
         return A.Normalize(mean=mean, std=std)
+
+    def unnormalize_tensor(self, tensor: torch.Tensor) -> torch.Tensor:
+        """Invert normalization for visualization.
+
+        Args:
+            tensor (Tensor['C H W' | 'B C H W', float]): Normalized image tensor.
+
+        Returns:
+            Tensor: Unnormalized tensor in [0, 1] matching input shape.
+        """
+        if not self.apply_normalization:
+            return tensor
+
+        mean, std = self._resolve_mean_std()
+        mean_t = torch.tensor(mean, device=tensor.device, dtype=tensor.dtype)
+        std_t = torch.tensor(std, device=tensor.device, dtype=tensor.dtype)
+
+        if tensor.ndim == 3:
+            mean_t = mean_t[:, None, None]
+            std_t = std_t[:, None, None]
+        elif tensor.ndim == 4:
+            mean_t = mean_t[None, :, None, None]
+            std_t = std_t[None, :, None, None]
+        else:
+            raise ValueError(
+                "Expected tensor with shape (C, H, W) or (B, C, H, W), "
+                f"got shape={tuple(tensor.shape)}."
+            )
+
+        return (tensor * std_t + mean_t).clamp(0.0, 1.0)
 
     def _pad_to_square(self) -> A.PadIfNeeded:
         """Pad to a square canvas while preserving full-page layout."""

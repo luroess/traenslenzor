@@ -1,13 +1,17 @@
 import os
+from collections.abc import Iterable, Mapping
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import Field
 from pytorch_lightning.loggers import WandbLogger
 
 from ..utils import BaseConfig, Console
 from .path_config import PathConfig
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 class WandbConfig(BaseConfig):
@@ -97,6 +101,23 @@ class WandbConfig(BaseConfig):
             "'project/run_id', or a wandb.ai URL."
         )
 
+    @staticmethod
+    def _flatten_dict(
+        data: Mapping[str, Any],
+        *,
+        parent_key: str = "",
+        sep: str = ".",
+    ) -> dict[str, Any]:
+        items: dict[str, Any] = {}
+        for key, value in data.items():
+            key_str = str(key)
+            new_key = f"{parent_key}{sep}{key_str}" if parent_key else key_str
+            if isinstance(value, Mapping):
+                items.update(WandbConfig._flatten_dict(value, parent_key=new_key, sep=sep))
+            else:
+                items[new_key] = value
+        return items
+
     def resolve_resume_run(self) -> tuple[str | None, Any | None]:
         """Resolve the run id (and optionally the run object) when resuming."""
         if self.run_id:
@@ -149,6 +170,177 @@ class WandbConfig(BaseConfig):
         run = matches[0]
         self.run_id = run.id
         return run.id, run
+
+    def build_runs_dataframe(
+        self,
+        runs: Iterable[Any],
+        *,
+        include_summary: bool = True,
+        include_config: bool = True,
+        include_unprefixed: bool = True,
+        include_raw: bool = True,
+        prefer: Literal["summary", "config"] = "summary",
+        summary_prefix: str = "summary.",
+        config_prefix: str = "config.",
+        flatten_sep: str = ".",
+    ) -> "pd.DataFrame":
+        """Build a DataFrame from a list of W&B runs.
+
+        Args:
+            runs: Iterable of W&B run objects.
+            include_summary: Include flattened summary metrics columns.
+            include_config: Include flattened config columns.
+            include_unprefixed: Include unprefixed merged columns for easy `query()`.
+            include_raw: Include raw `summary` and `config` dict columns.
+            prefer: Which source wins when summary/config share a key in unprefixed columns.
+            summary_prefix: Prefix applied to flattened summary columns.
+            config_prefix: Prefix applied to flattened config columns.
+            flatten_sep: Separator used when flattening nested dicts.
+
+        Returns:
+            A pandas DataFrame with run metadata and flattened metrics/configs.
+        """
+        import pandas as pd
+
+        rows: list[dict[str, Any]] = []
+        for run in runs:
+            summary_dict = getattr(getattr(run, "summary", None), "_json_dict", None) or {}
+            if not isinstance(summary_dict, Mapping):
+                summary_dict = {}
+            config_dict = getattr(run, "config", None) or {}
+            if not isinstance(config_dict, Mapping):
+                config_dict = {}
+            config_dict = {
+                str(key): value
+                for key, value in config_dict.items()
+                if not str(key).startswith("_")
+            }
+
+            summary_flat = (
+                self._flatten_dict(summary_dict, sep=flatten_sep) if include_summary else {}
+            )
+            config_flat = self._flatten_dict(config_dict, sep=flatten_sep) if include_config else {}
+
+            match prefer:
+                case "summary":
+                    merged = dict(config_flat)
+                    merged.update(summary_flat)
+                case "config":
+                    merged = dict(summary_flat)
+                    merged.update(config_flat)
+                case _:
+                    raise ValueError("prefer must be 'summary' or 'config'.")
+
+            row: dict[str, Any] = {
+                "run_id": getattr(run, "id", None),
+                "name": getattr(run, "name", None),
+                "state": getattr(run, "state", None),
+                "entity": getattr(run, "entity", None),
+                "project": getattr(run, "project", None),
+                "created_at": getattr(run, "created_at", None),
+                "updated_at": getattr(run, "updated_at", None),
+                "url": getattr(run, "url", None),
+                "group": getattr(run, "group", None),
+                "job_type": getattr(run, "job_type", None),
+                "tags": list(getattr(run, "tags", []) or []),
+            }
+
+            if include_raw:
+                row["summary"] = summary_dict
+                row["config"] = config_dict
+
+            if include_summary:
+                row.update({f"{summary_prefix}{key}": value for key, value in summary_flat.items()})
+
+            if include_config:
+                row.update({f"{config_prefix}{key}": value for key, value in config_flat.items()})
+
+            if include_unprefixed:
+                for key, value in merged.items():
+                    if key in row:
+                        continue
+                    row[key] = value
+
+            rows.append(row)
+
+        return pd.DataFrame(rows)
+
+    def runs_dataframe(
+        self,
+        *,
+        entity: str | None = None,
+        project: str | None = None,
+        runs: Iterable[Any] | None = None,
+        query: str | None = None,
+        query_engine: Literal["python", "numexpr"] = "python",
+        run_filters: dict[str, Any] | None = None,
+        include_summary: bool = True,
+        include_config: bool = True,
+        include_unprefixed: bool = True,
+        include_raw: bool = True,
+        prefer: Literal["summary", "config"] = "summary",
+        summary_prefix: str = "summary.",
+        config_prefix: str = "config.",
+        flatten_sep: str = ".",
+    ) -> "pd.DataFrame":
+        """Fetch W&B runs and return a DataFrame (optionally filtered by query).
+
+        Args:
+            entity: W&B entity override. Defaults to config/env/default entity.
+            project: W&B project override. Defaults to config project.
+            runs: Optional iterable of runs (bypass API call).
+            query: Pandas query string applied to the resulting DataFrame.
+            query_engine: Pandas query engine ("python" or "numexpr").
+            run_filters: Optional W&B API filters dict.
+            include_summary: Include flattened summary metrics columns.
+            include_config: Include flattened config columns.
+            include_unprefixed: Include unprefixed merged columns for easy `query()`.
+            include_raw: Include raw `summary` and `config` dict columns.
+            prefer: Which source wins when summary/config share a key in unprefixed columns.
+            summary_prefix: Prefix applied to flattened summary columns.
+            config_prefix: Prefix applied to flattened config columns.
+            flatten_sep: Separator used when flattening nested dicts.
+
+        Returns:
+            A pandas DataFrame of run metadata and metrics.
+        """
+        if runs is None:
+            import wandb
+
+            api = wandb.Api()
+            resolved_entity = (
+                entity
+                or self.entity
+                or getattr(api, "default_entity", None)
+                or os.getenv("WANDB_ENTITY")
+            )
+            resolved_project = project or self.project
+            if resolved_entity is None:
+                raise ValueError("W&B entity is required to list runs.")
+            if resolved_project is None:
+                raise ValueError("W&B project is required to list runs.")
+            run_path = f"{resolved_entity}/{resolved_project}"
+            if run_filters is None:
+                runs = api.runs(run_path)
+            else:
+                runs = api.runs(run_path, filters=run_filters)
+
+        df = self.build_runs_dataframe(
+            runs,
+            include_summary=include_summary,
+            include_config=include_config,
+            include_unprefixed=include_unprefixed,
+            include_raw=include_raw,
+            prefer=prefer,
+            summary_prefix=summary_prefix,
+            config_prefix=config_prefix,
+            flatten_sep=flatten_sep,
+        )
+
+        if query:
+            df = df.query(query, engine=query_engine)
+
+        return df
 
     def download_resume_checkpoint(
         self,

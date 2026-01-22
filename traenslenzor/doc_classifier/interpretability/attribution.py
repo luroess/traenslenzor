@@ -6,9 +6,12 @@ and converts their outputs into normalized heatmaps aligned with model inputs.
 
 from __future__ import annotations
 
+import contextlib
+import heapq
+import itertools
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
 
 import torch
 from captum.attr import (  # type: ignore[import-untyped]
@@ -24,6 +27,7 @@ from captum.attr import (  # type: ignore[import-untyped]
 from jaxtyping import Float, Int64
 from torch import Tensor, nn
 from torch.nn import functional as F
+from torch.utils.data import DataLoader, Dataset
 
 from ..utils import BaseConfig, Console
 
@@ -319,6 +323,268 @@ class AttributionResult:
     target: Int64[Tensor, "B"] | int | None  # noqa: F821
 
 
+@dataclass(slots=True)
+class AttributionSample:
+    """Sample metadata for best/worst attributions.
+
+    Attributes:
+        image: Normalized image tensor with shape (C, H, W).
+        label: Ground-truth class index.
+        pred: Predicted class index.
+        conf: Model confidence for the predicted class.
+        batch_idx: Batch index in the scan pass.
+        sample_idx: Index within the batch.
+    """
+
+    image: Float[Tensor, "C H W"]
+    label: int
+    pred: int
+    conf: float
+    batch_idx: int
+    sample_idx: int
+
+
+class _SafeDataset(Dataset):
+    def __init__(self, dataset: Dataset):
+        self.dataset = dataset
+
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    def __getitem__(self, idx: int) -> dict[str, Any] | None:
+        try:
+            return self.dataset[idx]
+        except Exception:
+            return None
+
+
+def _safe_collate(
+    batch: list[dict[str, Any] | None],
+) -> tuple[Tensor, Tensor, int] | None:
+    filtered = [item for item in batch if item is not None]
+    skipped = len(batch) - len(filtered)
+    if not filtered:
+        return None
+    images = torch.stack([item["image"] for item in filtered])
+    labels = torch.tensor([item["label"] for item in filtered], dtype=torch.long)
+    return images, labels, skipped
+
+
+def _extract_class_names(dataset: object) -> list[str]:
+    if hasattr(dataset, "features") and isinstance(dataset.features, dict):
+        label_feature = dataset.features.get("label")
+        if hasattr(label_feature, "names"):
+            return list(label_feature.names)
+    return []
+
+
+def find_best_worst(
+    model: nn.Module,
+    dataset: Dataset,
+    *,
+    device: torch.device | str,
+    batch_size: int = 64,
+    num_workers: int = 0,
+) -> tuple[AttributionSample, AttributionSample, list[str]]:
+    """Scan dataset to get the most confident correct and incorrect predictions.
+
+    Args:
+        model: Classification model returning logits.
+        dataset: Dataset yielding dicts with ``image`` and ``label`` keys.
+        device: Torch device for inference.
+        batch_size: Batch size for the scan.
+        num_workers: DataLoader workers (0 recommended for notebooks).
+
+    Returns:
+        Tuple of (best_sample, worst_sample, class_names).
+    """
+    console = Console.with_prefix("AttributionEngine", "find_best_worst")
+    best: AttributionSample | None = None
+    worst: AttributionSample | None = None
+    skipped_total = 0
+
+    class_names = _extract_class_names(dataset)
+    device_obj = torch.device(device)
+
+    loader: DataLoader = DataLoader(
+        _SafeDataset(dataset),
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        collate_fn=_safe_collate,
+        pin_memory=device_obj.type == "cuda",
+        persistent_workers=num_workers > 0,
+    )
+
+    was_training = model.training
+    model.eval()
+
+    amp_ctx = torch.amp.autocast("cuda") if device_obj.type == "cuda" else contextlib.nullcontext()
+
+    with torch.inference_mode():
+        for batch_idx, batch in enumerate(loader):
+            if batch is None:
+                continue
+            inputs, labels, skipped = batch
+            skipped_total += skipped
+            inputs = inputs.to(device_obj, non_blocking=True)
+            labels = labels.to(device_obj, non_blocking=True)
+            with amp_ctx:
+                logits = model(inputs)
+            probs = F.softmax(logits, dim=-1)
+            conf, preds = probs.max(dim=-1)
+            correct_mask = preds.eq(labels)
+
+            if correct_mask.any():
+                conf_correct = conf.masked_fill(~correct_mask, float("-inf"))
+                idx = int(conf_correct.argmax().item())
+                cand_conf = float(conf_correct[idx].item())
+                if best is None or cand_conf > best.conf:
+                    best = AttributionSample(
+                        image=inputs[idx].detach().float().cpu(),
+                        label=int(labels[idx].item()),
+                        pred=int(preds[idx].item()),
+                        conf=cand_conf,
+                        batch_idx=batch_idx,
+                        sample_idx=idx,
+                    )
+
+            if (~correct_mask).any():
+                conf_wrong = conf.masked_fill(correct_mask, float("-inf"))
+                idx = int(conf_wrong.argmax().item())
+                cand_conf = float(conf_wrong[idx].item())
+                if worst is None or cand_conf > worst.conf:
+                    worst = AttributionSample(
+                        image=inputs[idx].detach().float().cpu(),
+                        label=int(labels[idx].item()),
+                        pred=int(preds[idx].item()),
+                        conf=cand_conf,
+                        batch_idx=batch_idx,
+                        sample_idx=idx,
+                    )
+
+    if was_training:
+        model.train(True)
+
+    if skipped_total > 0:
+        console.warn(f"Skipped {skipped_total} corrupted images during scan.")
+    if best is None:
+        raise RuntimeError("No correct predictions found on the dataset.")
+    if worst is None:
+        raise RuntimeError("No incorrect predictions found on the dataset.")
+
+    return best, worst, class_names
+
+
+def find_best_worst_samples(
+    model: nn.Module,
+    dataset: Dataset,
+    *,
+    device: torch.device | str,
+    batch_size: int = 64,
+    num_workers: int = 0,
+    num_samples: int = 1,
+) -> tuple[list[AttributionSample], list[AttributionSample], list[str]]:
+    """Return top-k best/worst samples by confidence.
+
+    Args:
+        model: Classification model returning logits.
+        dataset: Dataset yielding dicts with ``image`` and ``label`` keys.
+        device: Torch device for inference.
+        batch_size: Batch size for the scan.
+        num_workers: DataLoader workers (0 recommended for notebooks).
+        num_samples: Number of samples to return per group.
+
+    Returns:
+        Tuple of (best_samples, worst_samples, class_names).
+    """
+    if num_samples < 1:
+        raise ValueError("num_samples must be >= 1.")
+
+    console = Console.with_prefix("AttributionEngine", "find_best_worst_samples")
+    skipped_total = 0
+
+    class_names = _extract_class_names(dataset)
+    device_obj = torch.device(device)
+
+    loader: DataLoader = DataLoader(
+        _SafeDataset(dataset),
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        collate_fn=_safe_collate,
+        pin_memory=device_obj.type == "cuda",
+        persistent_workers=num_workers > 0,
+    )
+
+    best_heap: list[tuple[float, int, AttributionSample]] = []
+    worst_heap: list[tuple[float, int, AttributionSample]] = []
+
+    was_training = model.training
+    model.eval()
+
+    amp_ctx = torch.amp.autocast("cuda") if device_obj.type == "cuda" else contextlib.nullcontext()
+
+    counter = itertools.count()
+
+    def _maybe_push(
+        heap: list[tuple[float, int, AttributionSample]],
+        sample: AttributionSample,
+    ) -> None:
+        order = next(counter)
+        if len(heap) < num_samples:
+            heapq.heappush(heap, (sample.conf, order, sample))
+            return
+        if heap[0][0] < sample.conf:
+            heapq.heapreplace(heap, (sample.conf, order, sample))
+
+    with torch.inference_mode():
+        for batch_idx, batch in enumerate(loader):
+            if batch is None:
+                continue
+            inputs, labels, skipped = batch
+            skipped_total += skipped
+            inputs = inputs.to(device_obj, non_blocking=True)
+            labels = labels.to(device_obj, non_blocking=True)
+            with amp_ctx:
+                logits = model(inputs)
+            probs = F.softmax(logits, dim=-1)
+            conf, preds = probs.max(dim=-1)
+            correct_mask = preds.eq(labels)
+
+            for i in range(inputs.shape[0]):
+                sample = AttributionSample(
+                    image=inputs[i].detach().float().cpu(),
+                    label=int(labels[i].item()),
+                    pred=int(preds[i].item()),
+                    conf=float(conf[i].item()),
+                    batch_idx=batch_idx,
+                    sample_idx=i,
+                )
+                if correct_mask[i]:
+                    _maybe_push(best_heap, sample)
+                else:
+                    _maybe_push(worst_heap, sample)
+
+    if was_training:
+        model.train(True)
+
+    if skipped_total > 0:
+        console.warn(f"Skipped {skipped_total} corrupted images during scan.")
+    if not best_heap:
+        raise RuntimeError("No correct predictions found on the dataset.")
+    if not worst_heap:
+        raise RuntimeError("No incorrect predictions found on the dataset.")
+
+    best = [
+        sample for _, _, sample in sorted(best_heap, key=lambda x: x[0], reverse=True)
+    ]
+    worst = [
+        sample for _, _, sample in sorted(worst_heap, key=lambda x: x[0], reverse=True)
+    ]
+    return best, worst, class_names
+
+
 class InterpretabilityConfig(BaseConfig["AttributionEngine"]):
     """Factory config that builds an :class:`AttributionEngine`.
 
@@ -379,6 +645,9 @@ __all__ = [
     "AttributionEngine",
     "AttributionMethod",
     "AttributionResult",
+    "AttributionSample",
     "BaselineStrategy",
+    "find_best_worst",
+    "find_best_worst_samples",
     "InterpretabilityConfig",
 ]

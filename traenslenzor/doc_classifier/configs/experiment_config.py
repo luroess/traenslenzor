@@ -7,10 +7,12 @@ from pathlib import Path
 
 import optuna
 import wandb
+from git import TYPE_CHECKING
 from pydantic import Field, ValidationInfo, field_validator, model_validator
-from pytorch_lightning import LightningDataModule, LightningModule, Trainer, seed_everything
+from pytorch_lightning import Trainer, seed_everything
 from typing_extensions import Self
 
+from ..interpretability.attribution_runner import AttributionRunConfig
 from ..lightning import (
     DocClassifierConfig,
     DocDataModuleConfig,
@@ -20,6 +22,10 @@ from ..lightning import (
 from ..utils import BaseConfig, Console, Stage
 from .optuna_config import OptunaConfig
 from .path_config import PathConfig
+
+if TYPE_CHECKING:
+    from ..lightning.lit_datamodule import DocDataModule
+    from ..lightning.lit_module import DocClassifierModule
 
 
 class ExperimentConfig(BaseConfig[Trainer]):
@@ -68,6 +74,9 @@ class ExperimentConfig(BaseConfig[Trainer]):
     )
     """Optional Optuna configuration enabling hyperparameter searches and trial
     orchestration when set."""
+
+    attribution_run: AttributionRunConfig | None = Field(default=None)
+    """Optional attribution scan configuration executed instead of training when enabled."""
 
     @property
     def default_config_path(self) -> Path:
@@ -179,7 +188,7 @@ class ExperimentConfig(BaseConfig[Trainer]):
         setup_stage: Stage | str = Stage.TRAIN,
         *,
         trial: optuna.Trial | None = None,
-    ) -> tuple[Trainer, LightningModule, LightningDataModule]:
+    ) -> tuple[Trainer, "DocClassifierModule", "DocDataModule"]:
         """Create trainer, module, and datamodule instances."""
         console = Console.with_prefix(self.__class__.__name__, "setup_target")
         console.set_verbose(self.verbose).set_debug(self.is_debug)
@@ -244,6 +253,10 @@ class ExperimentConfig(BaseConfig[Trainer]):
 
         console.log(f"Running experiment: {self.run_name} (stage={resolved_stage})")
 
+        if self.attribution_run is not None and self.attribution_run.enabled:
+            console.log("Attribution run enabled; running attribution scan.")
+            return self.run_attributions()
+
         trainer, lit_module, lit_datamodule = self.setup_target(
             setup_stage=resolved_stage,
         )
@@ -285,6 +298,22 @@ class ExperimentConfig(BaseConfig[Trainer]):
             return trainer
 
         return trainer
+
+    def run_attributions(self) -> Trainer:
+        """Run attribution scan configured by AttributionRunConfig.
+
+        Returns:
+            Trainer instance used during attribution setup.
+        """
+        if self.attribution_run is None or not self.attribution_run.enabled:
+            raise ValueError("AttributionRunConfig is not enabled.")
+
+        console = Console.with_prefix(self.__class__.__name__, "run_attributions")
+        console.set_verbose(self.verbose).set_debug(self.is_debug)
+        console.log("Starting attribution scan.")
+
+        runner = self.attribution_run.setup_target()
+        return runner.run(self)
 
     def compute_grayscale_mean_std(self) -> tuple[float, float]:
         """Compute grayscale mean/std for the configured training split.
