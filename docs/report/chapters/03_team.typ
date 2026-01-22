@@ -30,6 +30,8 @@
 #strong[What went wrong:]
 - Some components were less related to machine learning and instead mainly involved traditional software engineering tasks.
 - (Text Extractor) Unfortunately, PaddleOCR did not produce satisfactory results; this should have been evaluated more thoroughly before being integrated into the project.
+- (Font Detector) The late decision to switch the OCR engine (from Paddle to Tesseract) caused regression in the Font Detector, as the model was trained on tight bounding boxes but received loose boxes from Tesseract.
+- (Font Detector) The resolution mismatch between synthetic training data (72 DPI) and high-resolution images was initially overlooked because the primary test image also had 72 DPI. This caused the error to go unnoticed until late-stage testing with high-res images revealed massive size overestimation, which was addressed by implementing DPI scaling.
 - #[
   (Supervisor) In retrospect, we should have evaluated more carefully which model to start with, as working with a suboptimal model consumed a considerable amount of time.
 ]
@@ -65,6 +67,10 @@
     [DT2],[Tried different #gls("llm") models for translation quality.],
     [DT3],[Batch translation implementation with numbered output parsing.],
 
+    [FT1],[Font detector roadmap, model review, and dataset planning.],
+    [FT2],[Font detector MCP server, baseline model, and dataset generation.],
+    [FT3],[Dataset improvements, feature expansion, and MLP training results.],
+    [FT4],[Custom ResNet classifier, cropping updates, and test integration.],
 
     [XDE1],[Direct Version],
     [XDE2],[Separate #gls("llm")],
@@ -168,6 +174,32 @@
     - Implemented a batch translation prompt that preserves line numbering.
     - Parsed and mapped translated lines back onto text items.
   ],
+)
+
+#contributed(
+  "Font Detector",
+  [Lukas Röß], [FT1], [
+    - Created the roadmap for the font detector.
+    - Reviewed font identifier models.
+    - Planned synthetic dataset generation for five fonts and multiple sizes.
+  ],
+  [Lukas Röß], [FT2], [
+    - Implemented MCP tools for font name detection and size estimation.
+    - Integrated the HuggingFace font-identifier model.
+    - Built dataset generation with 5 fonts and 10k samples per font.
+    - Defined a 30D MLP with ReLU, MSE loss, Adam, and per-font normalization.
+  ],
+  [Lukas Röß], [FT3], [
+    - Improved synthetic data with tight cropping and multiline text.
+    - Expanded the feature vector to include line count and log features.
+    - Trained per-font MLPs and recorded MAE and RMSE results.
+  ],
+  [Lukas Röß], [FT4], [
+    - Replaced the HuggingFace model with a custom ResNet18 trained on generated data.
+    - Improved cropping and the font size model.
+    - Disabled the line-count feature due to unreliable behavior on real data.
+    - Added testing scripts and debugged MCP integration.
+  ]
 )
 
 #contributed(

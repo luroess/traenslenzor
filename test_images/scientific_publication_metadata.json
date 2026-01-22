@@ -1,0 +1,28 @@
+{
+  "documents": [
+    {
+      "filename": "scientific_publication_Lato.tex",
+      "font_family": "Lato",
+      "paragraphs": [
+        {"id": "P01", "role": "abstract", "size": 10},
+        {"id": "P02", "role": "keywords", "size": 10},
+        {"id": "P03", "role": "section", "size": 12},
+        {"id": "P04", "role": "body", "size": 10},
+        {"id": "P05", "role": "body", "size": 10},
+        {"id": "P06", "role": "section", "size": 12},
+        {"id": "P07", "role": "body", "size": 10},
+        {"id": "P08", "role": "body", "size": 10},
+        {"id": "P09", "role": "body", "size": 10},
+        {"id": "P10", "role": "section", "size": 12},
+        {"id": "P11", "role": "body", "size": 10},
+        {"id": "P12", "role": "body", "size": 10},
+        {"id": "P13", "role": "body", "size": 10},
+        {"id": "P14", "role": "section", "size": 12},
+        {"id": "P15", "role": "body", "size": 10},
+        {"id": "P16", "role": "section", "size": 12},
+        {"id": "P17", "role": "body", "size": 10},
+        {"id": "P18", "role": "footer", "size": 9}
+      ]
+    }
+  ]
+}

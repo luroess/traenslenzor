@@ -1,0 +1,102 @@
+﻿text,translated,font_size,detected_font,confidence
+"for Print-Ready Benchmark Font Small, A",0: Für Druckfertige Benchmark-Schriftart,25,Lato-Regular,94.500
+Detection Size Family and Font,"1: Detektion von Größe, Schriftfamilie u",23,Lato-Regular,95.800
+Authors Anonymous,2: Autoren anonym,10,Lato-Regular,96.000
+distribution for Affiliation dataset omi...,3: Verteilung des Affiliation-Datensatze,9,Lato-Regular,95.800
+the at Scan settings. default driver pag...,"4: Die Standard-Einstellungen für Scans,",10,Lato-Regular,96.000
+Abstract—We describe,5: Abstract—Wir beschreiben,12,Lato-Regular,95.500
+benchmark compact a con-,6: Benchmark kompakt ein kon-,9,Lato-Regular,94.500
+"it binarization, Avoid grayscale. as in ...",7: Binarisierung: Vermeiden Sie Graustuf,10,Lato-Regular,95.300
+of sisting,8: des stehend,9,Lato-Regular,95.000
+document with controlled types common,9: Dokument mit kontrollierter Typografi,10,Lato-Regular,95.400
+font recognition. for useful anti-aliasi...,10: Schriftarterkennung. Nützliche Anti-,9,Lato-Regular,96.000
+typography and paragraph-level ground tr...,11: Typografie und Absatzebene Ground Tr,11,Lato-Regular,94.667
+benchmark evaluation after targets print...,12: Benchmark-Evaluation nach Zielen Dru,10,Lato-Regular,94.857
+IDs paragraph with us- regions detected ...,13: IDs Absätze mit uns-Regionen detekti,10,Lato-Regular,92.000
+where blur and resampling affect font ni...,14: Wo Schärfe und Resampling die Schrif,11,Lato-Regular,95.875
+file metadata provide We matcher. ing la...,15: Datei-Metadaten liefern uns einen Ma,11,Lato-Regular,95.444
+By strictly,16: Durch strikte,11,Lato-Regular,96.000
+"font isolating families document, per we",17: Schriftfamilien dokumentieren,10,Lato-Regular,96.000
+for and family font truth size ground co...,18: pro wir,10,Lato-Regular,96.000
+enable robust fine-grained classificatio...,19: für und Schriftfamilie Schriftgröße ,10,Lato-Regular,95.400
+Accuracy Family Font include should Metr...,20: ermöglichen robuste feine Klassifizi,9,Lato-Regular,96.000
+Mean paragraphs) and classified of corre...,21: Genauigkeit Schriftfamilie Schrift,10,Lato-Regular,96.000
+"Keywords—document understanding, typogra...",22: Metriken ID. Jeder,12,Lato-Regular,93.667
+estimation. (MAE) size point for Error A...,23: Durchschnittliche Absätze) und korre,10,Lato-Regular,95.857
+"font classification, point size estimati...","24: Schlüsselwörter—Dokumentverstehen, T",10,Lato-Regular,94.714
+acter recognition.,25: Schätzung. (MAE) Schriftgröße Punkt ,9,Lato-Regular,96.000
+|. Introduction,"26: Schriftklassifizierung, Punktgröße S",9,Lato-Regular,90.000
+TABLE |,27: |. Einleitung,8,Lato-Regular,96.000
+family Font,28: Tabelle |,11,Lato-Regular,95.500
+for and point size attributes docu- key ...,29: Schriftfamilie,9,Lato-Regular,95.125
+(illustrative) metrics Recommended,30: für und Punktgröße Attribute Dokumen,8,Lato-Regular,96.000
+"reconstruction, accessibility tooling, a...",31: (illustrative) Metriken empfohlen,10,Lato-Regular,94.500
+perform well models on aware many,"32: Rekonstruktion, Zugänglichkeit Tools",13,Lato-Regular,95.833
+translation. While,33: Leistung bewerten,9,Lato-Regular,96.000
+Target Metric Reason,34: Target Metric Reason,14,Lato-Regular,96.000
+digital performance,35: digitale Leistung,11,Lato-Regular,96.000
+"due PDFs, degrade on scans can",36: PDFs verschlechtern bei Scans,12,Lato-Regular,96.000
+font >0.98 family page Font per one accu...,37: Schrift >0.98 Schriftfamilie Seite S,8,Lato-Regular,88.375
+distortion characteristics. printer and ...,38: Genauigkeit pro Seite,10,Lato-Regular,95.571
+variability print <0.50 (pt) Size MAE,39: Verzerrungseigenschaften. Drucker un,9,Lato-Regular,94.833
+"spread, introduced the physical by proce...",40: zur Variabilität des Drucks <0.50 (p,10,Lato-Regular,94.500
+lines footer high 9 pt recall Small text,41: Ausbreitung durch den physikalischen,10,Lato-Regular,94.875
+"similar make optical blurring—can grain,...",42: Linien Footer hoch 9 pt Recall,10,Lato-Regular,94.714
+Helvetica) indistinguishable. typefaces ...,43: ähnlich machen optische Verflüssigun,10,Lato-Regular,93.500
+specifically monitor,44: (z. B. Arial vs. Helvetica) ununters,10,Lato-Regular,96.000
+“outliers’— performance We on,45: „Ausreißer“—Leistung,13,Lato-Regular,89.750
+ground truth precise often lack Existing...,46: Wir auf,10,Lato-Regular,96.000
+text—where footer small headings large v...,47: vorhandene Datensätze,10,Lato-Regular,94.750
+bounding digital instead relying for pri...,48: Text—wo Footer klein,10,Lato-Regular,96.000
+pronounced. artifacts scaling most are,49: Kopfzeilen große oder sehr,9,Lato-Regular,96.000
+ink bound- with physical align which not...,50: digitale Boxen,10,Lato-Regular,95.111
+providing this by addresses benchmark ar...,51: mit physischen,10,Lato-Regular,95.714
+Related Work IV.,52: Eigenschaften,9,Lato-Regular,88.667
+generated is where design content “print...,generated is where design content “print,11,Lato-Regular,88.429
+focused detection has largely in font Pr...,focused detection has largely in font Pr,9,Lato-Regular,95.875
+"typographic with printed, known be speci...","typographic with printed, known be speci",10,Lato-Regular,95.286
+generated synthetic data wild” images “i...,generated synthetic data wild” images “i,10,Lato-Regular,90.222
+Identifiers. in the directly encoded par...,Identifiers. in the directly encoded par,10,Lato-Regular,93.714
+While backgrounds. random rendering by t...,While backgrounds. random rendering by t,10,Lato-Regular,96.000
+font often decouple the datasets valuabl...,font often decouple the datasets valuabl,11,Lato-Regular,95.000
+Composition Benchmark ll.,Composition Benchmark ll.,12,Lato-Regular,85.333
+maintain- semantics. By from the documen...,maintain- semantics. By from the documen,10,Lato-Regular,94.000
+"invoice, letter, includes benchmark ques...","invoice, letter, includes benchmark ques",10,Lato-Regular,95.222
+enable the realistic document ing struct...,enable the realistic document ing struct,10,Lato-Regular,95.875
+"technical and publication, scientific a ...","technical and publication, scientific a ",12,Lato-Regular,87.857
+"larger”) potential (e.g., ""title usually...","larger”) potential (e.g., ""title usually",10,Lato-Regular,89.111
+font single to document Each specificati...,font single to document Each specificati,11,Lato-Regular,95.500
+"primary goal is signal, although auxilia...","primary goal is signal, although auxilia",9,Lato-Regular,96.000
+labeled Paragraphs ambiguity. mixed-font...,labeled Paragraphs ambiguity. mixed-font,10,Lato-Regular,94.000
+classification. visual,classification. visual,8,Lato-Regular,95.500
+"point explicit and (e.g., identifiers st...","point explicit and (e.g., identifiers st",11,Lato-Regular,94.714
+PO7),PO7),6,Lato-Regular,91.000
+Conclusion V.,Conclusion V.,10,Lato-Regular,94.000
+sizes.,sizes.,10,Lato-Regular,96.000
+for provides bed benchmark This test a,for provides bed benchmark This test a,12,Lato-Regular,95.429
+focused,focused,9,Lato-Regular,95.000
+categories: represent fonts common chose...,categories: represent fonts common chose,12,Lato-Regular,95.833
+controlling analysis. By the typography ...,controlling analysis. By the typography ,11,Lato-Regular,95.667
+"Sans) and Plex IBM Lato, (Inter, Roboto,...","Sans) and Plex IBM Lato, (Inter, Roboto,",10,Lato-Regular,94.875
+"print mandating physical cycle, and vari...","print mandating physical cycle, and vari",9,Lato-Regular,95.625
+salbeietey Mono). We (Roboto ie monospac...,salbeietey Mono). We (Roboto ie monospac,15,Lato-Regular,64.333
+analog digital and between theory pricgg...,analog digital and between theory pricgg,11,Lato-Regular,89.667
+iteration to this,iteration to this,9,Lato-Regular,95.000
+the gn in focus fonts serif juded,the gn in focus fonts serif juded,13,Lato-Regular,82.286
+Subtier,Subtier,16,Lato-Regular,50.000
+reality.,reality.,5,Lato-Regular,96.000
+sans-serif type- modern between distinct...,sans-serif type- modern between distinct,10,Lato-Regular,94.400
+faces.,faces.,12,Lato-Regular,96.000
+font pt): small Included style test text...,font pt): small Included style test text,11,Lato-Regular,95.778
+(9,(9,9,Lato-Regular,96.000
+publication layout. two-column in detect...,publication layout. two-column in detect,9,Lato-Regular,94.667
+letters to single-column from layouts Do...,letters to single-column from layouts Do,10,Lato-Regular,95.143
+"document), (this ensur- Scientific two-c...","document), (this ensur- Scientific two-c",10,Lato-Regular,90.000
+different robust to is model detection i...,different robust to is model detection i,11,Lato-Regular,96.000
+The arrangements. spatial invoice and de...,The arrangements. spatial invoice and de,11,Lato-Regular,95.857
+ability model's to the testing includes ...,ability model's to the testing includes ,11,Lato-Regular,92.375
+"handle aligned text. sparse,","handle aligned text. sparse,",9,Lato-Regular,96.000
+Ill.,Ill.,11,Lato-Regular,74.000
+Protocol Evaluation,Protocol Evaluation,10,Lato-Regular,95.500
+involves The protocol evaluation recomme...,involves The protocol evaluation recomme,10,Lato-Regular,94.500
+standard A4 each document print-scan cyc...,standard A4 each document print-scan cyc,10,Lato-Regular,94.500
