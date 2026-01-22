@@ -105,7 +105,7 @@
   ],
   [Felix Schladt], [SV4], [
     // todo felix
-    - Evaluated multiple #glspl("llm") available on hugging face as replacement for LLaMA 3.
+    - Evaluated multiple #glspl("llm") available on hugging face as replacement for LLaMA 3.2.
     - Settled on qwen3 for its tool calling and comprehension abilities.
   ],
   [Jan Schaible], [SV5], [
@@ -141,10 +141,11 @@
 #contributed(
   "Text Extractor",
   [Felix Schladt], [TE1], [
-    - Converted to grayscale, applied blurring, and detected edges with Canny.
-  ],
+    - Converted to grayscale, applied blurring, and detected edges with Canny
+    - Document extraction and deskewing
+    ],
   [Felix Schladt], [TE2], [
-    - Performed #gls("ocr") using Paddle.
+    - Performed #gls("ocr") using PaddleOCR.
     - Parsed results into the session data structure.
   ],
   [Jan Schaible], [TE3], [
