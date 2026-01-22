@@ -1,4 +1,4 @@
-#import "@preview/supercharged-hm:0.1.1": *
+#import "@preview/supercharged-hm:0.1.2": *
 #import "@preview/pintorita:0.1.4"
 #show raw.where(lang: "pintora"): it => pintorita.render(it.text, style: "default")
 #show figure: set block(breakable: true)

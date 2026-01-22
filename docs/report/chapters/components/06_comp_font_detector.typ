@@ -1,4 +1,4 @@
-#import "@preview/supercharged-hm:0.1.1": *
+#import "@preview/supercharged-hm:0.1.2": *
 
 == Font Detector <comp_font_detector>
 
