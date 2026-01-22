@@ -25,7 +25,7 @@ from traenslenzor.file_server.session_state import SessionState, SuperResolvedDo
 ADDRESS = "127.0.0.1"
 PORT = 8004
 DOC_SCANNER_BASE_PATH = f"http://{ADDRESS}:{PORT}/mcp"
-_DOC_SCANNER_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "doc-scanner.toml"
+_DOC_SCANNER_CONFIG_PATH = Path(__file__).resolve().parents[2] / ".configs" / "doc-scanner.toml"
 
 doc_scanner_mcp = FastMCP(
     name="doc-scanner",
@@ -197,7 +197,6 @@ async def deskew_document(
         "Upscale a document image for OCR using OpenVINO text-image-super-resolution-0001. "
         "Stores the super-resolved image in the session."
     ),
-    tags={"doc-scanner", "superres", "session"},
     annotations=ToolAnnotations(
         title="Super-resolve document",
         readOnlyHint=False,

@@ -16,7 +16,7 @@ class DocScannerMCPConfig(BaseConfig["DocScannerRuntime"]):
     """Top-level configuration for the DocScanner MCP runtime (UVDoc only)."""
 
     model_config = SettingsConfigDict(
-        toml_file=Path(__file__).resolve().parents[2] / "config" / "doc-scanner.toml",
+        toml_file=Path(__file__).resolve().parents[2] / ".configs" / "doc-scanner.toml",
     )
 
     @property
@@ -49,7 +49,7 @@ class DocScannerMCPConfig(BaseConfig["DocScannerRuntime"]):
     )
     """Directory containing text-image-super-resolution-0001 XML/BIN files."""
     device: str = "auto"
-    """Device to run the model on ("auto", "cpu", "cuda")."""
+    """Device to run the UVDoc model on ("auto", "cpu", "cuda")."""
     verbose: bool = True
     """Enable verbose logging for the runtime and backend."""
     is_debug: bool = False
