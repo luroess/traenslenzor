@@ -205,7 +205,7 @@ class SessionState(BaseModel):
     language: str | None = None
     """Target language set by `traenslenzor.supervisor.tools.set_target_lang.set_target_language`."""
     class_probabilities: dict[str, float] | None = None
-    """Class probabilities set by `traenslenzor.doc_class_detector.mcp.classify_document` or `traenslenzor.doc_classifier.mcp_integration.mcp_server.classify_document`."""
+    """Class probabilities set by `traenslenzor.doc_classifier.mcp_integration.mcp_server.classify_document`."""
     superResolvedDocument: SuperResolvedDocument | None = None
     """Super-resolved document metadata."""
 
