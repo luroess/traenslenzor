@@ -33,10 +33,6 @@ The renderer uses #gls("ffc")-powered inpainting to remove the original text and
 If the user is not satisfied with the translation result, they may request changes by submitting a suggestion.
 The supervisor identifies the need to invoke the document editor tool (@comp_x_document_editor), applies the requested modifications, and re-renders the image to reflect the updated translation.
 
-#warning-note()[
-  #strong[For each component:] Add a description (task, input, output, #emph[interesting] technical detail).
-  For some components (e.g., the font detector or the document class detector), add experiment results (confusion matrices, loss curves, etc.).
-]
 
 #include "components/01_comp_user_interface.typ"
 #include "components/02_comp_supervisor.typ"
