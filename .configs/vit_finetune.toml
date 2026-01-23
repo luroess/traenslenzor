@@ -3,7 +3,6 @@ is_debug = false
 verbose  = true
 run_name = "vit-b16-finetune-rvlcdip"
 stage    = "train"
-# from_ckpt = "resnet50-epoch=2-val_loss=0.93.ckpt"
 
 [trainer_config]
 is_debug          = false
@@ -46,10 +45,10 @@ use_pretrained  = true       # Use ImageNet pretrained weights
     [module_config.optimizer]
     learning_rate     = 5.13e-4 # smaller base LR for pretrained backbone
     weight_decay      = 2.57e-5
-    backbone_lr_scale = 0.05
+    backbone_lr_scale = 0.2
 
     [module_config.scheduler]
-    max_lr           = 2.8e-4 # peak LR
+    max_lr           = 5.6e-4 # peak LR
     base_momentum    = 0.85
     max_momentum     = 0.95
     div_factor       = 25.0
@@ -67,21 +66,21 @@ verbose            = true
     split = "train"
 
         [datamodule_config.train_ds.transform_config]
-        transform_type = "train"
-        img_size       = 224
-        convert_to_rgb = true    # keep 3-channel input for pretrained ViT
-        normalization_mode = "imagenet"
+        transform_type     = "train"
+        img_size           = 224
+        convert_to_rgb     = true      # keep 3-channel input for pretrained ViT
+        normalization_mode = "dataset"
 
     [datamodule_config.val_ds]
         [datamodule_config.val_ds.transform_config]
-        transform_type       = "val"
-        img_size             = 224
-        convert_to_rgb       = true
-        normalization_mode   = "imagenet"
+        transform_type     = "val"
+        img_size           = 224
+        convert_to_rgb     = true
+        normalization_mode = "dataset"
 
     [datamodule_config.test_ds]
         [datamodule_config.test_ds.transform_config]
-        transform_type       = "val"
-        img_size             = 224
-        convert_to_rgb       = true
-        normalization_mode   = "imagenet"
+        transform_type     = "val"
+        img_size           = 224
+        convert_to_rgb     = true
+        normalization_mode = "dataset"
