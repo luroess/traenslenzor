@@ -3,6 +3,7 @@
 #pagebreak()
 
 == User Interface (Streamlit) <comp_user_interface>
+*Jan Duchscherer*
 
 The user interacts with trÄnslenzor through a web-based, chat-interface #gls("ui") implemented in Streamlit.
 The app caches local state in `st.session_state` (chat history, caches, and the current `session_id`), while the File Server (@comp_file_server) acts as the persistent source of truth for all workflow artifacts and metadata (`SessionState` + files).

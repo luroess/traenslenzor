@@ -8,6 +8,7 @@
 ]
 
 == Document Classifier (RVL-CDIP) <comp_doc_cls>
+*Jan Duchscherer*
 
 The Document Class Detector assigns a document class label to the current session document (e.g., *invoice*, *letter*, *presentation*).
 It is implemented in #blink("https://github.com/luroess/traenslenzor/tree/master/traenslenzor/doc_classifier")[`traenslenzor.doc_classifier`] and exposed to the supervisor as an #gls("mcp") server with a single tool (`classify_document(session_id)`).
@@ -524,15 +525,24 @@ The MCP tool keeps its signature minimal (`session_id` only) by resolving all in
 
 === Summary
 
-#figure(
-  caption: [Classfication within the trÄnslenzor system.],
-)[
-  #image("/imgs/doc-scanner/chat_super-res-classify.png", width: 86%)
-] <fig-doc-classifier-chat>
+#wrap-content(
+  align: top + right,
+  columns: (2fr, 3fr),
+  column-gutter: 24pt,
 
-- End-to-end Lightning training stack with modular backbones (AlexNet, ResNet-50, ViT-B/16) and model-aware preprocessing.
-- Config-as-Factory composition with TOML export/import and typed CLI overrides.
-- Experiment tooling: W&B logging, Optuna sweeps, optional Lightning tuning, and Captum interpretability hooks.
-- Generalization: models trained on RVL-CDIP exhibit nearly non-existent generalization capabilities to well-scanned modern documents converted to gray-scale. @fig-doc-classifier-chat shows an example where a nicely scanned document is m
-- Serving path as FastMCP tool integrated into the session-based File Server architecture.
+  [
 
+    - End-to-end Lightning training stack with modular backbones (AlexNet, ResNet-50, ViT-B/16) and model-aware preprocessing.
+    - Config-as-Factory composition with TOML export/import and typed CLI overrides.
+    - Experiment tooling: W&B logging, Optuna sweeps, optional Lightning tuning, and Captum interpretability hooks.
+    - Generalization: models trained on RVL-CDIP exhibit nearly non-existent generalization capabilities to well-scanned modern documents converted to gray-scale. @fig-doc-classifier-chat shows an example where a nicely scanned document is m
+    - Serving path as FastMCP tool integrated into the session-based File Server architecture.
+  ],
+  [
+    #figure(
+      caption: [Classfication within the trÄnslenzor system.],
+    )[
+      #image("/imgs/doc-scanner/chat_super-res-classify.png", width: 86%)
+    ] <fig-doc-classifier-chat>
+  ],
+)
