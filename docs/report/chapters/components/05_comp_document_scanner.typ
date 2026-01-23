@@ -9,22 +9,67 @@
 The Doc Scanner component converts sloppily photographed documents into a scan-like, top-down view and stores the required geometric metadata in the session state.
 It is exposed as an #gls("mcp") server and writes an `ExtractedDocument` to the file server. It provides the agent with two tools:
 - `deskew_document(session_id, crop_document?)`
-- `super_resolve_document(session_id, source="deskewed")`
+- `super_resolve_document(session_id, source="deskewed")`.
+
+=== Interface (MCP tool schemas) <doc-scanner-interface>
+
+The supervisor interacts with the Doc Scanner through a minimal tool interface.
+Both tools update the File Server session state and additionally return a small typed payload described by the MCP server's `output_schema` in `traenslenzor/doc_scanner/mcp.py`.
+
+#figure(
+  caption: [Doc Scanner MCP tool interfaces and return payload schemas: `traenslenzor/doc_scanner/mcp.py`.],
+)[
+  #table(
+    columns: (auto, 1fr, 1.4fr),
+    align: (left, left, left),
+    stroke: 0.5pt,
+    inset: 6pt,
+    table.header([*Tool*], [*Inputs*], [*Returns (typed payload)*]),
+
+    [`deskew_document`],
+    [
+      `session_id: str` (UUID)\
+      `crop_document: bool | none = none`
+    ],
+    [
+      `dict` with:\
+      `extractedDocument: {`\
+      `  documentCoordinates: list[{ x: float, y: float }]`\
+      `}`\
+      *(order UL, UR, LR, LL)*
+    ],
+
+    [`super_resolve_document`],
+    [
+      `session_id: str` (UUID)\
+      `source: "raw" | "deskewed" | "rendered" = "deskewed"`
+    ],
+    [
+      `dict` with:\
+      `superResolvedDocument: {`\
+      `  id: str, sourceId: str, source: str, model: str, scale: int`\
+      `}`
+    ],
+  )
+] <fig-doc-scanner-interface>
 
 === Background: UVDoc
 
-UVDoc frames document dewarping as dense resampling.
-// TODO: don't say a "neural network", use term to describe the specific architecture.
-A neural network predicts a coarse 2D sampling grid alongside a coarse 3D surface grid; the 2D grid is upsampled and applied via `grid_sample` to obtain the unwarped image @VerhoevenUVDoc2023.
+UVDoc tackles *single-image document unwarping*: given a sloppily captured photo of a physically deformed page (curling, wrinkles), it aims to recover a scan-like, top-downb view suitable for downstream OCR and layout analysis.
+Instead of predicting per-pixel optical flow directly, UVDoc represents the warp as a _coarse backward sampling grid_ and performs rectification by dense resampling @VerhoevenUVDoc2023.
+
+Concretely, a compact fully-convolutional model predicts a coarse 2D unwarping grid (where each output grid point samples from in the input), as well as an auxiliary coarse 3D surface grid.
+The 2D grid is upsampled to the desired output resolution and used as the sampling grid for `grid_sample`, while the 3D head acts as an implicit geometric regularizer that encourages physically plausible deformations @VerhoevenUVDoc2023.
+In our pipeline, this backward map translates into an pixel-space flow field (`map_xy`), enabling flattening of the document and subsequent pixel-wise backtransforms.
 
 === Background: Text Super-Resolution
 
-Document photos often contain small fonts or fine stroke structure that become hard to read after deskewing, especially when the raw image is low-resolution or heavily compressed.
-To improve downstream #gls("ocr") and rendering quality, we optionally apply a lightweight super-resolution model to the deskewed document.
+Document photos often contain small fonts or fine stroke structure that become hard to read when the raw image is low-resolution, heavily compressed, or blurred.
+To improve downstream #gls("ocr") and rendering quality, we optionally apply a lightweight single-image super-resolution (SR) model to the deskewed document.
 
-We use OpenVINO's Open Model Zoo network `text-image-super-resolution-0001`, which performs a fixed 3#sym.times upscaling and supports reshaping to different input sizes @OpenVINOTextImageSR0001.
-Architecturally, it is a compact CNN that upsamples with a transposed convolution head (`ConvTranspose2d`) (instead of a PixelShuffle block) @OpenVINOTextImageSR0001, aligning with fast SR designs such as FSRCNN @Dong_2016_ECCV.
-Like many super-resolution pipelines, we operate in a luminance/chroma color space: we super-resolve the `Y` channel and upscale chroma channels with bicubic interpolation, which preserves color consistency while sharpening glyph edges.
+We use OpenVINO's `text-image-super-resolution-0001`: a tiny, fully-convolutional CNN specialized for scanned text that produces a fixed 3#sym.times upscaled output (e.g., 1#sym.times 1#sym.times 360#sym.times 640 #sym.arrow 1#sym.times 1#sym.times 1080#sym.times 1920) @OpenVINOTextImageSR0001.
+The model is extremely small (~0.003M parameters; ~1.379 GFLOPs in the OMZ reference), prioritizing fast _document-specific_ sharpening over high-capacity natural-image SR @OpenVINOTextImageSR0001.
+Structurally, a shallow CNN extracts stroke/edge features and a learned transposed convolution head (`ConvTranspose2d`, stride #sym.tilde 3) performs the resolution increase @OpenVINOTextImageSR0001.
 
 ==== Super-resolution stress test (blur + downscale)
 
@@ -163,11 +208,9 @@ Using the hull before polygon approximation stabilizes the subsequent quadrilate
 The page-corner detection and planar warping primitives are implemented in `traenslenzor/doc_scanner/utils.py` and are *adapted* from the earlier OpenCV-based deskew in `traenslenzor/text_extractor/flatten_image.py`.
 We keep the same geometric core (ordering corners, estimating output size, and computing a homography), but rework the corner ordering heuristic (sum/diff rule) and generalize the utilities for the UVDoc pipeline (returning the homography and adding fallbacks like `minAreaRect`).
 
-In other words: the original `flatten_image.py` utilities (Felix Schladt) implement a fully classical corner-based deskew on the *raw* photo, while our `utils.py` functions serve as *post-processing* around UVDoc (page cropping + planar fallback).
-This shift in context drives several deliberate changes:
 
 #figure(
-  caption: [Key differences between the legacy OpenCV deskew utilities (Felix) and our UVDoc-aligned geometry helpers.],
+  caption: [Key differences between the inital OpenCV deskew utilities (Felix Schlandt) and our UVDoc-aligned geometry helpers.],
 )[
   #set text(size: 8pt)
   #table(
@@ -182,21 +225,16 @@ This shift in context drives several deliberate changes:
       Sort by y/x (top pair, bottom pair) #sym.arrow sum/diff heuristic (`x+y`, `x-y`) to order corners to (UL, UR, LR, LL) for improved robustness against rotations.
     ],
 
-    [`_warp_to_rectangle` #sym.arrow `warp_from_corners`],
-    [
-      Same homography-based rectification core, but returns additional metadata: output size and the homography matrix (float32) to persist a consistent planar fallback (`transformation_matrix`) and enable size-aware cropping/backtransforms in the UVDoc pipeline.
-    ],
-
     [`find_document_corners` #sym.arrow `find_page_corners`],
     [
-      Canny edge detection + contour search on the raw photo #sym.arrow Otsu thresholding on the UVDoc-unwarped output (mask and inverted mask), using external contours, convex hull, and `minAreaRect` fallback; improves robustness against wrinkles/text edges and enables stable cropping with an area-ratio safeguard.
+      Canny edge detection + contour search on the raw photo #sym.arrow Otsu thresholding on the UVDoc-unwarped output (mask and inverted mask), using external contours, convex hull, and `minAreaRect` fallback; improves robustness against wrinkles/text edges.
     ],
   )
 ] <tbl-doc-scanner-utils-diff>
 
 The algorithms below reflect *our* UVDoc-aligned implementations; the legacy `flatten_image.py` versions remain in the Text Extractor as a heuristic fallback when no `ExtractedDocument` from the scanner is present.
 
-In @alg-page-corners we formalize our contour-based page-cropping routine (`find_page_corners`) that runs on the UVDoc-unwarped output.
+In @alg-page-corners we formalize our contour-based page-cropping procedure (`find_page_corners`) that runs on the UVDoc-unwarped output, and was adapted from the initial deskew implementation described in @doc_deskew.
 #algorithm-figure(
   [Contour-based page corners and planar rectification],
   vstroke: .5pt + luma(220),

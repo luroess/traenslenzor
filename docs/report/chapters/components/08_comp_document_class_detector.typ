@@ -186,23 +186,23 @@ Therefore, we regenerate the plots from exported CSV histories (`docs/report/ana
     [#stack(
       spacing: 4pt,
       [#text(size: 9pt)[*Validation accuracy*]],
-      [#image("/imgs/doc-cls/val-acc.svg", width: 100%)],
+      [#image("/imgs/doc-cls/val-acc.png", width: 100%)],
     )],
     [#stack(
       spacing: 4pt,
       [#text(size: 9pt)[*Validation loss*]],
-      [#image("/imgs/doc-cls/val-loss.svg", width: 100%)],
+      [#image("/imgs/doc-cls/val-loss.png", width: 100%)],
     )],
 
     [#stack(
       spacing: 4pt,
       [#text(size: 9pt)[*Training loss*]],
-      [#image("/imgs/doc-cls/train-loss.svg", width: 100%)],
+      [#image("/imgs/doc-cls/train-loss.png", width: 100%)],
     )],
     [#stack(
       spacing: 4pt,
       [#text(size: 9pt)[*OneCycleLR schedule*]],
-      [#image("/imgs/doc-cls/one-cycle-lr.svg", width: 100%)],
+      [#image("/imgs/doc-cls/one-cycle-lr.png", width: 100%)],
     )],
   )
 ]
@@ -325,35 +325,26 @@ Some figures are sparse because non-finite objectives are omitted.
 This sweep targets the ResNet-50 fine-tune regime and focuses on learning-rate schedule and regularization.
 
 *Search space (from the Optuna database).* We sample:
-#table(
-  columns: (auto, 1fr),
-  align: (left, left),
-  inset: 4pt,
-  stroke: 0.5pt,
-  [Parameter], [Search space],
-  [`datamodule_config.train_ds.transform_config`], [categorical {`train`, `finetune`, `finetune_plus`}],
-  [`datamodule_config.train_ds.transform_config.normalization_mode`], [categorical {`dataset`, `imagenet`}],
-  [`module_config.scheduler.max_lr`], [`log-uniform [1e-4, 3e-3]`],
-  [`module_config.scheduler.pct_start`], [`uniform [0.05, 0.25]`],
-  [`module_config.optimizer.backbone_lr_scale`], [`log-uniform [0.01, 0.2]`],
-  [`module_config.optimizer.weight_decay`], [`log-uniform [1e-6, 1e-2]`],
-  [`trainer_config.callbacks.backbone_unfreeze_at_epoch`], [integer {1, 2, 3}],
-)
+- `datamodule_config.train_ds.transform_config`: categorical {`train`, `finetune`, `finetune_plus`}
+- `datamodule_config.train_ds.transform_config.normalization_mode`: categorical {`dataset`, `imagenet`}
+- `module_config.scheduler.max_lr`: log-uniform [1e-4, 3e-3]
+- `module_config.scheduler.pct_start`: uniform [0.05, 0.25]
+- `module_config.optimizer.backbone_lr_scale`: log-uniform [0.01, 0.2]
+- `module_config.optimizer.weight_decay`: log-uniform [1e-6, 1e-2]
+- `trainer_config.callbacks.backbone_unfreeze_at_epoch`: integer {1, 2, 3}
 
 *Best trial.* Trial #study_resnet.best_trial_number achieves objective #r3(study_resnet.best_value) with:
-#table(
-  columns: (auto, 1fr),
-  align: (left, left),
-  inset: 4pt,
-  stroke: 0.5pt,
-  [Parameter], [Best value],
-  [`transform_config`], [#p_resnet.at("datamodule_config.train_ds.transform_config")],
-  [`max_lr`], [#fmt(p_resnet.at("module_config.scheduler.max_lr"))],
-  [`pct_start`], [#fmt(p_resnet.at("module_config.scheduler.pct_start"))],
-  [`backbone_lr_scale`], [#fmt(p_resnet.at("module_config.optimizer.backbone_lr_scale"))],
-  [`weight_decay`], [#fmt(p_resnet.at("module_config.optimizer.weight_decay"))],
-  [`unfreeze_at_epoch`], [#p_resnet.at("trainer_config.callbacks.backbone_unfreeze_at_epoch")],
-)
+- `transform_config`: #p_resnet.at("datamodule_config.train_ds.transform_config")
+- `max_lr`: #fmt(p_resnet.at("module_config.scheduler.max_lr"))
+- `pct_start`: #fmt(p_resnet.at("module_config.scheduler.pct_start"))
+- `backbone_lr_scale`: #fmt(p_resnet.at("module_config.optimizer.backbone_lr_scale"))
+- `weight_decay`: #fmt(p_resnet.at("module_config.optimizer.weight_decay"))
+- `backbone_unfreeze_at_epoch`: #p_resnet.at("trainer_config.callbacks.backbone_unfreeze_at_epoch")
+
+*Notes (interpretation).* 
+- The best configuration uses `finetune_plus` with early backbone adaptation (`backbone_unfreeze_at_epoch = 2`), consistent with the hypothesis that RVL-CDIP benefits from stronger domain-specific augmentation and feature adaptation.
+- With OneCycleLR, the effective backbone peak learning rate is `max_lr * backbone_lr_scale`, here approximately #fmt(p_resnet.at("module_config.scheduler.max_lr") * p_resnet.at("module_config.optimizer.backbone_lr_scale")). This keeps backbone updates conservative while allowing the head to train at the full `max_lr`.
+- The top trials are tightly clustered (best value #r3(study_resnet.best_value)), suggesting a relatively flat optimum under the fixed trial budget; remaining variance is likely dominated by stochasticity (data order, augmentation randomness).
 
 #wrap-content(
   align: top + right,
@@ -426,6 +417,9 @@ For `backbone_unfreeze_at_epoch` in {#unfreeze_groups}, differences are small re
   )
 ] <fig-doc-cls-optuna-resnet-cats>
 
+*Notes.* The box plots and group statistics suggest that `finetune_plus` is the only transform preset that yields a sizable set of finite COMPLETE trials (n = #transform_test.group_stats.first().n) with low spread (median #r3(transform_test.group_stats.first().median), std #r3(transform_test.group_stats.first().std)).
+For backbone unfreezing, `backbone_unfreeze_at_epoch = 2` has a slightly better median objective (#r3(unfreeze_test.group_stats.at(1).median)) than epoch 1 (#r3(unfreeze_test.group_stats.at(0).median)), but the epoch-1 group has very small n and the ANOVA test is not significant.
+
 ==== AlexNet sweep (doc-classifier-alexnet-sweep)
 
 #let study_alexnet = optuna.filter(it => it.study_name == "doc-classifier-alexnet-sweep").first()
@@ -434,28 +428,19 @@ For `backbone_unfreeze_at_epoch` in {#unfreeze_groups}, differences are small re
 This study is tailored to AlexNet-from-scratch training and focuses on dropout, weight decay, and a small `max_lr` range.
 
 *Search space (from the Optuna database).* We sample:
-#table(
-  columns: (auto, 1fr),
-  align: (left, left),
-  inset: 4pt,
-  stroke: 0.5pt,
-  [Parameter], [Search space],
-  [`module_config.model_params.dropout_prob`], [`uniform [0.2, 0.6]`],
-  [`module_config.optimizer.weight_decay`], [`log-uniform [2e-4, 1.2e-3]`],
-  [`module_config.scheduler.max_lr`], [`log-uniform [8e-5, 4e-4]`],
-)
+- `module_config.model_params.dropout_prob`: uniform [0.2, 0.6]
+- `module_config.optimizer.weight_decay`: log-uniform [2e-4, 1.2e-3]
+- `module_config.scheduler.max_lr`: log-uniform [8e-5, 4e-4]
 
 *Best trial.* Trial #study_alexnet.best_trial_number achieves objective #r3(study_alexnet.best_value) with:
-#table(
-  columns: (auto, 1fr),
-  align: (left, left),
-  inset: 4pt,
-  stroke: 0.5pt,
-  [Parameter], [Best value],
-  [`dropout_prob`], [#fmt(p_alexnet.at("module_config.model_params.dropout_prob"))],
-  [`weight_decay`], [#fmt(p_alexnet.at("module_config.optimizer.weight_decay"))],
-  [`max_lr`], [#fmt(p_alexnet.at("module_config.scheduler.max_lr"))],
-)
+- `dropout_prob`: #fmt(p_alexnet.at("module_config.model_params.dropout_prob"))
+- `weight_decay`: #fmt(p_alexnet.at("module_config.optimizer.weight_decay"))
+- `max_lr`: #fmt(p_alexnet.at("module_config.scheduler.max_lr"))
+
+*Notes (interpretation).*
+- The sweep is prune-heavy (trials: #study_alexnet.n_trials, complete: #study_alexnet.n_complete, pruned: #study_alexnet.n_pruned), indicating that many configurations diverge or underperform early under the fixed epoch budget.
+- The importance proxy ranks `max_lr` as dominant (consistent with OneCycleLR sensitivity), followed by `weight_decay` and then dropout; this aligns with the typical failure mode of too aggressive learning rates causing unstable optimization.
+- The best parameters sit near the lower end for dropout and in a narrow learning-rate regime, suggesting that capacity-limited AlexNet benefits more from stable optimization than from strong regularization.
 
 #wrap-content(
   align: top + right,
@@ -491,6 +476,8 @@ We visualize objective relationships with `sns.regplot` (LOWESS smoothing, boots
     [#image("/imgs/optuna_analysis/doc-classifier-alexnet-sweep_reg_max_lr.png", width: 100%)],
   )
 ] <fig-doc-cls-optuna-alexnet-reg>
+
+*Notes.* The LOWESS curves visually support a narrow "safe" region for `max_lr` (too large values correlate with higher objectives / pruning) and a milder effect for `weight_decay`. Because these are observational relationships (and include pruned trials), we treat them as guidance for a follow-up ablation rather than a causal conclusion.
 
 ==== Cross-study interpretation
 

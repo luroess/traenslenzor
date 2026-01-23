@@ -98,7 +98,7 @@
 
 #contributed(
   "UI",
-  [Felix Schladt],
+  [Felix Schladt\ Jan Schaible],
   [UI1],
   [
     - Set up the Streamlit #gls("ui").

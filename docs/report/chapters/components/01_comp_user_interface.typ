@@ -11,7 +11,7 @@ Implementation notes:
 
 - The background async runner keeps a dedicated event loop and stores the pending `Future` in `st.session_state` for lifecycle tracking.
 - Sidebar polling is enabled only while the supervisor is running (interval: 10s); otherwise the UI serves cached state.
-- The image panels uses file-id-indexed caches for images and map_xy grids; the “Overlay” tab draws document corners and (optionally) the map_xy grid.
+- The image panel uses file-id-indexed caches for images and map_xy grids; the “Overlay” tab draws document corners and (optionally) the map_xy grid.
 - Uploading a new document resets the session via `prepare_new_doc()` and creates a new File Server session.
 - The UI exposes session import/export (pickle) and targeted deletion of session components.
 
