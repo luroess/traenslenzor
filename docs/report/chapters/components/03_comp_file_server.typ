@@ -18,6 +18,7 @@ The file server is the only instance keeping state except the user frontend. All
 class SessionState(BaseModel):
     rawDocumentId: str | None = None
     extractedDocument: ExtractedDocument | None = None
+    superResolvedDocument: SuperResolvedDocument | None = None
     renderedDocumentId: str | None = None
     text: list[TextItem] | None = None
     language: str | None = None
@@ -32,6 +33,7 @@ It is derived by the File Server through the information present in the `Session
 #code()[```py 
 ProgressStage = Literal[
     "awaiting_document",
+    "extracting_document",
     "detecting_language",
     "extracting_text",
     "translating",
@@ -47,4 +49,3 @@ class SessionProgress(BaseModel):
     total_steps: int
     steps: list[SessionProgressStep]
 ```]]
-

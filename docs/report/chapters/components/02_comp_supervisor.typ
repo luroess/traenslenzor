@@ -10,7 +10,7 @@ Although the implementation is concise, it reflects extensive experimentation to
 Substantial time was spent tuning the #gls("llm") prompt, and it remained one of the most sensitive parts of the system.
 Even minor refinements intended to improve alignment could introduce subtle regressions, so each change required careful testing and multiple rounds of iteration.
 
-=== Internal Structure 
+=== Internal Structure
 One of the requirements was to avoid programming a fixed sequence of tools that the process would follow once all information was gathered.
 Therefore, we only use LanGraph indirectly via LangChain's create_agent method, which handles tool execution after an #gls("llm") call when specified.
 
@@ -19,7 +19,7 @@ We opted to let the #gls("llm") inject the `session_id` into tool calls directly
 Programmatic injection would have required modifying the tool definitions, which we deemed unnecessary since the #gls("llm") handles the `session_id` injection seamlessly.
 
 === Model Selection <sec-llm-config>
-#let model(m) = {rgb-raw(m, rgb("#5079ba"))}
+#let model(m) = { rgb-raw(m, rgb("#5079ba")) }
 
 Choosing a suitable #gls("llm") was challenging, as the system had to run on consumer hardware without #gls("gpu") support, restricting us to smaller models.
 This was further complicated by the requirement that the model determine the tool invocation order dynamically at runtime using only tool descriptions and input specifications.
@@ -42,51 +42,53 @@ The overall goal was to make the system as autonomous as possible while ensuring
 
 Some of the problems we encountered along the way included:
 
-- *No rerender:* The #gls("llm") did not execute the render image tool after the user modified the text.  
-- *Imagined tools (LLaMA 3):* The #gls("llm") generated non-existent tools, e.g., ```py {"name": "language_selector"}```.  
-- *Simulated processing (LLaMA 3):* The #gls("llm") printed messages like `Rendering image...` instead of actually calling the tool.  
-- *Assumed language (LLaMA 3):* The #gls("llm") did not request the target language from the user when none had been provided and assumed a default.  
+- *No rerender:* The #gls("llm") did not execute the render image tool after the user modified the text.
+- *Imagined tools (LLaMA 3):* The #gls("llm") generated non-existent tools, e.g., ```py {"name": "language_selector"}```.
+- *Simulated processing (LLaMA 3):* The #gls("llm") printed messages like `Rendering image...` instead of actually calling the tool.
+- *Assumed language (LLaMA 3):* The #gls("llm") did not request the target language from the user when none had been provided and assumed a default.
 - *Additional text (LLaMA 3):* The #gls("llm") added descriptive text around the actual tool call, e.g.:
-    ```
-    Extracting text from image...
-    {"name": "text_extractor", "parameters": {}}
-    ```
+  ```
+  Extracting text from image...
+  {"name": "text_extractor", "parameters": {}}
+  ```
 - This list is not exhaustive and only highlights some of the more frequent issues encountered.
 
-#figure(caption: [Aggregated prompt template for #gls("llm") calls by the supervisor: `./traenslenzor/supervisor/prompt.py`])[
-    #code()[```py
-    f"""
-    Task:
-        You are an image translation assistant.
+#figure(
+  caption: [Aggregated prompt template for #gls("llm") calls by the supervisor: `./traenslenzor/supervisor/prompt.py`],
+)[
+  #code()[```py
+  f"""
+  Task:
+      You are an image translation assistant.
 
-        Your task is to:
-        - Translate all visible text in the provided image from the source language into the target language.
-        - Produce a corresponding image with the translated text accurately placed.
-        - The user might want to translate multiple documents.
+      Your task is to:
+      - Translate all visible text in the provided image from the source language into the target language.
+      - Produce a corresponding image with the translated text accurately placed.
+      - The user might want to translate multiple documents.
 
-        Tool usage:
-        - If multiple tools are available, determine the correct execution order based on tool input/output dependencies.
-        - Invoke a tool only when all required parameters are available.
-        - Do not describe internal reasoning, planning, or tool usage.
+      Tool usage:
+      - If multiple tools are available, determine the correct execution order based on tool input/output dependencies.
+      - Invoke a tool only when all required parameters are available.
+      - Do not describe internal reasoning, planning, or tool usage.
 
-        Missing information:
-        - If required information (e.g., target language or image) is missing, ask the user a single concise clarifying question before proceeding.
+      Missing information:
+      - If required information (e.g., target language or image) is missing, ask the user a single concise clarifying question before proceeding.
 
-        Output requirements:
-        - After completing the image render for the first time, state the document type represented by the image.
-        - Ask if the user would like to change something.
+      Output requirements:
+      - After completing the image render for the first time, state the document type represented by the image.
+      - Ask if the user would like to change something.
 
-        User feedback to the rendered image:
-        - If the user provides feedback, treat the input as exact argument for the “apply user feedback” tool.
-        - Immediately call the “apply user feedback” tool with that content, without additional commentary.
+      User feedback to the rendered image:
+      - If the user provides feedback, treat the input as exact argument for the “apply user feedback” tool.
+      - Immediately call the “apply user feedback” tool with that content, without additional commentary.
 
-    Context:
-        ✅ the current session_id is '01329c88-0373-46df-a572-6c34e4a19c24'
-        ✅ the user has selected the language english
-        ❌ the user has no document selected"
-        ...
-    """
-    ```]
+  Context:
+      ✅ the current session_id is '01329c88-0373-46df-a572-6c34e4a19c24'
+      ✅ the user has selected the language english
+      ❌ the user has no document selected"
+      ...
+  """
+  ```]
 ]<supervisor_prompt>
 
 === Failed approaches
@@ -129,14 +131,14 @@ This, however, did not work and was one of the reasons we switched to the sessio
 To encourage reasoning in LLaMA, we attempted to apply the ReAct pattern using a one-shot instruction:
 
 #figure(
-    caption: "One Shot Instruction",
-    code()[```json
-    Respond in the format {
-        "reason": "reason you are calling this tool next",
-        "name": function name,
-        "parameters": dictionary of argument name and its value
-    }...
-    ```]
+  caption: "One Shot Instruction",
+  code()[```json
+  Respond in the format {
+      "reason": "reason you are calling this tool next",
+      "name": function name,
+      "parameters": dictionary of argument name and its value
+  }...
+  ```],
 )
 The goal was to prompt the model to explicitly provide a reason before invoking a tool.
 However, LLaMA did not respond to this instruction, and its tool-calling behavior remained unchanged.
