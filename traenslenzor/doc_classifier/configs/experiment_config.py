@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 import optuna
+import torch
 import wandb
 from git import TYPE_CHECKING
 from pydantic import Field, ValidationInfo, field_validator, model_validator
@@ -14,6 +15,7 @@ from typing_extensions import Self
 
 from ..interpretability.attribution_runner import AttributionRunConfig
 from ..lightning import (
+    BackboneType,
     DocClassifierConfig,
     DocDataModuleConfig,
     TrainerFactoryConfig,
@@ -127,6 +129,7 @@ class ExperimentConfig(BaseConfig[Trainer]):
     ) -> Path | None:
         if isinstance(paths_cfg := info.data.get("paths"), PathConfig):
             return paths_cfg.resolve_checkpoint_path(value)
+        return value
 
     @model_validator(mode="after")
     def _apply_seed(self) -> Self:
@@ -281,15 +284,15 @@ class ExperimentConfig(BaseConfig[Trainer]):
         try:
             if resolved_stage is Stage.TRAIN:
                 stage_console.log("Starting training (fit)...")
-                trainer.fit(lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input)
+                trainer.fit(lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input, weights_only=False)
                 stage_console.log("Training completed")
             elif resolved_stage is Stage.VAL:
                 stage_console.log("Starting validation...")
-                trainer.validate(lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input)
+                trainer.validate(lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input, weights_only=False)
                 stage_console.log("Validation completed")
             elif resolved_stage is Stage.TEST:
                 stage_console.log("Starting testing...")
-                trainer.test(lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input)
+                trainer.test(lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input, weights_only=False)
                 stage_console.log("Testing completed")
         except KeyboardInterrupt:
             stage_console.warn("Keyboard interrupt received. Shutting down.")
