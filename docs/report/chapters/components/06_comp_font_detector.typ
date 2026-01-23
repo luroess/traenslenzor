@@ -47,14 +47,17 @@ It runs global font detection and estimates size for each text item from its bou
 The classification model (ResNet18) was trained for 5 epochs on 10,000 synthetic images (2,000 per class).
 The model achieved high accuracy on the specific synthetic validation set, demonstrating the ability to distinguish the five target fonts under ideal conditions.
 
-#table(
-  columns: (auto, auto, auto),
-  inset: 5pt,
-  align: center,
-  [*Metric*], [*Value*], [*Set*],
-  [Accuracy], [99.2%], [Validation],
-  [Precision], [0.99], [Validation],
-  [Recall], [0.99], [Validation],
+#figure(
+    table(
+    columns: (auto, auto, auto),
+    inset: 5pt,
+    align: center,
+    [*Metric*], [*Value*], [*Set*],
+    [Accuracy], [99.2%], [Validation],
+    [Precision], [0.99], [Validation],
+    [Recall], [0.99], [Validation],
+  ),
+  caption: [Font name classification performance on synthetic validation set],
 )
 
 ==== Font Size Estimation (MLP)
