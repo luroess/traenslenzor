@@ -256,17 +256,17 @@ gantt
   "Basic UI"       : 2026-1-10, 1w
 
   section supervisor
-  "Technology experiments"       : sv1, 2025-7-10, 2w
-  "Supervisor setup"       : sv2, after sv1, 4w
-  "Mock Infrastructure"       : sv3, after sv2, 3w
+  "Technology experiments"       : sv1, 2025-10-13, 2w
+  "Supervisor setup"       : sv2, after sv1, 2w
+  "Mock Infrastructure"       : sv3, after sv2, 2w
   "Evaluate different LLMs"       : sv4, after sv3, 2w
-  "Multiple tool calls (LLaMA 3)"       : sv5, after sv3, 3w
-  "Memory"       : sv6, after sv5, 4w
-  "Session changes"       : sv7, 2025-11-5, 2w
+  "Multiple tool calls (LLaMA 3)"       : sv5, after sv3, 2w
+  "Memory"       : sv6, after sv5, 1w
+  "Session changes"       : sv7, after sv6, 1w
   "Bug fixes"       : sv10, 2025-12-20, 2w
 
   section file_server
-  "File Server"       : fs1, after sv4, 1w
+  "File Server"       : fs1, after sv3, 1w
   "Session Server"       : fs2, after sv6, 1w
 
   section text_extractor
@@ -292,7 +292,7 @@ gantt
   "Tool Mock"       : 2025-7-10, 1w
 
   section x_document_editor
-  "Direct Version"       : xde1, 2025-11-25, 1w
+  "Direct Version"       : xde1, 2025-12-25, 1w
   "Separate LLM"       : xde2, after xde1, 2w
 
   section document_image_renderer
