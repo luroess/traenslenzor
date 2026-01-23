@@ -274,9 +274,6 @@ gantt
   "Paddle OCR"       : te2, after te1, 1w
   "Tesseract"       : te3, 2026-1-1, 1w
 
-  section layout_detector
-  "Tool Mock"       : 2025-7-10, 1w
-
   section font_detector
   "Roadmap & Review"       : ft1, 2025-10-13, 1w
   "MCP & MLP Baseline"     : ft2, after ft1, 6w

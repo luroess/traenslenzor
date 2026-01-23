@@ -8,7 +8,7 @@
 ] <components_architecture_fig>
 All components of the image translator are visualized in @components_architecture_fig.
 \
-The user interacts through the web-based streamlit user interface described in @comp_user_interface.
+The user interacts with the system through the web-based streamlit user interface described in @comp_user_interface.
 There, the user can upload an image to be translated and specify a prompt with requests for the target language and further alterations of the result.
 Upon the user starting the #gls("ui"), a new session is created via an #gls("http") #gls("api") call to the File Server component, instantiating a session state with a unique session id.
 \
@@ -30,6 +30,8 @@ Following text extraction, the #gls("llm") typically invokes the Font Detector (
 Once all items are fully processed, the Document Image Renderer (@comp_document_image_renderer) combines these results to produce the final translated document image.
 The renderer uses #gls("ffc")-powered inpainting to remove the original text and places the translated text with matching fonts, preserving the document's original appearance.
 \
+If the user is not satisfied with the translation result, they may request changes by submitting a suggestion.
+The supervisor identifies the need to invoke the document editor tool (@comp_x_document_editor), applies the requested modifications, and re-renders the image to reflect the updated translation.
 
 #warning-note()[
   #strong[For each component:] Add a description (task, input, output, #emph[interesting] technical detail).
