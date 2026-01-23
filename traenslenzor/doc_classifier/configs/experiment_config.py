@@ -6,7 +6,6 @@ from datetime import datetime
 from pathlib import Path
 
 import optuna
-import torch
 import wandb
 from git import TYPE_CHECKING
 from pydantic import Field, ValidationInfo, field_validator, model_validator
@@ -15,7 +14,6 @@ from typing_extensions import Self
 
 from ..interpretability.attribution_runner import AttributionRunConfig
 from ..lightning import (
-    BackboneType,
     DocClassifierConfig,
     DocDataModuleConfig,
     TrainerFactoryConfig,
