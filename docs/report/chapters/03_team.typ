@@ -420,7 +420,6 @@
   ],
 )
 
-#pagebreak()
 
 == Timeline <team_timeline>
 

@@ -28,7 +28,7 @@
     The Text Extractor component is responsible for extracting the text and the areas where the text is contained in the document.
     For this, a #gls("ocr") library is utilized.
 
-    == Document Deskew
+    == Document Deskew <doc_deskew>
     The goal of document deskewing is to find a document in an image and straighten it so it looks like it was scanned from the top.
     First, the image is converted to grayscale and slightly blurred to remove noise.
     Edges are then detected using an edge detector, and a small morphological operation is applied to close gaps in the edges.
