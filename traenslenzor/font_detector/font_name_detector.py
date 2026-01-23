@@ -1,5 +1,6 @@
 """Font name detector using custom ResNet18 model."""
 
+import logging
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
@@ -7,6 +8,8 @@ import torch
 import torch.nn as nn
 from PIL import Image
 from torchvision import models, transforms
+
+logger = logging.getLogger(__name__)
 
 
 class FontNameDetector:
@@ -23,6 +26,16 @@ class FontNameDetector:
             device: Device to run model on ('cuda', 'cpu', or None for auto)
         """
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+
+        if self.device == "cpu" and torch.cuda.is_available():
+            logger.warning(
+                "CUDA is available but checking failed or CPU explicitely requested. Using CPU."
+            )
+        elif self.device == "cpu":
+            logger.info("FontNameDetector using CPU (CUDA not available).")
+        else:
+            logger.info(f"FontNameDetector initialized using device: {self.device}")
+
         self.checkpoint_path = (
             Path(__file__).parent / "checkpoints" / "classifier" / "resnet18_fonts.pth"
         )
@@ -42,7 +55,9 @@ class FontNameDetector:
                 f"Model checkpoint not found at {self.checkpoint_path}. Please run train_classifier.py first."
             )
 
-        print(f"Loading custom font classifier from {self.checkpoint_path} on {self.device}...")
+        logger.info(
+            f"Loading custom font classifier from {self.checkpoint_path} on {self.device}..."
+        )
 
         # Load checkpoint
         checkpoint = torch.load(self.checkpoint_path, map_location=self.device, weights_only=False)
@@ -67,7 +82,7 @@ class FontNameDetector:
             ]
         )
 
-        print(f"Model loaded successfully! Classes: {self._classes}")
+        logger.info(f"Model loaded successfully! Classes: {self._classes}")
 
     def _prepare_image(self, img: Image.Image) -> Image.Image:
         """
@@ -127,7 +142,7 @@ class FontNameDetector:
         # Get label
         font_name = self._classes[predicted_class]
 
-        print(f"Detected: {font_name} (confidence: {conf_val:.2%})")
+        logger.info(f"Detected: {font_name} (confidence: {conf_val:.2%})")
 
         return font_name
 
