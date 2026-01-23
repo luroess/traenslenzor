@@ -23,6 +23,9 @@ uv run python -m traenslenzor
 translate img.png to english
 translate letter.png to english
 translate test_images/scientific_publication_Lato_straight.jpeg to german
+deskew invoice_clutter.jpg
+super-resolve the deskewed document
+classify invoice_clutter.jpg
 ```
 
 ## Setup (for Development)
