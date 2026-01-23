@@ -5,7 +5,6 @@ import cv2
 import numpy as np
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
-from numpy.typing import NDArray
 from PIL import Image
 
 from traenslenzor.file_server.client import FileClient, SessionClient
@@ -42,6 +41,19 @@ async def extract_text(session_id: str) -> str:
         return "No raw document available for this session"
 
     file_data = await FileClient.get_raw_bytes(session.rawDocumentId)
+    using_existing_extracted = False
+    extracted_document = None
+
+    if session.extractedDocument is not None and session.extractedDocument.id:
+        extracted_data = await FileClient.get_raw_bytes(session.extractedDocument.id)
+        if extracted_data is not None:
+            file_data = extracted_data
+            using_existing_extracted = True
+            extracted_document = session.extractedDocument
+            logger.info("Using previously extracted document for OCR")
+        else:
+            logger.error("Stored extracted document missing; falling back to raw document.")
+
     if file_data is None:
         logger.error("Invalid file id, no such document found")
         return f"Document not found: {session.rawDocumentId}"
@@ -58,52 +70,50 @@ async def extract_text(session_id: str) -> str:
 
     orig_img = bytes_to_numpy_image(file_data)
 
-    flattening_result = deskew_document(orig_img)
-
-    flattened_img = orig_img
-    transformation_matrix = np.eye(3, dtype=np.float64)
-    document_coordinates: NDArray[np.float32] = np.array([])
-    if flattening_result is not None:
-        logger.info("Image flattening successful")
-        flattened_img, transformation_matrix, document_coordinates = flattening_result
+    if using_existing_extracted:
+        flattened_img = orig_img
     else:
-        logger.error("Image flattening failed, proceeding with original image")
+        flattening_result = deskew_document(orig_img)
+        if flattening_result is None:
+            logger.error("Deskewing failed; cannot extract text.")
+            raise ToolError("Deskewing failed; cannot extract text.")
+        flattened_img, transformation_matrix, document_coordinates = flattening_result
 
-    upload_image = cv2.cvtColor(flattened_img, cv2.COLOR_BGR2RGB)
+        upload_image = cv2.cvtColor(flattened_img, cv2.COLOR_BGR2RGB)
 
-    # Create PIL image and restore DPI metadata
-    pil_upload_image = Image.fromarray(upload_image)
-    if original_dpi:
-        pil_upload_image.info["dpi"] = original_dpi
+        # Create PIL image and restore DPI metadata
+        pil_upload_image = Image.fromarray(upload_image)
+        if original_dpi:
+            pil_upload_image.info["dpi"] = original_dpi
 
-    flattened_image_id = await FileClient.put_img(f"{session_id}_deskewed.png", pil_upload_image)
-    if flattened_image_id is None:
-        logger.error("Uploading of extracted document image failed")
-        return "Uploading of extracted document image failed"
+        flattened_image_id = await FileClient.put_img(
+            f"{session_id}_deskewed.png", pil_upload_image
+        )
+        if flattened_image_id is None:
+            logger.error("Uploading of extracted document image failed")
+            return "Uploading of extracted document image failed"
 
-    extracted_document = ExtractedDocument(
-        id=flattened_image_id,
-        transformation_matrix=transformation_matrix.tolist(),
-        documentCoordinates=[BBoxPoint(x=pt[0], y=pt[1]) for pt in document_coordinates],
-    )
+        extracted_document = ExtractedDocument(
+            id=flattened_image_id,
+            transformation_matrix=transformation_matrix.tolist(),
+            documentCoordinates=[BBoxPoint(x=pt[0], y=pt[1]) for pt in document_coordinates],
+        )
+
+    if extracted_document is None:
+        logger.error("Extracted document metadata missing.")
+        return "Extracted document metadata missing."
 
     res = run_ocr(flattened_img)
 
     if res is None:
-        raise ToolError("OCR text extraction failed")
-
-    if res is None:
         logger.error("OCR failed to extract text")
-        return "OCR failed to extract text"
+        raise ToolError("OCR text extraction failed")
 
     def update_session(session: SessionState):
         session.text = res  # pyright: ignore[reportAttributeAccessIssue]
         session.extractedDocument = extracted_document
 
     await SessionClient.update(session_id, update_session)
-
-    if res is None:
-        return "Extracted no text from image"
 
     return "\n".join([f"{index}: {text.extractedText}" for index, text in enumerate(res)])
 

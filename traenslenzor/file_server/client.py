@@ -64,7 +64,31 @@ class FileClient:
         return str(resp.json().get("id"))
 
     @staticmethod
-    async def get_raw_bytes(file_id: str) -> Optional[bytes]:
+    async def put_numpy_array(name: str, array: NDArray[np.float32]) -> Optional[str]:
+        """Upload a numpy array as .npy bytes and return its UUID string."""
+        buffer = BytesIO()
+        np.save(buffer, array)
+        buffer.seek(0)
+        return await FileClient.put_bytes(name, buffer.getvalue())
+
+    @staticmethod
+    async def get_numpy_array(
+        file_id: str,
+    ) -> Optional[NDArray[np.float32]]:
+        """Download a .npy file and return as a numpy array, or None if not found."""
+        file_bytes = await FileClient.get_raw_bytes(file_id)
+
+        if file_bytes is None:
+            return None
+
+        buffer = BytesIO(file_bytes)
+        buffer.seek(0)
+        return np.load(buffer)
+
+    @staticmethod
+    async def get_raw_bytes(
+        file_id: str,
+    ) -> Optional[bytes]:
         """Download a file and return its bytes, or None if not found."""
         async with httpx.AsyncClient(timeout=300.0) as client:
             resp = await client.get(f"{FILES_ENDPOINT}/{file_id}")
@@ -76,19 +100,40 @@ class FileClient:
         return resp.content
 
     @staticmethod
-    async def get_image(file_id: str) -> PILImage | None:
+    async def get_image(
+        file_id: str,
+        *,
+        max_pixels: int = 50_000_000,
+    ) -> PILImage | None:
         """Download a image and return as a PILImage, or None if not found."""
         file_bytes = await FileClient.get_raw_bytes(file_id)
 
         if file_bytes is None:
             return None
-
-        return Image.open(BytesIO(file_bytes))
+        # Need to relax PIL's pixel guard for superresolution
+        # Allow unlimited when max_pixels=0.
+        original_max_pixels = Image.MAX_IMAGE_PIXELS
+        Image.MAX_IMAGE_PIXELS = None if max_pixels <= 0 else max_pixels
+        try:
+            img = Image.open(BytesIO(file_bytes))
+            width, height = img.size
+            pixels = width * height
+            if max_pixels > 0 and pixels > max_pixels:
+                scale = (max_pixels / float(pixels)) ** 0.5
+                new_size = (max(1, int(width * scale)), max(1, int(height * scale)))
+                img = img.resize(new_size, resample=Image.BILINEAR)
+            return img
+        finally:
+            Image.MAX_IMAGE_PIXELS = original_max_pixels
 
     @staticmethod
-    async def get_image_as_numpy(file_id: str) -> NDArray[np.float32] | None:
+    async def get_image_as_numpy(
+        file_id: str,
+        *,
+        max_pixels: int = 50_000_000,
+    ) -> NDArray[np.float32] | None:
         """Download a image and return as a PILImage, or None if not found."""
-        img = await FileClient.get_image(file_id)
+        img = await FileClient.get_image(file_id, max_pixels=max_pixels)
 
         if img is None:
             return None

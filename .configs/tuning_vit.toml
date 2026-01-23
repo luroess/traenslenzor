@@ -49,5 +49,4 @@ backbone        = "vit_b_16"
 [datamodule_config]
 batch_size  = 64
 num_workers = 16
-pin_memory  = true
 verbose     = true

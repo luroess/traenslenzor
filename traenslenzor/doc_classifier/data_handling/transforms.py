@@ -5,6 +5,7 @@ pipelines optimized for grayscale document images (RVL-CDIP dataset).
 
 Three pipeline types are provided:
 - TrainTransformConfig: Heavy augmentation for training from scratch
+- TrainHeavyTransformConfig: Extra-heavy augmentation for continued training
 - FineTuneTransformConfig: Light augmentation for fine-tuning pretrained models
 - FineTunePlusTransformConfig: Moderate augmentation for fine-tuning with extra regularization
 - ValTransformConfig: Deterministic transforms for validation/testing
@@ -13,6 +14,7 @@ Three pipeline types are provided:
 from typing import TYPE_CHECKING, Literal
 
 import albumentations as A
+import torch
 from albumentations.pytorch import ToTensorV2
 from pydantic import Field
 
@@ -27,8 +29,6 @@ class TransformConfig(BaseConfig[A.Compose]):
 
     All transform configs should inherit from this and implement setup_target().
     """
-
-    target: type[A.Compose] = Field(default=A.Compose, exclude=True)
 
     transform_type: str = Field(default="base")
     """Discriminator field for identifying transform type in serialized configs."""
@@ -83,13 +83,42 @@ class TransformConfig(BaseConfig[A.Compose]):
         mean, std = self._resolve_mean_std()
         return A.Normalize(mean=mean, std=std)
 
+    def unnormalize_tensor(self, tensor: torch.Tensor) -> torch.Tensor:
+        """Invert normalization for visualization.
+
+        Args:
+            tensor (Tensor['C H W' | 'B C H W', float]): Normalized image tensor.
+
+        Returns:
+            Tensor: Unnormalized tensor in [0, 1] matching input shape.
+        """
+        if not self.apply_normalization:
+            return tensor
+
+        mean, std = self._resolve_mean_std()
+        mean_t = torch.tensor(mean, device=tensor.device, dtype=tensor.dtype)
+        std_t = torch.tensor(std, device=tensor.device, dtype=tensor.dtype)
+
+        if tensor.ndim == 3:
+            mean_t = mean_t[:, None, None]
+            std_t = std_t[:, None, None]
+        elif tensor.ndim == 4:
+            mean_t = mean_t[None, :, None, None]
+            std_t = std_t[None, :, None, None]
+        else:
+            raise ValueError(
+                "Expected tensor with shape (C, H, W) or (B, C, H, W), "
+                f"got shape={tuple(tensor.shape)}."
+            )
+
+        return (tensor * std_t + mean_t).clamp(0.0, 1.0)
+
     def _pad_to_square(self) -> A.PadIfNeeded:
         """Pad to a square canvas while preserving full-page layout."""
         return A.PadIfNeeded(
             min_height=self.img_size,
             min_width=self.img_size,
             border_mode=0,
-            value=255,
         )
 
     def _resize_and_pad(self) -> list[A.BasicTransform]:
@@ -141,7 +170,7 @@ class TrainTransformConfig(TransformConfig):
                 ),
                 A.Perspective(scale=(0.02, 0.05), p=0.3),  # Simulate camera perspective
                 # Document-specific degradations
-                A.GaussNoise(std_range=(0.02, 0.08), p=0.3),  # Scanner noise
+                A.GaussNoise(std_range=(0.05, 0.1), p=0.3),  # Scanner noise
                 A.GaussianBlur(blur_limit=(3, 5), p=0.2),  # Slight blur
                 A.MotionBlur(blur_limit=3, p=0.2),  # Motion artifacts
                 # Brightness/contrast (common in scanned documents)
@@ -152,7 +181,103 @@ class TrainTransformConfig(TransformConfig):
                 ),
                 A.RandomGamma(gamma_limit=(80, 120), p=0.3),
                 # Channel handling
-                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.ToGray(p=1.0, num_output_channels=1)),
+                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.NoOp()),
+                self._normalization_transform(),
+                ToTensorV2(),
+            ]
+        )
+
+
+class TrainHeavyTransformConfig(TransformConfig):
+    """Extra-heavy augmentation pipeline for continued training.
+
+    Adds stronger geometric distortions, compression/downscale artifacts,
+    heavier noise, and occlusions to improve robustness.
+    """
+
+    transform_type: Literal["train_heavy"] = Field(default="train_heavy")
+    """Discriminator field identifying this as an extra-heavy training config."""
+
+    def setup_target(self) -> A.Compose:  # type: ignore[override]
+        """Create extra-heavy training augmentation pipeline.
+
+        Returns:
+            A.Compose: Training pipeline with extra-heavy augmentation.
+        """
+        return A.Compose(
+            [
+                *self._resize_and_pad(),
+                # Stronger geometric augmentations (still document-friendly)
+                A.ShiftScaleRotate(
+                    shift_limit=0.03,
+                    scale_limit=0.08,
+                    rotate_limit=7,
+                    border_mode=0,
+                    p=0.5,
+                ),
+                A.Affine(
+                    scale=(0.92, 1.08),
+                    translate_percent=(0.02, 0.06),
+                    rotate=(-7, 7),
+                    shear=(-7, 7),
+                    border_mode=0,
+                    p=0.4,
+                ),
+                A.Perspective(scale=(0.03, 0.08), p=0.35),
+                A.OneOf(
+                    [
+                        A.GridDistortion(num_steps=5, distort_limit=0.03, p=1.0),
+                        A.OpticalDistortion(distort_limit=0.03, p=1.0),
+                        A.ElasticTransform(alpha=1.0, sigma=50, p=1.0),
+                    ],
+                    p=0.2,
+                ),
+                # Noise and blur (scanner + camera artifacts)
+                A.OneOf(
+                    [
+                        A.GaussNoise(std_range=(0.02, 0.12), p=1.0),
+                        A.MultiplicativeNoise(multiplier=(0.9, 1.1), p=1.0),
+                    ],
+                    p=0.5,
+                ),
+                A.OneOf(
+                    [
+                        A.GaussianBlur(blur_limit=(3, 7), p=1.0),
+                        A.MotionBlur(blur_limit=5, p=1.0),
+                    ],
+                    p=0.3,
+                ),
+                # Compression and scaling artifacts
+                A.OneOf(
+                    [
+                        A.ImageCompression(quality_range=(30, 80), p=1.0),
+                        A.Downscale(scale_range=(0.4, 0.9), p=1.0),
+                    ],
+                    p=0.3,
+                ),
+                # Contrast and local histogram changes
+                A.RandomBrightnessContrast(
+                    brightness_limit=0.25,
+                    contrast_limit=0.25,
+                    p=0.5,
+                ),
+                A.RandomGamma(gamma_limit=(70, 130), p=0.3),
+                A.CLAHE(clip_limit=(1.0, 3.0), tile_grid_size=(8, 8), p=0.2),
+                # Occlusions
+                A.OneOf(
+                    [
+                        A.CoarseDropout(
+                            num_holes_range=(1, 4),
+                            hole_height_range=(0.03, 0.12),
+                            hole_width_range=(0.03, 0.12),
+                            fill=0,
+                            p=1.0,
+                        ),
+                        A.GridDropout(ratio=0.2, random_offset=True, p=1.0),
+                    ],
+                    p=0.2,
+                ),
+                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.NoOp()),
                 self._normalization_transform(),
                 ToTensorV2(),
             ]
@@ -185,7 +310,7 @@ class FineTuneTransformConfig(TransformConfig):
                     p=0.3,
                 ),
                 # Convert channels
-                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.ToGray(p=1.0, num_output_channels=1)),
+                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.NoOp()),
                 # Normalization and tensor conversion
                 self._normalization_transform(),
                 ToTensorV2(),
@@ -222,7 +347,7 @@ class FineTunePlusTransformConfig(TransformConfig):
                     p=0.4,
                 ),
                 A.RandomGamma(gamma_limit=(90, 110), p=0.2),
-                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.ToGray(p=1.0, num_output_channels=1)),
+                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.NoOp()),
                 self._normalization_transform(),
                 ToTensorV2(),
             ]
@@ -248,7 +373,7 @@ class ValTransformConfig(TransformConfig):
             [
                 *self._resize_and_pad(),
                 # Convert grayscale to desired channel count
-                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.ToGray(p=1.0, num_output_channels=1)),
+                (A.ToRGB(p=1.0) if self.convert_to_rgb else A.NoOp()),
                 self._normalization_transform(),
                 ToTensorV2(),
             ]

@@ -134,7 +134,14 @@ class Optimizable(BaseModel, Generic[T]):
         return self.target is bool
 
     def _is_int(self) -> bool:
-        return self.target is int
+        if self.target is int:
+            return True
+        return (
+            self.target is None
+            and isinstance(self.low, int)
+            and isinstance(self.high, int)
+            and self.categories is None
+        )
 
     def _is_float(self) -> bool:
         return self.target is float or (isinstance(self.low, float) or isinstance(self.high, float))

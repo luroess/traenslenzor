@@ -27,6 +27,10 @@ def has_translated_text(session: SessionState) -> bool:
 
 
 def has_text_been_extracted(session: SessionState) -> bool:
+    return bool(session.text)
+
+
+def has_extracted_document(session: SessionState) -> bool:
     return session.extractedDocument is not None
 
 
@@ -54,13 +58,22 @@ def has_result_been_rendered(session: SessionState) -> bool:
     return session.renderedDocumentId is not None
 
 
+def has_super_resolved_document(session: SessionState) -> bool:
+    return session.superResolvedDocument is not None
+
+
 def format_session(session_id: str, session: SessionState) -> str:
+    text_count = len(session.text) if session.text else 0
     return f"""
         ✅ the current session_id is '{session_id}'
         {f"✅ the user has selected the language {session.language}" if session.language else "❌ the user has no language selected"}
         {"✅ the user has a document loaded" if session.rawDocumentId else "❌ the user has no document selected"}
 
+        {"✅ extracted document is available" if has_extracted_document(session) else "❌ no extracted document available"}
+        {"✅ super-resolved document is available" if has_super_resolved_document(session) else "❌ no super-resolved document available"}
+
         {"✅ text was extracted from the document" if has_text_been_extracted(session) else "❌ no text was extracted from the document"}
+        {f"✅ text items: {text_count}" if text_count else "❌ no text items recorded"}
         {"✅ the text was translated" if has_translated_text(session) else "❌ the text has not yet been translated"}
         {"✅ the font has been detected" if has_font_been_detected(session) else "❌ the font has not yet been detected"}
         {f"✅ the document has been classified as {get_best_classification(session)}" if has_document_been_classified(session) else "❌ the document has not yet been classified"}

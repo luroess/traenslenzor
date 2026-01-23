@@ -5,61 +5,80 @@ verbose  = true
 stage    = "train"
 
 [trainer_config]
-is_debug          = false
-fast_dev_run      = false
-accelerator       = "auto"
-strategy          = "auto"
-max_epochs        = 10
+is_debug     = false
+fast_dev_run = false
+accelerator  = "auto"
+strategy     = "auto"
+max_epochs        = 16
 precision         = "32-true"
-log_every_n_steps = 50
+log_every_n_steps = 20
 use_wandb         = true
 
     [trainer_config.callbacks]
-    use_model_checkpoint    = true
-    checkpoint_save_top_k   = 1
-    use_early_stopping      = true
-    early_stopping_patience = 3
-    use_lr_monitor          = true
-    use_rich_progress_bar   = false
-    use_tqdm_progress_bar   = true
-    use_rich_model_summary  = true
-    use_backbone_finetuning = false
-    use_timer               = false
+    use_model_checkpoint     = true
+    checkpoint_save_top_k    = 1
+    use_early_stopping       = true
+    early_stopping_patience  = 3
+    use_lr_monitor           = true
+    use_rich_progress_bar    = false
+    use_tqdm_progress_bar    = true
+    use_rich_model_summary   = true
+    use_backbone_finetuning  = false
+    use_timer                = false
+    use_train_heavy_switch   = true
+    train_heavy_switch_epoch = 8
 
     [trainer_config.wandb_config]
     project = "doc-class-detector"
     entity  = "traenslenzor"
     tags    = ["alexnet", "scratch"]
-    notes   = "Training AlexNet from scratch on RVL-CDIP document classification"
 
 [module_config]
 backbone = "alexnet" # BackboneType.ALEXNET
 
+# [module_config.model_params]
+# num_classes = 16   # RVL-CDIP has 16 classes
+# in_channels = 1    # Grayscale input
+# dropout     = 0.22 # No dropout for scratch training
+
     [module_config.optimizer]
-    learning_rate = 0.000327 # tuned from LR finder (suggested =3.27e-4)
-    weight_decay  = 0.0005   # Standard L2 regularization
+    learning_rate = 3.27e-4 
+    weight_decay  = 0.00046 
 
     [module_config.scheduler]
-    max_lr           = 0.000327 # Match tuner suggestion for max LR
+    # NOTE: original OneCycle config for the first 8 epochs (kept for reference)
+    max_lr           = 0.000288 # Match tuner suggestion for max LR
     base_momentum    = 0.85
     max_momentum     = 0.95
-    div_factor       = 10.0     # lr_start = max_lr / 10  = 3.27e-5
-    final_div_factor = 20.0     # lr_final = max_lr / (10*20) = 1.635e-6
+    div_factor       = 25.0     # lr_start = max_lr / 25  = 2.108e-5
+    final_div_factor = 1e4      # lr_final = max_lr / (10*20) = 1.635e-6
     pct_start        = 0.15     # 15% warmup, then cosine decay
     anneal_strategy  = "cos"
+    # pct_start     = 0.0
+    # base_momentum = 0.85
+    # max_momentum  = 0.95
 
 [datamodule_config]
-batch_size         = 42    # 48 barely fits onto 3090 (11.5GB VRAM) so reduced to 42
+batch_size         = 44    # Increased to use available VRAM (was 44)
 persistent_workers = true
 is_debug           = false
 verbose            = true
-# limit_num_samples  = 1024
+# limit_num_samples  = 0.0008000025000078126
 
     [datamodule_config.train_ds]
         [datamodule_config.train_ds.transform_config]
+        # Start with train augmentations; callback switches to train_heavy at epoch 8
+        transform_type = "train"
+        convert_to_rgb = false
+
+    [datamodule_config.val_ds]
+        [datamodule_config.val_ds.transform_config]
         # Aggressive augmentation for scratch training
-        transform_type    = "train"
-        p_color_jitter    = 0.5
-        p_perspective     = 0.3
-        p_affine          = 0.3
-        p_horizontal_flip = 0.5
+        transform_type = "val"
+        convert_to_rgb = false
+
+    [datamodule_config.test_ds]
+        [datamodule_config.test_ds.transform_config]
+        # Aggressive augmentation for scratch training
+        transform_type = "val"
+        convert_to_rgb = false

@@ -240,3 +240,7 @@ debug/
 
 # Generated test images
 **/test_images/
+.codex/
+.tmp/
+external/ADL-*/
+.scale_batch_size_*.ckpt

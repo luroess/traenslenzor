@@ -52,5 +52,4 @@ use_pretrained = false
 [datamodule_config]
 batch_size  = 32   # Initial batch_size (will be replaced by tuner if enabled)
 num_workers = 4
-pin_memory  = true
 verbose     = true

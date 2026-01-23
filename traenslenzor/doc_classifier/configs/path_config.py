@@ -11,10 +11,6 @@ def _default_root() -> Path:
     return PROJECT_ROOT
 
 
-def _default_data_root() -> Path:
-    return PROJECT_ROOT / ".data"
-
-
 class PathConfig(SingletonConfig):
     """Centralise all filesystem locations for the document classifier."""
 

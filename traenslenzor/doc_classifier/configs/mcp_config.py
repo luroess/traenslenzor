@@ -7,29 +7,23 @@ still allowing a real checkpoint to be plugged in later.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import Annotated, Literal
 
 import torch
 from pydantic import Field, field_validator
 
 from traenslenzor.doc_classifier.configs.path_config import PathConfig
 from traenslenzor.doc_classifier.lightning import DocClassifierConfig
+from traenslenzor.doc_classifier.mcp_integration.runtime import DocClassifierRuntime
 from traenslenzor.doc_classifier.utils import BaseConfig
-
-if TYPE_CHECKING:
-    from traenslenzor.doc_classifier.mcp_integration.runtime import DocClassifierRuntime
-
-
-def _runtime_target() -> type["DocClassifierRuntime"]:
-    from traenslenzor.doc_classifier.mcp_integration.runtime import DocClassifierRuntime
-
-    return DocClassifierRuntime
 
 
 class DocClassifierMCPConfig(BaseConfig["DocClassifierRuntime"]):
     """Factory config that creates a :class:`DocClassifierRuntime` instance."""
 
-    target: type["DocClassifierRuntime"] = Field(default_factory=_runtime_target, exclude=True)
+    @property
+    def target(self) -> type["DocClassifierRuntime"]:
+        return DocClassifierRuntime
 
     lit_module_config: DocClassifierConfig = Field(
         default_factory=DocClassifierConfig,
@@ -41,7 +35,7 @@ class DocClassifierMCPConfig(BaseConfig["DocClassifierRuntime"]):
     checkpoint_path: Annotated[
         Path | None,
         Field(
-            default=Path("resnet50-epoch=5-val_loss=0.52.ckpt"),
+            default=Path("alexnet-epoch=15-val_loss=0.03.ckpt"),
             description=(
                 "Optional path to a Lightning checkpoint (.ckpt). "
                 "If provided, should be relative to .logs/checkpoints/."

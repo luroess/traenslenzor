@@ -17,13 +17,17 @@ from ..utils import BaseConfig, Console
 from .lit_trainer_callbacks import TrainerCallbacksConfig
 
 if TYPE_CHECKING:
+    from optuna import Trial
+
     from ..configs.experiment_config import ExperimentConfig
 
 
 class TrainerFactoryConfig(BaseConfig):
     """Configuration for constructing a PyTorch Lightning trainer."""
 
-    target: type[pl.Trainer] = Field(default_factory=lambda: pl.Trainer, exclude=True)
+    @property
+    def target(self) -> type[pl.Trainer]:
+        return pl.Trainer
 
     is_debug: bool = False
     """Set fast_dev_run to True, use CPU, set num_workers to 0, don't create model_checkpoints if True"""
@@ -135,9 +139,11 @@ class TrainerFactoryConfig(BaseConfig):
             .set_debug(experiment.is_debug)
         )
 
-        if not self.wandb_config.name:
+        if not self.wandb_config.name and not self.wandb_config.has_resume_target():
             self.wandb_config.name = experiment.run_name
             console.log(f"Set W&B run name: {experiment.run_name}")
+        elif not self.wandb_config.name and self.wandb_config.has_resume_target():
+            console.log("W&B resume requested; leaving run name unset to preserve run metadata.")
 
         stage = getattr(experiment, "stage", None)
         if stage is not None:
@@ -146,11 +152,17 @@ class TrainerFactoryConfig(BaseConfig):
             self.wandb_config.tags = sorted(tags)
             console.log(f"Added stage tag to W&B: {stage}")
 
-    def setup_target(self, experiment: Optional["ExperimentConfig"] = None) -> pl.Trainer:
+    def setup_target(
+        self,
+        experiment: Optional["ExperimentConfig"] = None,
+        *,
+        trial: "Trial | None" = None,
+    ) -> pl.Trainer:
         """Instantiate the configured trainer.
 
         Args:
             experiment: Optional experiment config (ignored currently, kept for API compatibility).
+            trial: Optional Optuna trial to attach pruning callbacks when enabled.
         """
         console = Console.with_prefix(self.__class__.__name__, "setup_target")
         if experiment is not None:
@@ -170,7 +182,9 @@ class TrainerFactoryConfig(BaseConfig):
         console.log(f"Max epochs: {self.max_epochs}, precision: {self.precision}")
 
         callbacks = self.callbacks.setup_target(
-            model_name=experiment.module_config.backbone if experiment else None
+            model_name=experiment.module_config.backbone if experiment else None,
+            trial=trial,
+            optuna_config=experiment.optuna_config if experiment else None,
         )
         console.log(f"Configured {len(callbacks)} callbacks: ")
         console.plog(list(map(lambda cb: type(cb).__name__, callbacks)))

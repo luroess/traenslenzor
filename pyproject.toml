@@ -55,9 +55,9 @@ dev = [
     "types-pyyaml>=6.0.12.20250915",
     "types-requests>=2.32.4.20250913",
     "albumentations>=2.0.8",
-    "tomlkit>=0.13.3",
     "datasets>=4.4.1",
     "devtools>=0.12.2",
+    "tomli-w>=1.0.0",
     "optuna>=4.2.0",
     "optuna-integration[pytorch-lightning]>=4.5.0",
     "pydantic>=2.12.4",
@@ -72,6 +72,8 @@ dev = [
     "typing-extensions>=4.15.0",
     "syrenka>=0.5.7",
     "watchdog>=6.0.0",
+    "py-reform>=0.1.0",
+    "openvino>=2025.4.1",
     "pytesseract>=0.3.13",
 ]
 

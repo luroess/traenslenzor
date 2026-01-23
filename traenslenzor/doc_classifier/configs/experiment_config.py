@@ -1,15 +1,18 @@
 """High-level experiment orchestration for the document classifier."""
 
+import math
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 
 import optuna
 import wandb
+from git import TYPE_CHECKING
 from pydantic import Field, ValidationInfo, field_validator, model_validator
-from pytorch_lightning import LightningDataModule, LightningModule, Trainer, seed_everything
+from pytorch_lightning import Trainer, seed_everything
 from typing_extensions import Self
 
+from ..interpretability.attribution_runner import AttributionRunConfig
 from ..lightning import (
     DocClassifierConfig,
     DocDataModuleConfig,
@@ -19,6 +22,10 @@ from ..lightning import (
 from ..utils import BaseConfig, Console, Stage
 from .optuna_config import OptunaConfig
 from .path_config import PathConfig
+
+if TYPE_CHECKING:
+    from ..lightning.lit_datamodule import DocDataModule
+    from ..lightning.lit_module import DocClassifierModule
 
 
 class ExperimentConfig(BaseConfig[Trainer]):
@@ -67,6 +74,9 @@ class ExperimentConfig(BaseConfig[Trainer]):
     )
     """Optional Optuna configuration enabling hyperparameter searches and trial
     orchestration when set."""
+
+    attribution_run: AttributionRunConfig | None = Field(default=None)
+    """Optional attribution scan configuration executed instead of training when enabled."""
 
     @property
     def default_config_path(self) -> Path:
@@ -117,6 +127,7 @@ class ExperimentConfig(BaseConfig[Trainer]):
     ) -> Path | None:
         if isinstance(paths_cfg := info.data.get("paths"), PathConfig):
             return paths_cfg.resolve_checkpoint_path(value)
+        return value
 
     @model_validator(mode="after")
     def _apply_seed(self) -> Self:
@@ -136,10 +147,49 @@ class ExperimentConfig(BaseConfig[Trainer]):
             self.trainer_config.update_wandb_config(self)
         return self
 
+    def _prepare_wandb_resume(self) -> None:
+        if not self.trainer_config.use_wandb:
+            return
+
+        wandb_cfg = self.trainer_config.wandb_config
+        if not wandb_cfg.has_resume_target():
+            return
+
+        console = Console.with_prefix(self.__class__.__name__, "wandb_resume")
+        console.set_verbose(self.verbose).set_debug(self.is_debug)
+
+        run_id, run = wandb_cfg.resolve_resume_run()
+        if run_id is None:
+            console.warn("W&B resume requested but no run id was resolved.")
+            return
+
+        if wandb_cfg.resume is None:
+            wandb_cfg.resume = "allow"
+
+        if run is not None:
+            run_entity = getattr(run, "entity", None)
+            run_project = getattr(run, "project", None)
+            if run_entity and wandb_cfg.entity is None:
+                wandb_cfg.entity = run_entity
+            if run_project and wandb_cfg.project != run_project:
+                console.warn(
+                    f"W&B project mismatch: config '{wandb_cfg.project}' vs run '{run_project}'."
+                )
+
+        if self.from_ckpt is None:
+            ckpt_path = wandb_cfg.download_resume_checkpoint(run=run, root_dir=self.paths.wandb)
+            if ckpt_path is not None:
+                console.log(f"Resuming from W&B checkpoint: {ckpt_path}")
+                self.from_ckpt = ckpt_path
+            else:
+                console.warn("No checkpoint downloaded; continuing without from_ckpt.")
+
     def setup_target(  # type: ignore[override]
         self,
         setup_stage: Stage | str = Stage.TRAIN,
-    ) -> tuple[Trainer, LightningModule, LightningDataModule]:
+        *,
+        trial: optuna.Trial | None = None,
+    ) -> tuple[Trainer, "DocClassifierModule", "DocDataModule"]:
         """Create trainer, module, and datamodule instances."""
         console = Console.with_prefix(self.__class__.__name__, "setup_target")
         console.set_verbose(self.verbose).set_debug(self.is_debug)
@@ -148,7 +198,8 @@ class ExperimentConfig(BaseConfig[Trainer]):
         console.log(f"Stage: {setup_stage}, Seed: {self.seed}")
 
         console.log("Creating Trainer...")
-        trainer = self.trainer_config.setup_target(self)
+        self._prepare_wandb_resume()
+        trainer = self.trainer_config.setup_target(self, trial=trial)
 
         resolved_stage = Stage.from_str(setup_stage)
 
@@ -203,6 +254,10 @@ class ExperimentConfig(BaseConfig[Trainer]):
 
         console.log(f"Running experiment: {self.run_name} (stage={resolved_stage})")
 
+        if self.attribution_run is not None and self.attribution_run.enabled:
+            console.log("Attribution run enabled; running attribution scan.")
+            return self.run_attributions()
+
         trainer, lit_module, lit_datamodule = self.setup_target(
             setup_stage=resolved_stage,
         )
@@ -224,20 +279,48 @@ class ExperimentConfig(BaseConfig[Trainer]):
         stage_console.set_verbose(self.verbose).set_debug(self.is_debug)
 
         ckpt_input = str(self.from_ckpt) if self.from_ckpt is not None else None
-        if resolved_stage is Stage.TRAIN:
-            stage_console.log("Starting training (fit)...")
-            trainer.fit(lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input)
-            stage_console.log("Training completed")
-        elif resolved_stage is Stage.VAL:
-            stage_console.log("Starting validation...")
-            trainer.validate(lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input)
-            stage_console.log("Validation completed")
-        elif resolved_stage is Stage.TEST:
-            stage_console.log("Starting testing...")
-            trainer.test(lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input)
-            stage_console.log("Testing completed")
+        try:
+            if resolved_stage is Stage.TRAIN:
+                stage_console.log("Starting training (fit)...")
+                trainer.fit(
+                    lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input, weights_only=False
+                )
+                stage_console.log("Training completed")
+            elif resolved_stage is Stage.VAL:
+                stage_console.log("Starting validation...")
+                trainer.validate(
+                    lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input, weights_only=False
+                )
+                stage_console.log("Validation completed")
+            elif resolved_stage is Stage.TEST:
+                stage_console.log("Starting testing...")
+                trainer.test(
+                    lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input, weights_only=False
+                )
+                stage_console.log("Testing completed")
+        except KeyboardInterrupt:
+            stage_console.warn("Keyboard interrupt received. Shutting down.")
+            if wandb.run is not None:
+                wandb.finish()
+            return trainer
 
         return trainer
+
+    def run_attributions(self) -> Trainer:
+        """Run attribution scan configured by AttributionRunConfig.
+
+        Returns:
+            Trainer instance used during attribution setup.
+        """
+        if self.attribution_run is None or not self.attribution_run.enabled:
+            raise ValueError("AttributionRunConfig is not enabled.")
+
+        console = Console.with_prefix(self.__class__.__name__, "run_attributions")
+        console.set_verbose(self.verbose).set_debug(self.is_debug)
+        console.log("Starting attribution scan.")
+
+        runner = self.attribution_run.setup_target()
+        return runner.run(self)
 
     def compute_grayscale_mean_std(self) -> tuple[float, float]:
         """Compute grayscale mean/std for the configured training split.
@@ -265,6 +348,42 @@ class ExperimentConfig(BaseConfig[Trainer]):
         console.log(f"Number of trials: {self.optuna_config.n_trials}")
         console.log(f"Monitoring metric: {self.optuna_config.monitor}")
 
+        def _coerce_metric(raw_metric: object | None) -> float | None:
+            if raw_metric is None:
+                return None
+            try:
+                value = (
+                    float(raw_metric.item()) if hasattr(raw_metric, "item") else float(raw_metric)
+                )
+            except (TypeError, ValueError):
+                return None
+            if not math.isfinite(value):
+                return None
+            return value
+
+        def _fallback_metric(direction: str) -> float:
+            return float("inf") if direction == "minimize" else float("-inf")
+
+        def _get_metric_from_trainer(
+            trainer: Trainer | None,
+            monitor: str,
+        ) -> tuple[float | None, str | None]:
+            if trainer is None:
+                return None, None
+            monitor_key = str(monitor)
+            for source_name in ("callback_metrics", "logged_metrics", "progress_bar_metrics"):
+                metrics = getattr(trainer, source_name, None)
+                if metrics and monitor_key in metrics:
+                    metric_value = _coerce_metric(metrics.get(monitor_key))
+                    if metric_value is not None:
+                        return metric_value, source_name
+            ckpt_callback = getattr(trainer, "checkpoint_callback", None)
+            if ckpt_callback is not None:
+                metric_value = _coerce_metric(getattr(ckpt_callback, "best_model_score", None))
+                if metric_value is not None:
+                    return metric_value, "checkpoint_callback.best_model_score"
+            return None, None
+
         def objective(trial: optuna.Trial) -> float:
             trial_console = Console.with_prefix(self.__class__.__name__, f"trial_{trial.number}")
             trial_console.set_verbose(self.verbose)
@@ -287,34 +406,76 @@ class ExperimentConfig(BaseConfig[Trainer]):
                 trial,
             )
 
-            trainer, lit_module, lit_datamodule = experiment_config_copy.setup_target(
-                setup_stage=self.stage,
-            )
-            trainer.fit(lit_module, datamodule=lit_datamodule)
+            trainer: Trainer | None = None
+            monitor = str(experiment_config_copy.optuna_config.monitor)
+            metric = _fallback_metric(experiment_config_copy.optuna_config.direction)
+            metric_source = "fallback"
 
-            monitor = experiment_config_copy.optuna_config.monitor
-            raw_metric = trainer.callback_metrics.get(monitor)
-            metric = (
-                float(raw_metric.item())
-                if hasattr(raw_metric, "item")
-                else float(raw_metric or float("inf"))
-            )
+            try:
+                trainer, lit_module, lit_datamodule = experiment_config_copy.setup_target(
+                    setup_stage=self.stage,
+                    trial=trial,
+                )
+                trainer.fit(lit_module, datamodule=lit_datamodule)
+
+                if experiment_config_copy.trainer_config.callbacks.use_optuna_pruning:
+                    _check_pruned(trainer, trial_console)
+
+                extracted_metric, source = _get_metric_from_trainer(trainer, monitor)
+                if extracted_metric is None:
+                    trial_console.warn(
+                        f"No '{monitor}' metric found after training; using fallback {metric:.4f}."
+                    )
+                else:
+                    metric = extracted_metric
+                    metric_source = source or "unknown"
+            except optuna.TrialPruned as exc:
+                trial_console.warn(f"Trial {trial.number} pruned: {exc}")
+                raise
+            except KeyboardInterrupt:
+                trial_console.warn("Keyboard interrupt received. Stopping Optuna study.")
+                raise
+            except Exception as exc:
+                trial_console.error(f"Trial {trial.number} failed: {exc}")
+                extracted_metric, source = _get_metric_from_trainer(trainer, monitor)
+                if extracted_metric is not None:
+                    metric = extracted_metric
+                    metric_source = f"failed:{source}"
+                    trial_console.warn(f"Recovered '{monitor}' from {source}: {metric:.4f}.")
+                else:
+                    metric_source = "failed:fallback"
+                    trial_console.warn(
+                        f"No '{monitor}' metric available after failure; using fallback "
+                        f"{metric:.4f}."
+                    )
+                trial.set_user_attr("failed_reason", repr(exc))
+            finally:
+                experiment_config_copy.optuna_config.log_to_wandb()
+
+                if self.optuna_config is not None:
+                    self.optuna_config.suggested_params = (
+                        experiment_config_copy.optuna_config.suggested_params.copy()
+                    )
+
+                if wandb.run is not None:
+                    wandb.finish()
+
+            trial.set_user_attr("metric_source", metric_source)
             trial_console.log(
                 f"Trial {trial.number} finished with {monitor}: {metric:.4f}",
             )
             console.dbg(f"Trial {trial.number} params: {trial.params}")
-
-            experiment_config_copy.optuna_config.log_to_wandb()
-
-            if self.optuna_config is not None:
-                self.optuna_config.suggested_params = (
-                    experiment_config_copy.optuna_config.suggested_params.copy()
-                )
-
-            if wandb.run is not None:
-                wandb.finish()
-
             return metric
+
+        def _check_pruned(trainer: Trainer, trial_console: Console) -> None:
+            """Raise TrialPruned if Optuna requested pruning."""
+            for callback in trainer.callbacks:
+                check_pruned = getattr(callback, "check_pruned", None)
+                if callable(check_pruned):
+                    trial_console.log("Optuna pruning check executed.")
+                    check_pruned()
+                    return
+            trial_console.warn("Optuna pruning enabled but no pruning callback was found.")
 
         if self.trainer_config.use_wandb:
             self.trainer_config.wandb_config.group = "optuna"
@@ -323,7 +484,11 @@ class ExperimentConfig(BaseConfig[Trainer]):
 
         study = self.optuna_config.setup_target()
         console.log(f"Running optimization with {self.optuna_config.n_trials} trials...")
-        study.optimize(objective, n_trials=self.optuna_config.n_trials)
+        try:
+            study.optimize(objective, n_trials=self.optuna_config.n_trials)
+        except KeyboardInterrupt:
+            console.warn("Keyboard interrupt received. Stopping Optuna study.")
+            return
 
         if hasattr(study, "best_value") and hasattr(study, "best_params"):
             console.log(f"Optuna study completed. Best value: {study.best_value:.4f}")

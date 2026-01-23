@@ -149,6 +149,14 @@ async def replace_text(
     )
 
     transformation_matrix = session.extractedDocument.transformation_matrix
+    map_xy = None
+    if session.extractedDocument.mapXYId:
+        map_xy = await FileClient.get_numpy_array(session.extractedDocument.mapXYId)
+        if map_xy is None:
+            logger.warning(
+                "Failed to load map_xy for %s; falling back to homography.",
+                session.extractedDocument.mapXYId,
+            )
     original_image = await FileClient.get_image(session.rawDocumentId)
     if original_image is None:
         logger.error(f"Failed to load original image for document: {session.rawDocumentId}")
@@ -158,8 +166,16 @@ async def replace_text(
         )
     original_size = (original_image.width, original_image.height)
 
+    inverse_matrix = (
+        np.linalg.inv(np.array(transformation_matrix))
+        if transformation_matrix is not None
+        else None
+    )
     final_image = renderer.transform_image(
-        result_image, np.linalg.inv(np.array(transformation_matrix)), original_size
+        result_image,
+        inverse_matrix,
+        original_size,
+        map_xy=map_xy,
     )
 
     final_image = renderer.paste_replaced_to_original(original_image, final_image)

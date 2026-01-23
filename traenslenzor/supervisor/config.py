@@ -11,7 +11,7 @@ from pydantic_settings import (
 
 class LLMConfig(BaseModel):
     seed: int = 69
-    temperature: int = 0
+    temperature: float = 0
     ollama_url: str = "http://localhost:11434"
     model: str = "qwen3:4b"
     debug_mode: bool = False

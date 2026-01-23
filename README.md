@@ -9,7 +9,7 @@
     sudo apt install tesseract-ocr
     ```
 
-- [ollama](https://ollama.com/) – Used for hosting the LLM.  
+- [ollama](https://ollama.com/) – Used for hosting the LLM.
   If Ollama is running on a port other than the default (`11434`), update the `ollama_url` setting in `.configs/supervisor.toml` accordingly.
 
 ## Run Project
@@ -23,7 +23,7 @@ uv run python -m traenslenzor
 After cloning, install python dependencies
 
 ```sh
-uv sync
+uv sync --dev
 ```
 
 install pre-commit hooks:
@@ -87,9 +87,13 @@ sequenceDiagram
 ```ts
 interface State {
     rawDocumentId: string;
+    deskewBackend?: "opencv" | "uvdoc";
     extractedDocument: {
         id: string,
         documentCoordinates: [];
+        mapXYId?: string,
+        mapXYShape?: [number, number, number],
+        backend?: "opencv" | "uvdoc",
     }
     renderedDocumentId: string,
     text: TextItem[];
@@ -109,6 +113,3 @@ interface TextItem {
     translatedText: string;
 }
 ```
-
-
-

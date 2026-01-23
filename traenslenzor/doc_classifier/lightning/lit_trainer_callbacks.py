@@ -18,11 +18,15 @@ from typing_extensions import Self
 from traenslenzor.doc_classifier.utils.console import Console
 
 from ..configs.path_config import PathConfig
+from ..data_handling.huggingface_rvl_cdip_ds import make_transform_fn
+from ..data_handling.transforms import TrainHeavyTransformConfig, TransformConfig
 from ..utils import BaseConfig, Metric
 from .finetune_callback import OneCycleBackboneFinetuning
 
 if TYPE_CHECKING:
-    pass
+    from optuna import Trial
+
+    from ..configs.optuna_config import OptunaConfig
 
 
 class CustomTQDMProgressBar(TQDMProgressBar):
@@ -46,6 +50,66 @@ class CustomRichProgressBar(RichProgressBar):
         items = super().get_metrics(trainer, pl_module)
         items.pop("v_num", None)
         return items
+
+
+class TrainTransformSwitchCallback(Callback):
+    """Switch training transforms to the heavy pipeline at a target epoch."""
+
+    def __init__(self, switch_epoch: int = 8) -> None:
+        super().__init__()
+        self.switch_epoch = switch_epoch
+        self._switched = False
+
+    @staticmethod
+    def _build_heavy_config(base: TransformConfig | None) -> TrainHeavyTransformConfig:
+        if isinstance(base, TrainHeavyTransformConfig):
+            return base
+        if base is None:
+            return TrainHeavyTransformConfig()
+        base_data = base.model_dump()
+        base_data["transform_type"] = "train_heavy"
+        filtered = {
+            key: value
+            for key, value in base_data.items()
+            if key in TrainHeavyTransformConfig.model_fields
+        }
+        return TrainHeavyTransformConfig(**filtered)
+
+    def on_train_epoch_start(self, trainer, pl_module) -> None:
+        if self._switched or trainer.current_epoch < self.switch_epoch:
+            return
+
+        console = Console.with_prefix(self.__class__.__name__, "on_train_epoch_start")
+        datamodule = trainer.datamodule
+        if datamodule is None or not hasattr(datamodule, "config"):
+            console.warn("No datamodule with config found; cannot switch transforms.")
+            return
+
+        train_cfg = getattr(datamodule.config, "train_ds", None)
+        if train_cfg is None:
+            console.warn("No train_ds config found; cannot switch transforms.")
+            return
+
+        base_cfg = getattr(train_cfg, "transform_config", None)
+        if isinstance(base_cfg, TrainHeavyTransformConfig):
+            self._switched = True
+            console.log("Training transforms already set to TrainHeavyTransformConfig.")
+            return
+
+        heavy_cfg = self._build_heavy_config(base_cfg)
+        train_cfg.transform_config = heavy_cfg
+
+        try:
+            dataset = datamodule.train_ds
+            transform_pipeline = heavy_cfg.setup_target()
+            dataset.set_transform(make_transform_fn(transform_pipeline))
+            self._switched = True
+            console.log(
+                f"Switched training transforms to {heavy_cfg.__class__.__name__} "
+                f"(epoch={trainer.current_epoch})."
+            )
+        except Exception as exc:
+            console.warn(f"Failed to switch training transforms: {exc}")
 
 
 class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
@@ -75,7 +139,10 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
     """Number of epochs with no improvement after which training stops."""
 
     use_lr_monitor: bool = True
-    lr_logging_interval: str = "epoch"
+    lr_logging_interval: str = "step"
+
+    use_optuna_pruning: bool = False
+    """Enable Optuna pruning callback for hyperparameter optimization runs."""
 
     use_rich_progress_bar: bool = False
     """Enable Rich progress bar for enhanced terminal output. Mutually exclusive with use_tqdm_progress_bar."""
@@ -98,6 +165,11 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
     """Deprecated: unused by the OneCycleLR-safe finetuning callback."""
     backbone_train_bn: bool = True
     """Whether to train batch normalization layers during backbone finetuning."""
+
+    use_train_heavy_switch: bool = False
+    """Switch training transforms to TrainHeavyTransformConfig after a target epoch."""
+    train_heavy_switch_epoch: int = 8
+    """Epoch to activate the heavy training transform pipeline (0-based)."""
 
     use_timer: bool = False
     """Enable timer callback to track training duration."""
@@ -127,9 +199,25 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
         safe_name = cls._sanitize_metric_name(monitor_name)
         return f"epoch={{epoch}}-{safe_name}=" + "{" + monitor_name + ":.2f}"
 
-    def setup_target(self, model_name: str | None = None) -> list[Callback]:
+    def setup_target(  # type: ignore[override]
+        self,
+        model_name: str | None = None,
+        *,
+        trial: "Trial | None" = None,
+        optuna_config: "OptunaConfig | None" = None,
+    ) -> list[Callback]:
         console = Console.with_prefix(self.__class__.__name__)
         callbacks: list[Callback] = []
+
+        if trial:
+            object.__setattr__(self, "use_model_checkpoint", False)
+            object.__setattr__(self, "use_early_stopping", False)
+            if self.use_optuna_pruning is False:
+                console.warn(
+                    "Optuna trial provided but use_optuna_pruning is False. "
+                    "Enabling use_optuna_pruning."
+                )
+                object.__setattr__(self, "use_optuna_pruning", True)
 
         if self.use_model_checkpoint:
             dirpath = (
@@ -206,6 +294,14 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
                 )
             )
 
+        if self.use_train_heavy_switch:
+            callbacks.append(
+                TrainTransformSwitchCallback(
+                    switch_epoch=self.train_heavy_switch_epoch,
+                )
+            )
+            console.log(f"Train transforms will switch at epoch {self.train_heavy_switch_epoch}.")
+
         if self.use_timer:
             callbacks.append(
                 Timer(
@@ -213,5 +309,13 @@ class TrainerCallbacksConfig(BaseConfig[list[Callback]]):
                     interval=self.timer_interval,
                 ),
             )
+
+        if self.use_optuna_pruning:
+            if optuna_config is None:
+                raise ValueError("optuna_config is required when use_optuna_pruning is True.")
+            if trial is None:
+                raise ValueError("trial is required when use_optuna_pruning is True.")
+            callbacks.append(optuna_config.get_pruning_callback(trial))
+            console.log(f"Optuna pruning active (monitor={optuna_config.monitor})")
 
         return callbacks

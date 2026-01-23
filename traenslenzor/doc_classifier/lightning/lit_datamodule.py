@@ -1,7 +1,6 @@
 """LightningDataModule wrapper around RVL-CDIP with configurable transforms."""
 
 import os
-import warnings
 from typing import Any, Callable
 
 import numpy as np
@@ -15,15 +14,6 @@ from typing_extensions import Self
 from ..data_handling.huggingface_rvl_cdip_ds import RVLCDIPConfig
 from ..data_handling.transforms import TrainTransformConfig, ValTransformConfig
 from ..utils import BaseConfig, Console, Stage
-
-# Suppress PyTorch's internal pin_memory deprecation warning (PyTorch 2.9+)
-# This warning comes from DataLoader's internal implementation
-warnings.filterwarnings(
-    "ignore",
-    message=r"The argument 'device' of Tensor\.pin_memory\(\) is deprecated",
-    category=DeprecationWarning,
-    module=r"torch\.utils\.data\._utils\.pin_memory",
-)
 
 
 def collate_hf_batch(batch: list[dict[str, Any]]) -> tuple[torch.Tensor, torch.Tensor]:
@@ -98,7 +88,9 @@ def _default_ds(split: Stage) -> RVLCDIPConfig:
 class DocDataModuleConfig(BaseConfig["DocDataModule"]):
     """Configuration for :class:`DocDataModule`."""
 
-    target: type["DocDataModule"] = Field(default_factory=lambda: DocDataModule, exclude=True)
+    @property
+    def target(self) -> type["DocDataModule"]:
+        return DocDataModule
 
     batch_size: int = 32
     """Batch size for DataLoaders."""
@@ -109,9 +101,14 @@ class DocDataModuleConfig(BaseConfig["DocDataModule"]):
     persistent_workers: bool = True
     """Whether to keep DataLoader worker processes alive between epochs."""
 
-    limit_num_samples: float | None = Field(default=None, gt=0, lt=1.0)
-    """Limit number of samples per dataset for debugging.
-    If int, uses that many samples. If float between 0 and 1, uses that fraction of the dataset."""
+    limit_num_samples: float | None = Field(default=None)
+    """Limit number of samples per dataset."""
+
+    limit_sample_shuffle: bool = True
+    """Whether to shuffle before applying limit_num_samples (avoids ordered subsets)."""
+
+    seed: int | None = 42
+    """Seed used when shuffling a limited dataset. Set None for non-deterministic order."""
 
     is_debug: bool = False
     verbose: bool = True
@@ -142,6 +139,19 @@ class DocDataModuleConfig(BaseConfig["DocDataModule"]):
             object.__setattr__(self, "num_workers", 0)
             console.log("Debug settings: num_workers=0 applied for DataModule")
 
+        return self
+
+    @model_validator(mode="after")
+    def _validate_limit_num_samples(self) -> Self:
+        """Validate limit_num_samples supports int counts or float fractions."""
+        limit = self.limit_num_samples
+        if limit is None:
+            return self
+        if isinstance(limit, float):
+            if not 0 < limit < 1.0:
+                raise ValueError("limit_num_samples must be in (0, 1) when float.")
+        else:
+            raise ValueError("limit_num_samples must be int, float, or None.")
         return self
 
 
@@ -320,19 +330,19 @@ class DocDataModule(pl.LightningDataModule):
         Returns:
             HFDataset: Limited dataset with specified number/fraction of samples.
         """
-        limit = self.config.limit_num_samples
         original_size = len(dataset)
-        target_size = int(original_size * limit)
+        target_size = max(1, int(original_size * self.config.limit_num_samples))
 
-        # Select subset
-        limited_dataset = dataset.select(range(target_size))
+        # Select subset (shuffle first to avoid ordered bias)
+        limited_dataset = dataset.shuffle(seed=self.config.seed).select(range(target_size))
 
         # Log the limitation
         console = Console.with_prefix(self.__class__.__name__, "_apply_sample_limit")
         console.set_verbose(self.config.verbose).set_debug(self.config.is_debug)
         console.log(
             f"Limited {stage} dataset: {original_size} → {target_size} samples "
-            f"({target_size / original_size * 100:.1f}%)"
+            f"({target_size / original_size * 100:.1f}%), "
+            f"shuffle={self.config.limit_sample_shuffle}, seed={self.config.seed}"
         )
 
         return limited_dataset

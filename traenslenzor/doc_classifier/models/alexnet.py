@@ -1,6 +1,5 @@
 import torch
 from jaxtyping import Float
-from pydantic import Field
 from torch import nn
 
 from ..utils import BaseConfig
@@ -9,9 +8,12 @@ from ..utils import BaseConfig
 class AlexNetParams(BaseConfig["AlexNet"]):
     """Parameter configuration for AlexNet."""
 
-    target: type["AlexNet"] = Field(default_factory=lambda: AlexNet, exclude=True)
+    @property
+    def target(self) -> type["AlexNet"]:
+        return AlexNet
+
     num_classes: int
-    dropout: float = 0.5
+    dropout: float = 0.3
     in_channels: int = 1
     """Number of input channels. Set to 1 for grayscale; set to 3 for RGB."""
 
@@ -67,7 +69,7 @@ class AlexNet(nn.Module):
         super().__init__()
         self.params = params
 
-        self.features = nn.Sequential(
+        self.backbone = nn.Sequential(
             nn.Conv2d(self.params.in_channels, 96, kernel_size=11, stride=4, padding=2),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2),
@@ -81,9 +83,10 @@ class AlexNet(nn.Module):
             nn.Conv2d(384, 256, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.AdaptiveAvgPool2d((6, 6)),
         )
-        self.avgpool = nn.AdaptiveAvgPool2d((6, 6))
         self.classifier = nn.Sequential(
+            nn.Flatten(),
             nn.Dropout(p=self.params.dropout),
             nn.Linear(256 * 6 * 6, 4096),
             nn.ReLU(inplace=True),
@@ -103,9 +106,7 @@ class AlexNet(nn.Module):
         Returns:
             Logits with shape (B, N) where N = num_classes.
         """
-        x = self.features(x)
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
+        x = self.backbone(x)
         x = self.classifier(x)
         return x
 

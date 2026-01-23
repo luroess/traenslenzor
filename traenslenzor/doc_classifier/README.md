@@ -37,14 +37,14 @@ uv run traenslenzor/doc_classifier/run.py -h
 Train AlexNet from scratch on RVL-CDIP with default settings:
 
 ```sh
-uv run traenslenzor/doc_classifier/run.py --config_path .configs/alexnet_scratch.toml
+uv run traenslenzor/doc_classifier/run.py --config_path _config/alexnet_scratch.toml
 ```
 
 Or fine-tune ResNet-50 or Vit-16 pretrained on ImageNet:
 
 ```sh
-uv run traenslenzor/doc_classifier/run.py --config_path .configs/resnet50_finetune.toml
-# uv run traenslenzor/doc_classifier/run.py --config_path .configs/vit_finetune.toml
+uv run traenslenzor/doc_classifier/run.py --config_path _config/resnet50_finetune.toml
+# uv run traenslenzor/doc_classifier/run.py --config_path _config/vit_finetune.toml
 ```
 
 ## Package Structure
@@ -87,6 +87,32 @@ Key points:
 2. `OptunaConfig.setup_optimizables()` recursively visits nested configs, lists, and dicts; suggested values are applied before `ExperimentConfig.setup_target(...)`.
 3. Suggestions are recorded in `OptunaConfig.suggested_params` and forwarded to WandB via `log_to_wandb()`. No manual plumbing needed inside your objective.
 
+### TOML-defined Optuna Sweeps (No Python)
+
+You can run Optuna sweeps directly from a normal TOML config via `optuna_config.search_space`:
+
+```toml
+[optuna_config]
+study_name = "resnet50-sweep"
+n_trials   = 30
+monitor    = "val/loss"
+
+    [optuna_config.search_space.module_config.scheduler]
+    max_lr = { low = 1e-4, high = 3e-3, log = true }
+
+    [optuna_config.search_space.trainer_config.callbacks]
+    backbone_unfreeze_at_epoch = { low = 0, high = 3, step = 1 }
+
+    [optuna_config.search_space.datamodule_config.train_ds]
+    transform_config = { categories = ["train", "finetune", "finetune_plus"] }
+```
+
+Run the sweep:
+
+```bash
+uv run traenslenzor/doc_classifier/run.py --sweep_path _config/resnet_sweep.toml
+```
+
 ## Running Experiments
 
 ### Creating and Managing Configs
@@ -101,18 +127,17 @@ config = ExperimentConfig(run_name="my_experiment", verbose=True)
 config.trainer_config.max_epochs = 20
 config.module_config.learning_rate = 1e-3
 
-# Save to default location: .configs/{run_name}.toml
+# Save to default location: _config/{run_name}.toml
 config.save_config()
 
 # Or save to a custom path
-config.save_config(".configs/custom_name.toml")
+config.save_config("_config/custom_name.toml")
 ```
 
-The generated TOML file includes:
-- Type hints for all fields (e.g., `# type: <class 'int'>`)
-- Doc-strings as comments for documentation
-- Proper nested structure for complex configs
-- Human-readable format with clear section headers
+The generated TOML file contains:
+- The nested config structure in standard TOML (tables/arrays)
+- Only data values (internal factory plumbing like `target` is not serialized)
+- No comment/type-hint preservation (current writer is `tomli-w`)
 
 **Loading configs from TOML:**
 
@@ -121,7 +146,7 @@ from pathlib import Path
 from traenslenzor.doc_classifier.configs import ExperimentConfig
 
 # Load a saved config
-config = ExperimentConfig.from_toml(Path(".configs/my_experiment.toml"))
+config = ExperimentConfig.from_toml(Path("_config/my_experiment.toml"))
 
 # Modify and re-save
 config.trainer_config.max_epochs = 50
@@ -144,16 +169,16 @@ config.save_config()
 "
 
 # Run training with the saved config
-uv run traenslenzor/doc_classifier/run.py --config_path=.configs/my_run.toml
+uv run traenslenzor/doc_classifier/run.py --config_path=_config/my_run.toml
 
 # Run validation only
 uv run traenslenzor/doc_classifier/run.py \
-  --config_path=.configs/my_run.toml \
+  --config_path=_config/my_run.toml \
   --stage=VAL
 
 # Run test only
 uv run traenslenzor/doc_classifier/run.py \
-  --config_path=.configs/my_run.toml \
+  --config_path=_config/my_run.toml \
   --stage=TEST
 ```
 
@@ -180,7 +205,7 @@ uv run traenslenzor/doc_classifier/run.py \
 ```bash
 # Load base config from TOML, then override specific values
 uv run traenslenzor/doc_classifier/run.py \
-  --config_path=.configs/my_run.toml \
+  --config_path=_config/my_run.toml \
   --trainer_config.max_epochs=50 \
   --module_config.learning_rate=0.0005
 
