@@ -500,7 +500,8 @@ We export multiple methods (Integrated Gradients, Input x Gradient, Noise Tunnel
 - *Scientific publication (AlexNet best, IG):* evidence spreads over the dense text block and page frame rather than local semantics.
 - *Handwritten (ResNet-50 best, Layer Gradient x Activation ):* evidence follows stroke-like regions and line structure, which are discriminative for this class.
 
-*Observations (worst cases).* In the worst examples, both backbones confuse *advertisement* with *scientific publication*. Grad-CAM highlights high-contrast, title-like typography and centralized foreground structure, suggesting a shortcut based on global layout, strong contrast, and scan/capture artifacts (frame, margins), rather than content-level semantics.
+*Observations (worst cases).* In the worst examples, both backbones confuse *advertisement* with *scientific publication*. Grad-CAM highlights high-contrast, title-like typography and centralized foreground structure and scan/capture artifacts (frame, margins), rather than content-level semantics. The AlexNet attributions are non-specific, diffuse and nearly uniform, which suggests that the model failed to find discriminative features and fell back to a near-random guess. The ResNet-50 attributions focus on a distinct center-region: a depiction of a feamle model, as well as the high-contrast, non-layout-aligned title, which both appear as strong visual cues _against_ typical scientific publication layouts, hence the misclassification is rather unexpected in this case.
+
 
 The qualitative evidence in @fig-doc-cls-attrib-gradcam supports the broader RVL-CDIP pattern: the classifier relies heavily on document layout. To reduce the shown failure mode, augmentations that decorrelate labels from borders/background (random crops, margin masking, stronger background/contrast perturbations) should make the model less sensitive to shortcuts and improve robustness.
 
