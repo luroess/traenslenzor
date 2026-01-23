@@ -46,9 +46,9 @@
     inset: 6pt,
     table.header([*WP ID*], [*Work Package Description*]),
     [UI1], [Basic UI],
-    [UI2], [Streamlit UI revision: async handling, session init],
-    [UI3], [Live updates (polling/progress) + session overview + image panel],
-    [UI4], [Session tools and UI chores],
+    [UI2], [Streamlit UI revision: async handling, session init, image panel, prompt presets],
+    [UI3], [Live updates (polling/progress) + session overview + image panel++],
+    [UI4], [Session tools & UI chores],
 
     [SV1], [Technology experiments.],
     [SV2], [Supervisor setup.],
@@ -83,18 +83,16 @@
     [IR3], [Rotation and transformation support],
     [IR4], [MCP server integration],
 
-    // Document Scanner Jan Duchscherer
-    [DS1], [Integrate UVDoc + runtime/backends],
-    [DS2], [Deskew pipeline + SessionState integration],
+    [DS1], [UVDoc backend + MCP integration],
+    [DS2], [Deskew pipeline],
     [DS3], [Super-resolution + stabilization],
 
-    // Document Class Detector Jan Duchscherer
-    [DC1], [Bootstrap ML infrastructure],
-    [DC2], [RVL-CDIP dataset + Albumentations transforms + dataset stats],
-    [DC3], [Lightning training pipeline (AlexNet/ResNet-50/ViT-B/16)],
-    [DC4], [Experiment tooling (W&B, Optuna sweeps, resume, tests)],
-    [DC5], [Interpretability (Captum attributions)],
-    [DC6], [Serving tool (FastMCP + File Server session integration)],
+    [DC1], [ML infrastructure],
+    [DC2], [RVL-CDIP + transforms],
+    [DC3], [Lit train pipeline (optimizer, scheduler, callbacks)],
+    [DC4], [Experiment tooling (WandB/Optuna)],
+    [DC5], [Interpretability (Captum)],
+    [DC6], [Serving tool (FastMCP + sessions)],
   )
 ] <team_work_packages_work_packages_table>
 
@@ -104,20 +102,20 @@
   [UI1],
   [
     - Set up the Streamlit #gls("ui").
-    - Implemented the initial chat interface (prompt input, message rendering) and a simple run helper.
+    - Built a basic chat interface to interact with the supervisor.
   ],
   [Jan Duchscherer],
   [UI2],
   [
-    - Extended the UI into a session-based app with improved File Server integration.
-    - Added prompt presets, refined chat-session handling & caching.
-    - Updated session progress and image panel to match evolving supervisor interfaces.
+    - Improved File Server integration and async handling.
+    - Improved session initialization and error handling.
+    - Added prompt presets, improved runtime behaviour and caching.
+    - Added session progress and image panels to monitor evolving supervisor interfaces.
   ],
   [Lukas Roess],
-  [UI1],
+  [UI2],
   [
-    - Improved run ergonomics (default Streamlit port).
-    - Extended the sidebar session overview to surface additional per-item metadata (e.g., translation/font fields).
+    - Extended the sidebar session overview to show additional per-item metadata (e.g., translation/font fields).
   ],
   [Felix Schladt],
   [UI2],
@@ -135,7 +133,6 @@
   [UI2],
   [
     - Improved UI compatibility with session state schema changes (nested translation/font structures).
-    - Adapted the UI to changes in downstream tools (e.g., image renderer) to keep the pipeline functional end-to-end.
   ],
   [Jan Schaible],
   [UI2],
@@ -224,28 +221,6 @@
 )
 
 #contributed(
-  "Document Scanner",
-  [Jan Duchscherer],
-  [DS1],
-  [
-    - Integrated UVDoc and introduced a backend-based runtime.
-
-  ],
-  [Jan Duchscherer],
-  [DS2],
-  [
-    - Improved document cropping from TE1 and added transition fallback logic.
-    - Updated session state structures to carry scanner outputs for downstream tools.
-  ],
-  [Jan Duchscherer],
-  [DS3],
-  [
-    - Iterated on flow-field based deskewing.
-    - Added super-resolution tool & cut down interface complexity.
-  ],
-)
-
-#contributed(
   "Text Extractor",
   [Felix Schladt],
   [TE1],
@@ -264,6 +239,27 @@
   [
     - Performed #gls("ocr") using Tesseract.
     - Parsed results into the session data structure.
+  ],
+)
+
+#contributed(
+  "Document Scanner",
+  [Jan Duchscherer],
+  [DS1],
+  [
+    - Integrated UVDoc and introduced a backend-based runtime.
+  ],
+  [Jan Duchscherer],
+  [DS2],
+  [
+    - Implemented the deskew pipeline (unwarp + flow-field export) and session-state integration (ExtractedDocument).
+    - Improved document cropping from TE1 and added fallback logic.
+  ],
+  [Jan Duchscherer],
+  [DS3],
+  [
+    - Iterated on flow-field based deskewing.
+    - Added super-resolution tool & cut down interface complexity.
   ],
 )
 
@@ -295,16 +291,18 @@
   [Jan Duchscherer],
   [DC1],
   [
-    - Bootstrapped the `doc_classifier` subpackage and Config-as-Factory infrastructure (`BaseConfig`, `PathConfig`, `Console`).
+    - Bootstrapped the `doc_classifier` subpackage's ML infrastructure.
+    - Set up Lightning training modules, data modules, and configuration handling.
     - Implemented TOML-driven configuration with typed CLI overrides.
-    - Initial training and tuning runs.
   ],
   [Jan Duchscherer],
   [DC2],
   [
     - Integrated RVL-CDIP via Hugging Face Datasets and implemented model-aware Albumentations transform presets.
+    - IMproved logging of metrics and confusion matrices via W&B.
     - Added dataset statistics computation and deterministic subsampling for debugging.
     - Added support for LitTuner integration.
+    - Initial training and tuning runs.
   ],
   [Jan Duchscherer],
   [DC3],
@@ -313,6 +311,7 @@
     - Added custom fine-tune callbacks with OneCycleLR support.
     - Improved confusion-matrix logging via W&B.
     - MCP integration prep (model saving, loading, inference).
+    - Improved Optuna integration and trial creation from config.
   ],
   [Jan Duchscherer],
   [DC4],
@@ -326,8 +325,14 @@
   [Jan Duchscherer],
   [DC5],
   [
-    - Added Captum attribution utilities (Integrated Gradients, Grad-CAM, ...) for qualitative interpretability.
+    - Added Captum attribution utilities (IG, Grad-CAM, ...) for interpretability.
     - Run tests and attributions on tests split.
+  ],
+  [Jan Duchscherer],
+  [DC6],
+  [
+    - Exposed document classification as an MCP tool and integrated results into the File Server session state.
+
   ],
 )
 
@@ -421,73 +426,72 @@
 
 #figure(caption: [Project timeline by work package])[
   ```pintora
-    gantt
-      dateFormat YYYY-MM-DD
-      axisFormat DD/MM
-      axisInterval 2w
+  gantt
+    dateFormat YYYY-MM-DDTHH
+    axisFormat DD/MM
+    axisInterval 2w
 
-  section user_interface
-  "Basic UI"       : UI1, 2026-01-10, 1w
-  "Streamlit UI revision: async handling, session init"       : UI2, 2025-12-14, 2w
-  "Live updates (polling/progress) + session overview + image panel"       : UI3, 2025-12-22, 4w
-  "Session tools and UI chores"       : UI4, 2026-01-20, 3d
+    section user_interface
+    "Basic UI"       : 2026-1-10, 1w
+    "Revision"        : ui2, after ui1, 1w
+    "Polling + Progress"       : ui2, 2025-12-22, 4w
+    "Session I/O + cleanup"       : ui3, 2026-1-20, 3d
 
   section supervisor
-  "Technology experiments."       : SV1, 2025-10-13, 2w
-  "Supervisor setup."       : SV2, after SV1, 2w
-  "Mock infrastructure."       : SV3, after SV2, 2w
-  "Evaluate different LLMs."       : SV4, after SV3, 2w
-  "Multiple tool calls (LLaMA 3)."       : SV5, after SV3, 2w
-  "Memory."       : SV6, after SV5, 1w
-  "Session changes."       : SV7, after SV6, 1w
-  "Bug fixes."       : SV10, 2025-12-20, 2w
+    "Technology experiments"       : sv1, 2025-10-13, 2w
+    "Supervisor setup"       : sv2, after sv1, 2w
+    "Mock Infrastructure"       : sv3, after sv2, 2w
+    "Evaluate different LLMs"       : sv4, after sv3, 2w
+    "Multiple tool calls (LLaMA 3)"       : sv5, after sv3, 2w
+    "Memory"       : sv6, after sv5, 1w
+    "Session changes"       : sv7, after sv6, 1w
+    "Bug fixes"       : sv10, 2025-12-20, 2w
 
-  section file_server
-  "File Server"       : FS1, after SV3, 1w
-  "Session Server"       : FS2, after SV6, 1w
+    section file_server
+    "File Server"       : fs1, after sv3, 1w
+    "Session Server"       : fs2, after sv6, 1w
 
-  section text_extractor
-  "Flatten Image"       : TE1, after SV6, 1w
-  "Paddle OCR"       : TE2, after TE1, 1w
-  "Tesseract"       : TE3, 2026-01-01, 1w
+    section text_extractor
+    "Flatten Image"       : te1, after sv6, 1w
+    "Paddle OCR"       : te2, after te1, 1w
+    "Tesseract"       : te3, 2026-1-1, 1w
 
-  section document_scanner
-  "Integrate UVDoc + runtime/backends"       : DS1, 2026-01-03, 5d
-  "Deskew pipeline + SessionState integration"       : DS2, 2026-01-03, 19d
-  "Super-resolution + stabilization"       : DS3, 2026-01-18, 4d
+    section doc_scanner
+    "UVDoc + integration"       : ds1, 2026-1-3, 5d
+    "Deskew pipeline + Super-res."       : ds2, 2026-1-3, 19d
+    "Super-resolution + fixes"       : ds3, 2026-1-18, 4d
 
-  section font_detector
-  "Font detector roadmap, model review, and dataset planning."       : FT1, 2025-10-13, 1w
-  "Font detector MCP server, baseline MLP model, and dataset generation."     : FT2, after FT1, 6w
-  "Dataset improvements, feature expansion, and MLP training results."   : FT3, after FT2, 2w
-  "Custom ResNet classifier, cropping updates, and test integration."       : FT4, after FT3, 6w
+    section font_detector
+    "Roadmap & Review"       : ft1, 2025-10-13, 1w
+    "MCP & MLP Baseline"     : ft2, after ft1, 6w
+    "Dataset & MLP Tuning"   : ft3, after ft2, 2w
+    "ResNet & DPI Fix"       : ft4, after ft3, 6w
 
-  section document_translator
-  "Initial testing with single-batch translation."       : DT1, 2025-11-24, 3w
-  "Tried different LLM models for translation quality."       : DT2, after DT1, 1w
-  "Batch translation implementation with numbered output parsing."       : DT3, after DT2, 4w
+    section document_translator
+    "Single-batch testing"       : dt1, 2025-11-24, 3w
+    "LLM model comparison"       : dt2, after dt1, 1w
+    "Batch implementation"       : dt3, after dt2, 4w
 
-  section x_document_editor
-  "Direct Version"       : XDE1, 2025-12-25, 1w
-  "Separate LLM"       : XDE2, after XDE1, 2w
+    section doc_classifier
+    "ML infrastructure"       : dc1, 2025-10-13, 3w
+    "RVL-CDIP + transforms"       : dc2a, 2025-10-24, 5d
+    "Lit Train (Optim, Sched)"       : dc3, 2025-11-13, 4w
+    "MCP Integraion"       : dc6, 2025-12-18, 35d
+    "Transforms + DS stats"       : dc2b, 2025-12-20, 3d
+    "Sweep & Train"       : dc4, 2025-12-20, 12d
+    "Interpretability"       : dc5, 2026-1-16, 5d
 
-  section document_image_renderer
-  "LaMa inpainting setup and testing"       : IR1, 2025-10-25, 1w
-  "Text operations module"       : IR2, after IR1, 2w
-  "Rotation and transformation support"       : IR3, 2025-12-02, 2w
-  "MCP server integration"       : IR4, after IR3, 1w
+    section x_document_editor
+    "Direct Version"       : xde1, 2025-12-25, 1w
+    "Separate LLM"       : xde2, after xde1, 2w
 
-  section document_class_detector
-  "Bootstrap ML infrastructure"       : DC1, 2025-10-13, 2w
-  "RVL-CDIP dataset + Albumentations transforms + dataset stats"       : DC2, 2025-10-24, 5d
-  "Lightning training pipeline (AlexNet/ResNet-50/ViT-B/16)"       : DC3, 2025-11-13, 2w
-  "Serving tool (FastMCP + File Server session integration)"       : DC6, 2025-12-18, 35d
-  "RVL-CDIP dataset + Albumentations transforms + dataset stats"       : DC2_stats, 2025-12-20, 3d
-  "Experiment tooling (W&B, Optuna sweeps, resume, tests)"       : DC4, 2025-12-20, 12d
-  "Interpretability (Captum attributions)"       : DC5, 2026-01-16, 5d
+    section document_image_renderer
+    "LaMa inpainting setup"       : ir1, 2025-10-25, 1w
+    "Text operations module"       : ir2, after ir1, 2w
+    "Rotation and transformation"       : ir3, 2025-12-2, 2w
+    "MCP server integration"       : ir4, after ir3, 1w
 
-
-  section Release
-  "Release" : milestone, 2026-01-23, 0d
+    section Release
+    "Release" : milestone, 2026-1-23, 0d
   ```
 ] <team_timeline_gantt>
