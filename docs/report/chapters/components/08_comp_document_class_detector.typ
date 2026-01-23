@@ -28,21 +28,7 @@ We implement an end-to-end PyTorch Lightning training stack for the 16-class RVL
 - Optimization and training: AdamW with explicit parameter groups (head vs backbone) and OneCycleLR scheduling.
 - Monitoring: accuracy and cross-entropy loss are tracked with TorchMetrics; at the end of each validation epoch, a row-normalized confusion matrix is logged to Weights & Biases.
 - Interpretability: Captum-based attributions (e.g., Integrated Gradients, Grad-CAM) can be used to perform post-hoc analysis of trained models.
-// TODO: imnprove the
 
-// #figure(caption: [Train and evaluation metrics tracked by the document classifier.])[
-//   #code()[```py
-//   class Metric(StrEnum):
-//       TRAIN_LOSS = "train/loss"
-//       TRAIN_ACCURACY = "train/accuracy"
-
-//       VAL_LOSS = "val/loss"
-//       VAL_ACCURACY = "val/accuracy"
-//       VAL_CONFUSION_MATRIX = "val/confusion_matrix"
-
-//       TEST_LOSS = "test/loss"
-//       TEST_ACCURACY = "test/accuracy"
-//   ```]]
 
 ==== Data, preprocessing & augmentations <doc-cls-data-prep>
 
@@ -408,10 +394,9 @@ This study is tailored to AlexNet-from-scratch training and focuses on dropout, 
 - `weight_decay`: #fmt(p_alexnet.at("module_config.optimizer.weight_decay"))
 - `max_lr`: #fmt(p_alexnet.at("module_config.scheduler.max_lr"))
 
-*Notes (interpretation).*
+*Notes.*
 - The sweep is prune-heavy (trials: #study_alexnet.n_trials, complete: #study_alexnet.n_complete, pruned: #study_alexnet.n_pruned), indicating that many configurations diverge or underperform early under the fixed epoch budget.
-- The importance proxy ranks `max_lr` as dominant (consistent with OneCycleLR sensitivity), followed by `weight_decay` and then dropout; this aligns with the typical failure mode of too aggressive learning rates causing unstable optimization.
-- The best parameters sit near the lower end for dropout and in a narrow learning-rate regime, suggesting that capacity-limited AlexNet benefits more from stable optimization than from strong regularization.
+
 
 #wrap-content(
   align: top + right,
@@ -430,6 +415,9 @@ This study is tailored to AlexNet-from-scratch training and focuses on dropout, 
     ] <fig-doc-cls-optuna-alexnet-core>
   ],
   [
+    - The importance proxy ranks `max_lr` as dominant (consistent with OneCycleLR sensitivity), followed by `weight_decay` and then dropout; this aligns with the typical failure mode of too aggressive learning rates causing unstable optimization.
+    - The best parameters sit near the lower end for dropout and in a narrow learning-rate regime, suggesting that capacity-limited AlexNet benefits more from stable optimization than from strong regularization.
+    \
     The importance plot ranks `max_lr` as the dominant factor, followed by `weight_decay` and then dropout.
     This matches the LOWESS trends in @fig-doc-cls-optuna-alexnet-reg, where only a narrow range of learning rates yields stable training.
   ],
@@ -448,15 +436,15 @@ We visualize objective relationships with `sns.regplot` (LOWESS smoothing, boots
   )
 ] <fig-doc-cls-optuna-alexnet-reg>
 
-*Notes.* The LOWESS curves visually support a narrow "safe" region for `max_lr` (too large values correlate with higher objectives / pruning) and a milder effect for `weight_decay`. Because these are observational relationships (and include pruned trials), we treat them as guidance for a follow-up ablation rather than a causal conclusion.
+*Notes.* The LOWESS curves visually support a narrow "safe" region for `max_lr` (too large values correlate with higher objectives / pruning) and a milder effect for `weight_decay`. Howeever, given the limited number of finite COMPLETE trials, these trends should be interpreted with extreme caution. This is especially true for `weight_decay` where the LOWESS trend connects widely spread data points.
 
-==== Cross-study interpretation
+==== Cross-study interpretation and takeaways
 
-- The ResNet sweep's best finite trials use dataset normalization and `finetune_plus` transforms; comparisons against ImageNet normalization remain inconclusive because those settings rarely produce finite COMPLETE trials.
+- The ResNet sweep's best finite trials use dataset normalization and `finetune_plus` transforms; this supports our earlier findings where we naively normalized our data on ImageNet statistics and got extremely poor results.
 - Backbone unfreezing shows only small differences and appears second-order relative to augmentation/normalization and learning-rate schedule.
 - The AlexNet sweep shows the strongest sensitivity to `max_lr` and `weight_decay`, consistent with the importance plot and the LOWESS trends.
+- Generalization of the sweeps' findings to longer training and full dataset size is uncertain; follow-up experiments should validate the best configurations under production conditions.
 
-// uv run -m traenslenzor.doc_classifier.run --config_path .configs/alexnet_scratch.toml --stage TEST
 
 === Attributability and Interpretability <doc-cls-attrib>
 
@@ -464,13 +452,13 @@ We qualitatively inspect the classifier's decision cues using Captum-based attri
 For each backbone, we scan the test split and select the most confident correct prediction ("best") and the most confident incorrect prediction ("worst").
 We compute attributions for the predicted class (i.e., the explanation targets the model decision, not the ground truth).
 
-We export multiple attribution methods (Integrated Gradients, Input x Gradient, Noise Tunnel, Occlusion, DeepLift, LayerGradXActivation),
-focus on Grad-CAM here because it yields an intuitive spatial explanation that matches the layout-driven nature of RVL-CDIP.
-As a complementary view, we also show an Integrated Gradients (IG) map for a representative AlexNet sample.
+We export multiple methods (Integrated Gradients, Input x Gradient, Noise Tunnel, Occlusion, DeepLift, LayerGradXActivation). In this report we focus on two views:
+- *Grad-CAM overlays* (coarse, convolutional feature-level evidence; intuitive for layout cues).
+- *Integrated Gradients (IG)* (input-level sensitivity; useful to spot border/background artifacts).
 
-*Grad-CAM.* Grad-CAM builds a coarse importance map on the last convolutional features by weighting each feature map by the global-average pooled gradient of the target logit and then upsampling to input resolution @gradcam:
-$ L^c = op("ReLU")(sum_k alpha_k^c A^k) $ with $ alpha_k^c = 1/(H W) sum_(i,j) partial y^c / partial A^k_(i,j) $.
-Because these feature maps are low-resolution, the overlays appear blocky; this is expected and still informative at the layout level.
+// *Grad-CAM.* Grad-CAM builds a coarse importance map on the last convolutional features by weighting each feature map by the global-average pooled gradient of the target logit and then upsampling to input resolution @gradcam:
+// $ L^c = op("ReLU")(sum_k alpha_k^c A^k) $ with $ alpha_k^c = 1/(H W) sum_(i,j) partial y^c / partial A^k_(i,j) $.
+// Because these feature maps are low-resolution, the overlays appear blocky; this is expected and still informative at the layout level.
 
 // Attribution artifacts were generated via:
 // uv run python -m traenslenzor.doc_classifier.run --stage=TEST --attribution_run.enabled=true ...
@@ -506,60 +494,16 @@ Because these feature maps are low-resolution, the overlays appear blocky; this 
   )
 ] <fig-doc-cls-attrib-gradcam>
 
+*How to read the plots.* Grad-CAM (used for the ResNet-50 samples) builds a spatial importance map on a late convolutional layer and upsamples it to input resolution @gradcam. The overlay appears blocky because the underlying feature maps are low-resolution; this is expected and still informative at the page-layout level. IG can appear speckled when the model is uncertain (e.g., when the softmax distribution is close to uniform over 16 classes), in which case the attribution signal is weak and unstable.
 
-resnet-worst uses Gradient-weighted Class Activation Mapping (Grad-CAM) @gradcam for attribution,which builds a coarse importance map over the input image showing which receptive fields of the final convolutional layer contributed most to the predicted class logit. Given the high relevance attributed to the centra region displaying a female model, it seems that the model was paying attention to an discriminative feature, but none-theless misclassified the document as a scientific publication instead of an advertisement.
-*Interpretation.* In correct cases, the attribution follows class-defining layout cues: dense text blocks and page frame for *scientific publication* and strong stroke/line structure for *handwritten*.
-In the failure cases, both backbones confuse *advertisement* with *scientific publication*; Grad-CAM highlights high-contrast, title-like typography and centered foreground structure, suggesting a shortcut based on global layout and scan artifacts.
+*Observations (best cases).* In the best examples, the attribution concentrates on class-defining *layout* cues:
+- *Scientific publication (AlexNet best, IG):* evidence spreads over the dense text block and page frame rather than local semantics.
+- *Handwritten (ResNet-50 best, Layer Gradient x Activation ):* evidence follows stroke-like regions and line structure, which are discriminative for this class.
 
-*Practical takeaway.* Across Grad-CAM (@fig-doc-cls-attrib-gradcam) and Integrated Gradients (@fig-doc-cls-attrib-ig), saliency concentrates on document structure rather than semantics.
-Robustness could be improved by augmentations that decorrelate labels from borders/background (e.g., border randomization/cropping, stronger background perturbations, explicit margin masking).
+*Observations (worst cases).* In the worst examples, both backbones confuse *advertisement* with *scientific publication*. Grad-CAM highlights high-contrast, title-like typography and centralized foreground structure, suggesting a shortcut based on global layout, strong contrast, and scan/capture artifacts (frame, margins), rather than content-level semantics.
 
-#figure(
-  caption: [Integrated Gradients (IG) attribution for a correct AlexNet test sample (target = predicted class logit).],
-)[
-  #grid(
-    columns: (1fr, 1fr),
-    column-gutter: 12pt,
-    row-gutter: 10pt,
+The qualitative evidence in @fig-doc-cls-attrib-gradcam supports the broader RVL-CDIP pattern: the classifier relies heavily on document layout. To reduce the shown failure mode, augmentations that decorrelate labels from borders/background (random crops, margin masking, stronger background/contrast perturbations) should make the model less sensitive to shortcuts and improve robustness.
 
-    [#figure(
-      image(attr_root + "/alexnet/ig_heat_best_scientific_alexnet_heatmap.png", width: 100%),
-      caption: [IG heatmap — AlexNet (best) — GT+Pred: *scientific publication* (p = 0.0635).],
-    ) <fig-doc-cls-attrib-ig-heatmap>],
-    [#figure(
-      table(
-        columns: (auto, 1fr),
-        align: (left, left),
-        stroke: 0.5pt,
-        inset: 6pt,
-        [*Ground truth*], [13 = *scientific publication*],
-        [*Prediction*], [13 = *scientific publication*],
-        [*Confidence*], [0.0635 (≈ 1/16)],
-        [*Explained target*], [predicted class logit (`target=sample.pred`)],
-      ),
-      caption: [Sample metadata for @fig-doc-cls-attrib-ig-heatmap.],
-    ) <fig-doc-cls-attrib-ig-metadata>],
-
-    [#figure(
-      [
-        IG integrates gradients along a path from a *baseline* image to the input.
-        Our baseline is all zeros by default (BaselineStrategy.ZERO).
-        We visualize IG with `sign="all"`: green denotes positive contributions (increasing the *scientific publication* logit) and red denotes negative contributions.
-      ],
-      caption: [How to read IG (red vs green).],
-    ) <fig-doc-cls-attrib-ig-howto>],
-    [#figure(
-      [
-        - *Layout-driven evidence dominates:* page frame/margins and large rectangular text blocks carry the most coherent signal.
-        - *Speckled pattern ⇒ weak, unstable evidence:* the confidence is near-uniform over 16 classes, so the logit is almost flat and IG becomes noisy.
-        - *Ink texture vs background:* positive contributions concentrate inside dense text regions, while negative contributions often sit in lighter margins/border regions.
-
-        *Bottom line:* The model is correct, but not decisive; the prediction is driven primarily by page-level layout statistics rather than semantics.
-      ],
-      caption: [Interpretation of @fig-doc-cls-attrib-ig-heatmap.],
-    ) <fig-doc-cls-attrib-ig-interpretation>],
-  )
-] <fig-doc-cls-attrib-ig>
 
 === Serving and Session Integration
 
@@ -579,7 +523,15 @@ The MCP tool keeps its signature minimal (`session_id` only) by resolving all in
 
 === Summary
 
+#figure(
+  caption: [Classfication within the trÄnslenzor system.],
+)[
+  #image("/imgs/doc-scanner/chat_super-res-classify.png", width: 86%)
+] <fig-doc-classifier-chat>
+
 - End-to-end Lightning training stack with modular backbones (AlexNet, ResNet-50, ViT-B/16) and model-aware preprocessing.
 - Config-as-Factory composition with TOML export/import and typed CLI overrides.
 - Experiment tooling: W&B logging, Optuna sweeps, optional Lightning tuning, and Captum interpretability hooks.
+- Generalization: models trained on RVL-CDIP exhibit nearly non-existent generalization capabilities to well-scanned modern documents converted to gray-scale. @fig-doc-classifier-chat shows an example where a nicely scanned document is m
 - Serving path as FastMCP tool integrated into the session-based File Server architecture.
+
