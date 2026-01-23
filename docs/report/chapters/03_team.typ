@@ -59,17 +59,12 @@
     [SV7], [Session changes.],
     [SV10], [Bug fixes.],
 
-    [SV1], [Technology experiments.],
-    [SV2], [Supervisor setup.],
-    [SV3], [Mock infrastructure.],
-    [SV4], [Evaluate different #gls("llm")s.],
-    [SV5], [Multiple tool calls (LLaMA 3).],
-    [SV6], [Memory.],
-    [SV7], [Session changes.],
-    [SV10], [Bug fixes.],
-
     [FS1], [File Server],
     [FS2], [Session Server],
+
+    [TE1], [Flatten Image],
+    [TE2], [Paddle OCR],
+    [TE3], [Tesseract],
 
     [DT1], [Initial testing with single-batch translation.],
     [DT2], [Tried different #gls("llm") models for translation quality.],
@@ -427,73 +422,72 @@
 #figure(caption: [Project timeline by work package])[
   ```pintora
     gantt
-      dateFormat YYYY-MM-DDTHH
+      dateFormat YYYY-MM-DD
       axisFormat DD/MM
       axisInterval 2w
 
   section user_interface
-  "Basic UI"       : 2026-1-10, 1w
-  "Streamlit rev."       : ui2, 2025-12-14, 2w
-  "Live updates (polling/progress) + session overview + image panel"       : ui2, 2025-12-22, 4w
-  "Session tools and UI maintenance"       : ui3, 2026-1-20, 3d
+  "Basic UI"       : UI1, 2026-01-10, 1w
+  "Streamlit UI revision: async handling, session init"       : UI2, 2025-12-14, 2w
+  "Live updates (polling/progress) + session overview + image panel"       : UI3, 2025-12-22, 4w
+  "Session tools and UI chores"       : UI4, 2026-01-20, 3d
 
   section supervisor
-  "Technology experiments"       : sv1, 2025-10-13, 2w
-  "Supervisor setup"       : sv2, after sv1, 2w
-  "Mock Infrastructure"       : sv3, after sv2, 2w
-  "Evaluate different LLMs"       : sv4, after sv3, 2w
-  "Multiple tool calls (LLaMA 3)"       : sv5, after sv3, 2w
-  "Memory"       : sv6, after sv5, 1w
-  "Session changes"       : sv7, after sv6, 1w
-  "Bug fixes"       : sv10, 2025-12-20, 2w
+  "Technology experiments."       : SV1, 2025-10-13, 2w
+  "Supervisor setup."       : SV2, after SV1, 2w
+  "Mock infrastructure."       : SV3, after SV2, 2w
+  "Evaluate different LLMs."       : SV4, after SV3, 2w
+  "Multiple tool calls (LLaMA 3)."       : SV5, after SV3, 2w
+  "Memory."       : SV6, after SV5, 1w
+  "Session changes."       : SV7, after SV6, 1w
+  "Bug fixes."       : SV10, 2025-12-20, 2w
 
   section file_server
-  "File Server"       : fs1, after sv3, 1w
-  "Session Server"       : fs2, after sv6, 1w
+  "File Server"       : FS1, after SV3, 1w
+  "Session Server"       : FS2, after SV6, 1w
 
   section text_extractor
-  "Flatten Image"       : te1, after sv6, 1w
-  "Paddle OCR"       : te2, after te1, 1w
-  "Tesseract"       : te3, 2026-1-1, 1w
+  "Flatten Image"       : TE1, after SV6, 1w
+  "Paddle OCR"       : TE2, after TE1, 1w
+  "Tesseract"       : TE3, 2026-01-01, 1w
 
   section document_scanner
-  "Integrate UVDoc + flatten image"       : ds1, 2026-01-03, 5d
-  "Deskew pipeline + MCP integration"       : ds2, 2026-01-03, 19d
-  "Super-resolution + stabilization"       : ds3, 2026-01-18, 4d
+  "Integrate UVDoc + runtime/backends"       : DS1, 2026-01-03, 5d
+  "Deskew pipeline + SessionState integration"       : DS2, 2026-01-03, 19d
+  "Super-resolution + stabilization"       : DS3, 2026-01-18, 4d
 
   section font_detector
-  "Roadmap & Review"       : ft1, 2025-10-13, 1w
-  "MCP & MLP Baseline"     : ft2, after ft1, 6w
-  "Dataset & MLP Tuning"   : ft3, after ft2, 2w
-  "ResNet & DPI Fix"       : ft4, after ft3, 6w
+  "Font detector roadmap, model review, and dataset planning."       : FT1, 2025-10-13, 1w
+  "Font detector MCP server, baseline MLP model, and dataset generation."     : FT2, after FT1, 6w
+  "Dataset improvements, feature expansion, and MLP training results."   : FT3, after FT2, 2w
+  "Custom ResNet classifier, cropping updates, and test integration."       : FT4, after FT3, 6w
 
   section document_translator
-  "Single-batch testing"       : dt1, 2025-11-24, 3w
-  "LLM model comparison"       : dt2, after dt1, 1w
-  "Batch implementation"       : dt3, after dt2, 4w
+  "Initial testing with single-batch translation."       : DT1, 2025-11-24, 3w
+  "Tried different LLM models for translation quality."       : DT2, after DT1, 1w
+  "Batch translation implementation with numbered output parsing."       : DT3, after DT2, 4w
 
   section x_document_editor
-  "Direct Version"       : xde1, 2025-12-25, 1w
-  "Separate LLM"       : xde2, after xde1, 2w
+  "Direct Version"       : XDE1, 2025-12-25, 1w
+  "Separate LLM"       : XDE2, after XDE1, 2w
 
   section document_image_renderer
-  "LaMa inpainting setup"       : ir1, 2025-10-25, 1w
-  "Text operations module"       : ir2, after ir1, 2w
-  "Rotation and transformation"       : ir3, 2025-12-2, 2w
-  "MCP server integration"       : ir4, after ir3, 1w
+  "LaMa inpainting setup and testing"       : IR1, 2025-10-25, 1w
+  "Text operations module"       : IR2, after IR1, 2w
+  "Rotation and transformation support"       : IR3, 2025-12-02, 2w
+  "MCP server integration"       : IR4, after IR3, 1w
 
   section document_class_detector
-  "Bootstrap ML infrastructure"       : dc1, 2025-10-13, 2w
-  "RVL-CDIP dataset + initial transforms"       : dc2, 2025-10-24, 5d
-  "Fixes: training pipeline (optimizer, callbacks)"       : dc3, 2025-11-13, 2w
-  "MCP integration and serving"       : dc3, 2025-12-18, 35d
-  "Improved augmentation + dataset stats":      : dc2, 2025-12-20, 3d
-  "Optuna sweeps"       : dc4, 2025-12-20, 12d
-  "Interpretability"       : dc5, 2026-01-16, 5d
+  "Bootstrap ML infrastructure"       : DC1, 2025-10-13, 2w
+  "RVL-CDIP dataset + Albumentations transforms + dataset stats"       : DC2, 2025-10-24, 5d
+  "Lightning training pipeline (AlexNet/ResNet-50/ViT-B/16)"       : DC3, 2025-11-13, 2w
+  "Serving tool (FastMCP + File Server session integration)"       : DC6, 2025-12-18, 35d
+  "RVL-CDIP dataset + Albumentations transforms + dataset stats"       : DC2_stats, 2025-12-20, 3d
+  "Experiment tooling (W&B, Optuna sweeps, resume, tests)"       : DC4, 2025-12-20, 12d
+  "Interpretability (Captum attributions)"       : DC5, 2026-01-16, 5d
 
 
   section Release
-  "Release" : milestone, 2026-1-23, 0d
+  "Release" : milestone, 2026-01-23, 0d
   ```
 ] <team_timeline_gantt>
-

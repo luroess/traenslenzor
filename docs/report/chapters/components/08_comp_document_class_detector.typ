@@ -52,7 +52,44 @@ $mu = 0.911966$ and $sigma = 0.241507$ (single channel). These are the defaults 
 RVL-CDIP consists of grayscale document page images where *layout* is often the strongest cue (header structure, margins, tables, signature blocks).
 Consequently, our preprocessing aims to preserve global layout while making the input compatible with both scratch-trained and ImageNet-pretrained backbones.
 
-//  TODO: include some example images here!
+#figure(
+  caption: [Document-classifier test examples.],
+)[
+  #grid(
+    columns: (1fr, 1fr, 1fr, 1fr),
+    column-gutter: 10pt,
+    row-gutter: 4pt,
+    align: top,
+    [
+      #stack(
+        spacing: 3pt,
+        [#image("/imgs/doc-cls/advertisment_test.png", width: 95%)],
+        [#text(size: 8pt)[(a) Advertisement.]],
+      )
+    ],
+    [
+      #stack(
+        spacing: 3pt,
+        [#image("/imgs/doc-cls/handwritten_test.png", width: 95%)],
+        [#text(size: 8pt)[(b) Handwritten.]],
+      )
+    ],
+    [
+      #stack(
+        spacing: 3pt,
+        [#image("/imgs/doc-cls/file_folder_test.png", width: 95%)],
+        [#text(size: 8pt)[(c) File folder.]],
+      )
+    ],
+    [
+      #stack(
+        spacing: 3pt,
+        [#image("/imgs/doc-cls/scientific_publication_test.png", width: 95%)],
+        [#text(size: 8pt)[(d) Scientific publication.]],
+      )
+    ],
+  )
+] <fig-doc-cls-test-examples>
 
 *Data loading (Hugging Face).* We load RVL-CDIP from the Hugging Face Hub (`chainyo/rvl-cdip`) using `load_dataset(...)` and cache it locally (see `RVLCDIPConfig` in #blink("https://github.com/luroess/traenslenzor/blob/master/traenslenzor/doc_classifier/data_handling/huggingface_rvl_cdip_ds.py")[`traenslenzor/doc_classifier/data_handling/huggingface_rvl_cdip_ds.py`]).
 Transforms are attached through `HFDataset.set_transform(...)` with a pickleable batch wrapper (`_TransformApplier`) to enable Lightning DataLoader multiprocessing.
