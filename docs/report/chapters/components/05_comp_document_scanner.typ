@@ -5,53 +5,12 @@
 #show: style-algorithm
 
 == Doc Scanner (UVDoc Deskew + Super-Resolution) <comp_doc_scanner>
+*Jan Duchscherer*
 
 The Doc Scanner component converts sloppily photographed documents into a scan-like, top-down view and stores the required geometric metadata in the session state.
 It is exposed as an #gls("mcp") server and writes an `ExtractedDocument` to the file server. It provides the agent with two tools:
-- `deskew_document(session_id, crop_document?)`
-- `super_resolve_document(session_id, source="deskewed")`.
-
-=== Interface (MCP tool schemas) <doc-scanner-interface>
-
-The supervisor interacts with the Doc Scanner through a minimal tool interface.
-Both tools update the File Server session state and additionally return a small typed payload described by the MCP server's `output_schema` in `traenslenzor/doc_scanner/mcp.py`.
-
-#figure(
-  caption: [Doc Scanner MCP tool interfaces and return payload schemas: `traenslenzor/doc_scanner/mcp.py`.],
-)[
-  #table(
-    columns: (auto, 1fr, 1.4fr),
-    align: (left, left, left),
-    stroke: 0.5pt,
-    inset: 6pt,
-    table.header([*Tool*], [*Inputs*], [*Returns (typed payload)*]),
-
-    [`deskew_document`],
-    [
-      `session_id: str` (UUID)\
-      `crop_document: bool | none = none`
-    ],
-    [
-      `dict` with:\
-      `extractedDocument: {`\
-      `  documentCoordinates: list[{ x: float, y: float }]`\
-      `}`\
-      *(order UL, UR, LR, LL)*
-    ],
-
-    [`super_resolve_document`],
-    [
-      `session_id: str` (UUID)\
-      `source: "raw" | "deskewed" | "rendered" = "deskewed"`
-    ],
-    [
-      `dict` with:\
-      `superResolvedDocument: {`\
-      `  id: str, sourceId: str, source: str, model: str, scale: int`\
-      `}`
-    ],
-  )
-] <fig-doc-scanner-interface>
+- `deskew_document(session_id, crop_document?) -> {"extractedDocument": {"documentCoordinates": [{"x": float, "y": float}, ...]}}` (UL, UR, LR, LL)
+- `super_resolve_document(session_id, source="deskewed") -> {"superResolvedDocument": {"id": str, "sourceId": str, "source": str, "model": str, "scale": int}}`
 
 === Background: UVDoc
 
@@ -171,42 +130,29 @@ Algorithm @alg-uvdoc-deskew summarizes the end-to-end deskew pipeline and the pr
 ) <alg-uvdoc-deskew>
 
 
-Technically, the backend runs UVDocNet on a fixed-size input, upsamples the predicted 2D grid to the original resolution, and applies `grid_sample(..., align_corners: true)` to produce the deskewed output.
+The backend runs UVDocNet on a fixed-size input, upsamples the predicted 2D grid to the original resolution, and applies `grid_sample(..., align_corners: true)` to produce the deskewed output.
 The normalized sampling grid is also converted into a pixel-space flow field `map_xy`, which enables accurate non-linear backtransforms.
-To keep stored flow fields manageable, `map_xy` may be stride-downsampled to satisfy a pixel budget (controlled by `max_map_pixels`) or disabled entirely (`generate_map_xy=false`).
-
-In more detail, UVDoc predicts normalized sampling coordinates `(u, v)` in the `grid_sample` convention (`u, v in [-1, 1]`).
-With `align_corners: true`, we convert normalized coordinates into original-image pixel coordinates:
-
-$ x_in = ((u + 1) / 2) * (W - 1) $
-$ y_in = ((v + 1) / 2) * (H - 1) $
-
-We store this backward mapping as a flow field `map_xy[y, x] = (x_in, y_in)`,
-i.e., each deskewed output pixel `(x, y)` points to the originating location in the raw input image.
-For a lightweight planar fallback, we also compute a homography `H` from 4 corner correspondences (stored as `transformation_matrix`).
+To keep stored flow fields manageable, `map_xy` is stride-downsampled to limit the size of the resulting numpy array (controlled by `max_map_pixels`) or disabled entirely (`generate_map_xy=false`).
 
 The tool optionally crops the unwarped image to the detected page contour while keeping a consistent `map_xy` for backtransforming edits back to the raw image.
+
+==== Page detection + planar rectification (adapted utilities)
 
 Page cropping uses a fast contour-based heuristic (`find_page_corners`) on the UVDoc output:
 - grayscale + Gaussian blur
 - Otsu thresholding (evaluated on mask and inverted mask) @opencv_tutorial_thresholding_otsu
 - morphological closing (fills gaps)
 - largest external contour #sym.arrow.r convex hull #sym.arrow.r polygon approximation (`approxPolyDP`, `#sym.epsilon = 0.02 * perimeter`) @opencv_tutorial_contour_features
-- fallback to `minAreaRect` if no clean quadrilateral is found
 - reject small candidates via an area-ratio threshold; order corners (UL, UR, LR, LL)
 
-*Why Otsu?* We want a robust, fully automatic foreground/background split without hand-tuning a threshold for each lighting condition.
+We decided to use Otsu thresholding instead of Canny edge detection (as in the original deskew implementation) as we aimed for a fully automatic foreground/background split without hand-tuning a threshold for each lighting condition.
 Otsu's method selects a global threshold from the grayscale histogram by minimizing within-class variance; for document photos (after UVDoc unwarping) the page/background distribution is often close to bimodal, which makes Otsu a good fit in practice @opencv_tutorial_thresholding_otsu.
-We apply a small Gaussian blur first (as recommended in the tutorial) to suppress noise, and we try both mask polarities (mask and inverted mask) to handle both dark-on-light and light-on-dark backgrounds.
 
-*Why a convex hull?* Raw contours on a thresholded image can contain small concavities caused by wrinkles, shadows, or broken edges.
-`cv.convexHull` constructs a convex envelope of the contour by “correcting convexity defects” @opencv_tutorial_contour_features.
-Using the hull before polygon approximation stabilizes the subsequent quadrilateral fit: it removes local inward dents and yields a smoother, globally consistent page boundary.
-
-==== Page detection + planar rectification (adapted utilities)
+Raw contours on a thresholded image can contain small concavities caused by wrinkles, shadows, or broken edges. `cv.convexHull` constructs a convex envelope of the contour by "correcting convexity defects" @opencv_tutorial_contour_features.
+Using the hull before polygon approximation stabilizes the subsequent fit: it removes local inward dents and yields a smoother, globally consistent page boundary.
 
 The page-corner detection and planar warping primitives are implemented in `traenslenzor/doc_scanner/utils.py` and are *adapted* from the earlier OpenCV-based deskew in `traenslenzor/text_extractor/flatten_image.py`.
-We keep the same geometric core (ordering corners, estimating output size, and computing a homography), but rework the corner ordering heuristic (sum/diff rule) and generalize the utilities for the UVDoc pipeline (returning the homography and adding fallbacks like `minAreaRect`).
+We keep the same geometric core (ordering corners, estimating output size, and computing a homography), as described in @doc_deskew, but rework the corner ordering heuristic (sum/diff rule) and generalize the utilities for the UVDoc pipeline (returning the homography and adding fallbacks like `minAreaRect`).
 
 
 #figure(
@@ -232,7 +178,7 @@ We keep the same geometric core (ordering corners, estimating output size, and c
   )
 ] <tbl-doc-scanner-utils-diff>
 
-The algorithms below reflect *our* UVDoc-aligned implementations; the legacy `flatten_image.py` versions remain in the Text Extractor as a heuristic fallback when no `ExtractedDocument` from the scanner is present.
+The algorithms below reflect *our* UVDoc-aligned implementations; the base-line version in `flatten_image.py` versions remain in the Text Extractor as a fallback when no `ExtractedDocument` from the scanner is present.
 
 In @alg-page-corners we formalize our contour-based page-cropping procedure (`find_page_corners`) that runs on the UVDoc-unwarped output, and was adapted from the initial deskew implementation described in @doc_deskew.
 #algorithm-figure(
@@ -283,21 +229,6 @@ This yields a stable orientation for convex page contours even under mild rotati
 *Planar rectification (`warp_from_corners`).* To compute the homography fallback (`transformation_matrix`), we estimate an output rectangle size from the maximum side lengths, solve `H` via `cv2.getPerspectiveTransform`, and warp via `cv2.warpPerspective`.
 In the UVDoc pipeline we return and persist both `H` (float32) and the output size, so downstream tools can crop consistently and still backtransform edits.
 
-==== Flow-field sampling and stride downsampling
-
-Two small helper procedures are central for keeping the UVDoc flow field usable in a session-based system:
-
-- `ComputeMapStride`: chooses a stride such that the stored number of `map_xy` samples stays below a pixel budget `max_map_pixels`.
-- `SampleMapXY`: maps points from *unwarped space* to *original image space* by nearest-neighbor indexing into the backward flow field.
-
-We use nearest-neighbor sampling because we mostly map sparse geometric objects (page corners, coarse grids). For high-frequency backtransforms we rely on the renderer to interpolate the flow field as needed.
-
-*Stride selection.* We downsample `map_xy` with a stride `s` chosen to satisfy a storage budget:
-`s = ceil(sqrt((H*W) / max_map_pixels))` (or `s = 1` if already under budget).
-
-*Map sampling.* For sparse point mappings, we sample `map_xy` via nearest neighbor:
-`(x_in, y_in) = map_xy[round(y), round(x)]`, with clipping to image bounds.
-
 === Downstream Use
 
 For rendering translated text back onto the original photo, the Image Renderer prefers the UVDoc flow field (`mapXYId`) and falls back to the homography (`transformation_matrix`) when needed.
@@ -337,5 +268,6 @@ The mask enables clean compositing: composite = raw * (1 - mask) + back * mask.
 === Discussion and Limitations
 
 - Flow-field based backtransforms are only as accurate as the predicted sampling grid and may show artifacts near strong folds or occlusions.
-- Downsampling `map_xy` trades accuracy for storage and introduces approximation error (usually acceptable for compositing).
+- The effects of the UVDoc powered deskewing are rather sublte in the few examples shown here.
 - The homography `transformation_matrix` is a coarse approximation and should be treated as a fallback when the flow field is unavailable.
+
