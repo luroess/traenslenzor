@@ -1,7 +1,6 @@
 #import "@preview/supercharged-hm:0.1.2": *
 #import "@preview/wrap-it:0.1.1": wrap-content
 
-== Text Extractor (Layout Detector) <comp_text_extractor>
 
 // - Show trial with Paddle OCr
 //   - Explain issues
@@ -15,6 +14,8 @@
 
 // - SHOW Preprocessing ( In his template Preprocessing is done in the Image Provider, which we do not really have. We have the file server doing something similar i guess but its definetely not the place where we do image preprocessing. I think its fine though, he said we do not have to follow the template 100%.)
 
+== Text Extractor (Layout Detector) <comp_text_extractor>
+
 #wrap-content(
   align: top + right,
   column-gutter: 30pt,
@@ -23,12 +24,11 @@
     #image("/imgs/ocr_test_boxes.png")
   ]<fig-ocr-result>],
   [
+
     The Text Extractor component is responsible for extracting the text and the areas where the text is contained in the document.
     For this, a #gls("ocr") library is utilized.
 
-    == Document Deskew <doc_deskew>
-    If the session already contains an `ExtractedDocument` produced by the doc scanner (@comp_doc_scanner), the Text Extractor can directly run OCR on the deskewed image.
-    Otherwise, it falls back to a heuristic corner-based deskew described below.
+    == Document Deskew
     The goal of document deskewing is to find a document in an image and straighten it so it looks like it was scanned from the top.
     First, the image is converted to grayscale and slightly blurred to remove noise.
     Edges are then detected using an edge detector, and a small morphological operation is applied to close gaps in the edges.
@@ -40,7 +40,6 @@
     This transform is used to warp the image so the document becomes rectangular and straight.
     The final output is the deskewed image, along with the corner points and the transformation matrix, which can be used for #gls("ocr").
 
-    === PaddleOCR
 
   ],
 )
@@ -53,6 +52,7 @@
     #image("/imgs/paddle_ocr_boxes.png")
   ],
   [
+    === PaddleOCR
     A first version of the Text Extractor was realized using PaddleOCR.
     Integrating PaddleOCR into the application proved difficult due to it not being compatible with the used LangChain version 1.0.0.
     As the incompatibility arose only due to two incorrect import paths in a single file, a small shim wrapper[@paddle_shim] requiring import prior to the PaddleOCR library import sufficed to fix the issue.
@@ -78,5 +78,4 @@
 
   ],
 )
-
 

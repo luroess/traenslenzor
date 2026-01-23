@@ -235,8 +235,8 @@ The AlexNet confusion matrix shows near-perfect per-class recall in this snapsho
 
 === Optuna Hyperparameter Sweeps <doc-cls-optuna-sweeps>
 
-#let optuna = json("/analysis/optuna/optuna_summary.json")
-#let optuna_stats = json("/analysis/optuna/optuna_stats.json")
+#let optuna = json("/analysis/optuna_summary.json")
+#let optuna_stats = json("/analysis/optuna_stats.json")
 #let r3 = x => str(calc.round(x, digits: 3))
 
 // Formatting helper for small hyperparameters (e.g., max_lr, weight_decay).

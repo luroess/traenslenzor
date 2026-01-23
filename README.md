@@ -18,6 +18,13 @@
 uv run python -m traenslenzor
 ```
 
+# Run Examples - Streamlit UI
+```
+translate img.png to english
+translate letter.png to english
+translate test_images/scientific_publication_Lato_straight.jpeg to german
+```
+
 ## Setup (for Development)
 
 After cloning, install python dependencies

@@ -1,0 +1,158 @@
+[
+  {
+    "study_name": "doc-classifier-alexnet-sweep",
+    "db_name": "doc-classifier-alexnet-sweep",
+    "direction": "MINIMIZE",
+    "n_trials": 56,
+    "n_complete": 8,
+    "n_pruned": 44,
+    "n_fail": 2,
+    "n_running": 2,
+    "best_value": 0.6331439018249512,
+    "best_trial_number": 31,
+    "best_params": {
+      "module_config.model_params.dropout_prob": 0.2166879577381872,
+      "module_config.optimizer.weight_decay": 0.0004549190582785617,
+      "module_config.scheduler.max_lr": 0.00028752792912052253
+    },
+    "top_trials": [
+      {
+        "number": 31,
+        "value": 0.6331439018249512,
+        "value_plot": 0.6331439018249512,
+        "state": "COMPLETE",
+        "param.module_config.model_params.dropout_prob": 0.2166879577381872,
+        "param.module_config.optimizer.weight_decay": 0.0004549190582785617,
+        "param.module_config.scheduler.max_lr": 0.00028752792912052253
+      },
+      {
+        "number": 15,
+        "value": 0.6340157389640808,
+        "value_plot": 0.6340157389640808,
+        "state": "COMPLETE",
+        "param.module_config.optimizer.weight_decay": 0.0010830926710025408,
+        "param.module_config.scheduler.max_lr": 0.0002940121633437256
+      },
+      {
+        "number": 6,
+        "value": 0.6399804949760437,
+        "value_plot": 0.6399804949760437,
+        "state": "COMPLETE",
+        "param.module_config.optimizer.weight_decay": 0.0002728857173480427,
+        "param.module_config.scheduler.max_lr": 0.00025426975342809064
+      },
+      {
+        "number": 22,
+        "value": 0.6403172016143799,
+        "value_plot": 0.6403172016143799,
+        "state": "COMPLETE",
+        "param.module_config.optimizer.weight_decay": 0.00029349635957490216,
+        "param.module_config.scheduler.max_lr": 0.00022801847197573573
+      },
+      {
+        "number": 4,
+        "value": 0.6436557769775391,
+        "value_plot": 0.6436557769775391,
+        "state": "COMPLETE",
+        "param.module_config.optimizer.weight_decay": 0.000697918837010721,
+        "param.module_config.scheduler.max_lr": 0.0004265429098400041
+      }
+    ],
+    "param_importance": {
+      "module_config.optimizer.weight_decay": 0.16710313722787593,
+      "module_config.scheduler.max_lr": 0.7062744557518398,
+      "module_config.model_params.dropout_prob": 0.1266224070202844
+    },
+    "importance_method": "spearman_all_states"
+  },
+  {
+    "study_name": "doc-classifier",
+    "db_name": "doc-classifier",
+    "direction": "MINIMIZE",
+    "n_trials": 90,
+    "n_complete": 43,
+    "n_pruned": 41,
+    "n_fail": 2,
+    "n_running": 4,
+    "best_value": 0.46112072467803955,
+    "best_trial_number": 68,
+    "best_params": {
+      "trainer_config.callbacks.backbone_unfreeze_at_epoch": 2,
+      "module_config.optimizer.weight_decay": 2.571032024236515e-05,
+      "module_config.optimizer.backbone_lr_scale": 0.10698430723977197,
+      "module_config.scheduler.max_lr": 0.002342739075170707,
+      "module_config.scheduler.pct_start": 0.10645271634578779,
+      "datamodule_config.train_ds.transform_config": "finetune_plus"
+    },
+    "top_trials": [
+      {
+        "number": 68,
+        "value": 0.46112072467803955,
+        "value_plot": 0.46112072467803955,
+        "state": "COMPLETE",
+        "param.trainer_config.callbacks.backbone_unfreeze_at_epoch": 2,
+        "param.module_config.optimizer.weight_decay": 2.571032024236515e-05,
+        "param.module_config.optimizer.backbone_lr_scale": 0.10698430723977197,
+        "param.module_config.scheduler.max_lr": 0.002342739075170707,
+        "param.module_config.scheduler.pct_start": 0.10645271634578779,
+        "param.datamodule_config.train_ds.transform_config": "finetune_plus"
+      },
+      {
+        "number": 62,
+        "value": 0.46207669377326965,
+        "value_plot": 0.46207669377326965,
+        "state": "COMPLETE",
+        "param.trainer_config.callbacks.backbone_unfreeze_at_epoch": 2,
+        "param.module_config.optimizer.weight_decay": 2.859788810746105e-05,
+        "param.module_config.optimizer.backbone_lr_scale": 0.08456383847381495,
+        "param.module_config.scheduler.max_lr": 0.002061185275293191,
+        "param.module_config.scheduler.pct_start": 0.07533181772603367,
+        "param.datamodule_config.train_ds.transform_config": "finetune_plus"
+      },
+      {
+        "number": 50,
+        "value": 0.46300533413887024,
+        "value_plot": 0.46300533413887024,
+        "state": "COMPLETE",
+        "param.trainer_config.callbacks.backbone_unfreeze_at_epoch": 2,
+        "param.module_config.optimizer.weight_decay": 0.0004140920683943699,
+        "param.module_config.optimizer.backbone_lr_scale": 0.06672433279050836,
+        "param.module_config.scheduler.max_lr": 0.002535842652149821,
+        "param.module_config.scheduler.pct_start": 0.07845262338766963,
+        "param.datamodule_config.train_ds.transform_config": "finetune_plus"
+      },
+      {
+        "number": 56,
+        "value": 0.46369388699531555,
+        "value_plot": 0.46369388699531555,
+        "state": "COMPLETE",
+        "param.trainer_config.callbacks.backbone_unfreeze_at_epoch": 2,
+        "param.module_config.optimizer.weight_decay": 2.2870469082689083e-05,
+        "param.module_config.optimizer.backbone_lr_scale": 0.06520461295610107,
+        "param.module_config.scheduler.max_lr": 0.002535631561065008,
+        "param.module_config.scheduler.pct_start": 0.058968143028109,
+        "param.datamodule_config.train_ds.transform_config": "finetune_plus"
+      },
+      {
+        "number": 51,
+        "value": 0.46569159626960754,
+        "value_plot": 0.46569159626960754,
+        "state": "COMPLETE",
+        "param.trainer_config.callbacks.backbone_unfreeze_at_epoch": 2,
+        "param.module_config.optimizer.weight_decay": 1.2611739442640473e-05,
+        "param.module_config.optimizer.backbone_lr_scale": 0.06400934145624422,
+        "param.module_config.scheduler.max_lr": 0.002650267572496676,
+        "param.module_config.scheduler.pct_start": 0.07755894117851986,
+        "param.datamodule_config.train_ds.transform_config": "finetune_plus"
+      }
+    ],
+    "param_importance": {
+      "trainer_config.callbacks.backbone_unfreeze_at_epoch": 0.21525846463117096,
+      "module_config.optimizer.weight_decay": 0.17918665027789776,
+      "module_config.optimizer.backbone_lr_scale": 0.014398927254473929,
+      "module_config.scheduler.max_lr": 0.33117532685290035,
+      "module_config.scheduler.pct_start": 0.25998063098355706
+    },
+    "importance_method": "spearman"
+  }
+]

@@ -32,7 +32,12 @@ def translate(text: TextItem, lang: str) -> HasTranslation:
         "role": "user",
         "content": f"Only Respond with the translation, or the original if you cannot translate it. Never say anything else, but the translation or the original text. Text to translate to {lang}: \n{text.extractedText}",
     }
-    response = client.chat(model=settings.llm.model, messages=[system, message])
+    response = client.chat(
+        model=settings.llm.model,
+        messages=[system, message],
+        options={"num_gpu": -1},
+        keep_alive="10m",
+    )
 
     assert response.message.content is not None
 
@@ -78,7 +83,12 @@ def translate_all(texts: list[TextItem], lang: str) -> list[HasTranslation]:
 
     content = None
     try:
-        response = client.chat(model=settings.llm.model, messages=[system, message])
+        response = client.chat(
+            model=settings.llm.model,
+            messages=[system, message],
+            options={"num_gpu": -1},
+            keep_alive="10m",
+        )
         content = response.message.content
 
         if content:
