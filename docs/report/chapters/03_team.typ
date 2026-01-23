@@ -68,7 +68,7 @@
     [DT3],[Batch translation implementation with numbered output parsing.],
 
     [FT1],[Font detector roadmap, model review, and dataset planning.],
-    [FT2],[Font detector MCP server, baseline model, and dataset generation.],
+    [FT2],[Font detector MCP server, baseline MLP model, and dataset generation.],
     [FT3],[Dataset improvements, feature expansion, and MLP training results.],
     [FT4],[Custom ResNet classifier, cropping updates, and test integration.],
 
@@ -196,10 +196,11 @@
     - Trained per-font MLPs and recorded MAE and RMSE results.
   ],
   [Lukas Röß], [FT4], [
-    - Replaced the HuggingFace model with a custom ResNet18 trained on generated data.
-    - Improved cropping and the font size model.
-    - Disabled the line-count feature due to unreliable behavior on real data.
+    - Replaced the HuggingFace model with a custom ResNet18.
+    - Generated a dedicated synthetic dataset for the classifier.
     - Added testing scripts and debugged MCP integration.
+    - Disabled the line-count feature due to unreliable behavior on real data.
+    - Implemented DPI scaling to handle Tesseract's loose bounding boxes.
   ]
 )
 
@@ -277,12 +278,15 @@ gantt
   "Tool Mock"       : 2025-7-10, 1w
 
   section font_detector
-  "Tool Mock"       : 2025-7-10, 1w
+  "Roadmap & Review"       : ft1, 2025-10-13, 1w
+  "MCP & MLP Baseline"     : ft2, after ft1, 6w
+  "Dataset & MLP Tuning"   : ft3, after ft2, 2w
+  "ResNet & DPI Fix"       : ft4, after ft3, 6w
 
   section document_translator
-  "Single-batch testing"       : dt1, 2025-10-25, 1w
+  "Single-batch testing"       : dt1, 2025-11-24, 3w
   "LLM model comparison"       : dt2, after dt1, 1w
-  "Batch implementation"       : dt3, after dt2, 1w
+  "Batch implementation"       : dt3, after dt2, 4w
 
   section document_class_detector
   "Tool Mock"       : 2025-7-10, 1w

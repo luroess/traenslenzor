@@ -103,7 +103,7 @@ The following results compare the ground truth (`scientific_publication_metadata
 ]
 
 #figure(
-  image("../../imgs/scientific_publication_Lato_session_details.png", width: 90%),
+  image("../../imgs/scientific_publication_Lato_session_details.png", width: 50%),
   caption: [Session details view showing detected font properties],
 ) <fig:font_det_session>
 
@@ -112,6 +112,6 @@ The following results compare the ground truth (`scientific_publication_metadata
 - **Font Identification:** The system correctly identified the font as **Lato-Regular** with **42.87% confidence**. While the confidence score is lower than ideal (likely due to the image quality and the dense scientific layout), the classification was correct.
 
 #figure(
-  image("../../imgs/scientific_publication_Lato_with_detection_box.png", width: 90%),
+  image("../../imgs/scientific_publication_Lato_with_detection_box.png", width: 80%),
   caption: [Used scientific publication sample for final evaluation with detected bounding box],
 ) <fig:font_det_box>
