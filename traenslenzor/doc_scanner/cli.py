@@ -25,7 +25,7 @@ from traenslenzor.doc_scanner.superres import (
 from traenslenzor.file_server.client import FileClient, SessionClient
 from traenslenzor.file_server.session_state import SessionState, initialize_session
 
-_DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "doc-scanner.toml"
+_DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / ".configs" / "doc-scanner.toml"
 
 
 class CLIDocScannerConfig(DocScannerMCPConfig):
@@ -68,6 +68,8 @@ class CLIDocScannerConfig(DocScannerMCPConfig):
         default=None,
         description="Optional path to a doc-scanner TOML config file.",
     )
+    crop_document: bool | None = None
+    """Override cropping to the detected page contour (None uses config)."""
 
     model_config = SettingsConfigDict(
         arbitrary_types_allowed=True,
@@ -77,7 +79,7 @@ class CLIDocScannerConfig(DocScannerMCPConfig):
         cli_parse_args=True,
         cli_implicit_flags=True,
         env_prefix="DOC_SCANNER_",
-        toml_file=Path(__file__).resolve().parents[2] / "config" / "doc-scanner.toml",
+        toml_file=Path(__file__).resolve().parents[2] / ".configs" / "doc-scanner.toml",
     )
 
 
@@ -159,6 +161,7 @@ def _build_runtime_config(cli_config: CLIDocScannerConfig, console: Console) -> 
             "superres_source",
             "superres_output_path",
             "config_path",
+            "crop_document",
         },
         exclude_unset=True,
     )
@@ -198,7 +201,10 @@ async def _run_cli(cli_config: CLIDocScannerConfig) -> None:
     session.rawDocumentId = file_id
 
     session_id = await SessionClient.create(session)
-    extracted = await runtime.scan_session(session_id)
+    extracted = await runtime.scan_session(
+        session_id,
+        crop_document=cli_config.crop_document,
+    )
 
     def update_session(state: SessionState) -> None:
         state.extractedDocument = extracted

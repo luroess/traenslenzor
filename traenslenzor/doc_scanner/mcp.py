@@ -133,7 +133,6 @@ def get_runtime() -> DocScannerRuntime:
         "The supervisor injects `session_id` automatically; do not ask the user for it. "
         "Returns the extracted document payload."
     ),
-    tags={"doc-scanner", "deskew", "session"},
     annotations=ToolAnnotations(
         title="Deskew document",
         readOnlyHint=False,
@@ -151,20 +150,23 @@ async def deskew_document(
             pattern="^[0-9a-fA-F-]{36}$",
         ),
     ],
-    context_level: Annotated[
-        Literal["minimal", "full"],
+    crop_document: Annotated[
+        bool | None,
         Field(
-            default="minimal",
+            default=None,
             description=(
-                "Controls how much extraction context to include in the response (minimal, full)."
+                "Override cropping to the detected page contour. "
+                "When omitted, uses the runtime config."
             ),
         ),
-    ] = "minimal",
+    ] = None,
 ) -> dict[str, object]:
     """Deskew the session document and update the session state.
 
     Args:
         session_id (str): File server session id injected by the supervisor.
+        crop_document (bool | None): Override cropping to the detected page contour.
+            When None, uses the runtime config.
     Returns:
         dict[str, object]: Payload containing the serialized extracted document.
     """
@@ -172,7 +174,7 @@ async def deskew_document(
     try:
         extracted = await runtime.scan_session(
             session_id,
-            context_level=context_level,
+            crop_document=crop_document,
         )
     except Exception as exc:
         console.error(str(exc))

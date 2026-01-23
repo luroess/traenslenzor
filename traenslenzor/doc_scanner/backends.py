@@ -39,8 +39,6 @@ class DeskewResult:
     """Document corners in original image coordinates (UL, UR, LR, LL)."""
     map_xy: Float32[NDArray, "H W 2"] | None
     """Optional map_xy mapping output pixels -> original pixels."""
-    map_xyz: Float32[NDArray, "Gh Gw 3"] | None
-    """Optional UVDoc 3D grid (coarse) for surface-aware post-processing."""
 
 
 class UVDocDeskewBackend:
@@ -88,6 +86,8 @@ class UVDocDeskewBackend:
     def deskew(
         self,
         image_rgb: UInt8[NDArray, "H W 3"],
+        *,
+        crop_document: bool | None = None,
     ) -> DeskewResult:
         """Deskew (dewarp) a document image via [UVDoc neural unwarping](https://arxiv.org/html/2302.02887v2).
 
@@ -136,6 +136,8 @@ class UVDocDeskewBackend:
 
         Args:
             image_rgb (ndarray[uint8]): Input RGB image, shape (H, W, 3).
+            crop_document (bool | None): Override cropping to the detected page contour.
+                When None, defaults to the runtime config.
 
         Returns:
             DeskewResult containing deskewed RGB image, corners, and optional map_xy.
@@ -147,6 +149,7 @@ class UVDocDeskewBackend:
         self._load_model()
         assert self._model is not None
         assert self._device is not None
+        crop_page = self.config.crop_page if crop_document is None else crop_document
 
         # --- Prepare original (full-res) source tensor ----------------------------------------
         # image_rgb: (H, W, 3) uint8 in RGB order.
@@ -170,15 +173,10 @@ class UVDocDeskewBackend:
         # --- Predict a coarse UV sampling grid with UVDocNet ----------------------------------
         # points2d: (B, 2, Gh, Gw) in normalized [-1, 1] image coords for grid_sample (x,y).
         with torch.no_grad():
-            points2d, points3d = self._model.forward(inp)
+            points2d, _ = self._model.forward(inp)
 
         if points2d.dim() == 3:
             points2d = points2d.unsqueeze(0)
-        if points3d.dim() == 3:
-            points3d = points3d.unsqueeze(0)
-
-        map_xyz = points3d[0].permute(1, 2, 0).detach().cpu().numpy().astype(np.float32)
-
         # --- Upsample grid to full resolution and unwarp via grid_sample ------------------
         # grid_2ch: (1, 2, H, W) -> grid: (1, H, W, 2) for grid_sample.
         grid_2ch = F.interpolate(points2d, size=(h, w), mode="bilinear", align_corners=True)
@@ -206,7 +204,8 @@ class UVDocDeskewBackend:
 
         # --- Optionally detect/crop the page on the unwarped result ---------------------------
         corners_unwarped = None
-        if self.config.crop_page:
+        # TODO: make it dependant on the param from the mcp tool
+        if crop_page:
             corners_unwarped, area_ratio = find_page_corners(
                 unwarped_rgb, min_area_ratio=self.config.min_area_ratio
             )
@@ -286,5 +285,4 @@ class UVDocDeskewBackend:
             transformation_matrix=transformation_matrix,
             corners_original=corners_original,
             map_xy=map_xy_out,
-            map_xyz=map_xyz,
         )

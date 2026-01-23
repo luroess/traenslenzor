@@ -30,8 +30,6 @@ def _collect_session_file_manifest(session: SessionState) -> dict[str, str]:
         manifest[extracted.id] = "extracted.png"
         if extracted.mapXYId:
             manifest[extracted.mapXYId] = "map_xy.npy"
-        if extracted.mapXYZId:
-            manifest[extracted.mapXYZId] = "map_xyz.npy"
     if session.renderedDocumentId:
         manifest[session.renderedDocumentId] = "rendered.png"
     superres = session.superResolvedDocument
@@ -49,7 +47,6 @@ def _build_session_payload(session: SessionState) -> dict[str, Any]:
     if isinstance(extracted, dict):
         extracted.pop("id", None)
         extracted.pop("mapXYId", None)
-        extracted.pop("mapXYZId", None)
 
     superres = payload.get("superResolvedDocument")
     if isinstance(superres, dict):
@@ -165,7 +162,6 @@ def apply_restore_payload(
         "rendered": upload_named("rendered.png"),
         "superres": upload_named("superres.png"),
         "map_xy": upload_named("map_xy.npy"),
-        "map_xyz": upload_named("map_xyz.npy"),
     }
 
     if file_ids["raw"] is None and file_ids["extracted"] is None:
@@ -181,9 +177,6 @@ def apply_restore_payload(
     if isinstance(extracted_meta, dict):
         if extracted_meta.get("mapXYShape") is not None and file_ids["map_xy"] is None:
             st.session_state["session_restore_error"] = "Missing map_xy file."
-            return
-        if extracted_meta.get("mapXYZShape") is not None and file_ids["map_xyz"] is None:
-            st.session_state["session_restore_error"] = "Missing map_xyz file."
             return
 
     if superres_meta is not None and file_ids["superres"] is None:
@@ -204,8 +197,6 @@ def apply_restore_payload(
             documentCoordinates=extracted_meta.get("documentCoordinates") or [],
             mapXYId=file_ids["map_xy"],
             mapXYShape=extracted_meta.get("mapXYShape"),
-            mapXYZId=file_ids["map_xyz"],
-            mapXYZShape=extracted_meta.get("mapXYZShape"),
         )
 
     if isinstance(superres_meta, dict) and file_ids["superres"]:
@@ -315,8 +306,6 @@ def apply_session_deletions(
         file_ids.append(extracted.id)
         if extracted.mapXYId:
             file_ids.append(extracted.mapXYId)
-        if extracted.mapXYZId:
-            file_ids.append(extracted.mapXYZId)
     if delete_rendered and session.renderedDocumentId:
         file_ids.append(session.renderedDocumentId)
     if delete_superres and session.superResolvedDocument:

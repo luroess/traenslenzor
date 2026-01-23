@@ -170,10 +170,6 @@ class ExtractedDocument(BaseModel):
     """File id for the optional map_xy array mapping output pixels to original image pixels (may be downsampled)."""
     mapXYShape: tuple[int, int, int] | None = None
     """Shape metadata for map_xy as (H, W, 2) when available (downsampled shapes are allowed)."""
-    mapXYZId: str | None = None
-    """File id for the optional UVDoc 3D grid (coarse) when available."""
-    mapXYZShape: tuple[int, int, int] | None = None
-    """Shape metadata for map_xyz as (Gh, Gw, 3) when available."""
 
 
 class SuperResolvedDocument(BaseModel):

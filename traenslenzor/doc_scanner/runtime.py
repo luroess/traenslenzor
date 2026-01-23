@@ -36,13 +36,14 @@ class DocScannerRuntime:
         self,
         session_id: str,
         *,
-        context_level: str = "minimal",
+        crop_document: bool | None = None,
     ) -> ExtractedDocument:
         """Deskew the session's raw document and upload results.
 
         Args:
             session_id (str): File server session id.
-            context_level (str): Controls how much metadata to persist (standard/full).
+            crop_document (bool | None): Override cropping to the detected page contour.
+                When None, defaults to the runtime config.
 
         Returns:
             ExtractedDocument: Deskewed document metadata including ids and coordinates.
@@ -58,7 +59,10 @@ class DocScannerRuntime:
         image_rgb = np.array(image.convert("RGB"), dtype=np.uint8)
 
         deskew_backend = self._get_backend()
-        result: DeskewResult = deskew_backend.deskew(image_rgb)
+        result: DeskewResult = deskew_backend.deskew(
+            image_rgb,
+            crop_document=crop_document,
+        )
 
         output_image = Image.fromarray(result.image_rgb)
         output_id = await FileClient.put_img(f"{session_id}_deskewed.png", output_image)
@@ -73,16 +77,7 @@ class DocScannerRuntime:
                 raise RuntimeError("Failed to upload map_xy array")
             map_xy_shape = result.map_xy.shape
 
-        map_xyz_id = None
-        map_xyz_shape = None
         transformation_matrix = result.transformation_matrix
-        if context_level == "full" and result.map_xyz is not None:
-            map_xyz_id = await FileClient.put_numpy_array(
-                f"{session_id}_map_xyz.npy", result.map_xyz
-            )
-            if map_xyz_id is None:
-                raise RuntimeError("Failed to upload map_xyz array")
-            map_xyz_shape = result.map_xyz.shape
 
         coords = []
         if result.corners_original is not None:
@@ -96,8 +91,6 @@ class DocScannerRuntime:
             documentCoordinates=coords,
             mapXYId=map_xy_id,
             mapXYShape=map_xy_shape,
-            mapXYZId=map_xyz_id,
-            mapXYZShape=map_xyz_shape,
             transformation_matrix=(
                 transformation_matrix.tolist() if transformation_matrix is not None else None
             ),
