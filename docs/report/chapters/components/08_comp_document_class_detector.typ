@@ -49,8 +49,7 @@ We implement an end-to-end PyTorch Lightning training stack for the 16-class RVL
 For grayscale normalization (in [0, 1]), we compute dataset statistics on the RVL-CDIP train split via `DocDataModule.compute_grayscale_mean_std()`:
 $mu = 0.911966$ and $sigma = 0.241507$ (single channel). These are the defaults in `TransformConfig`.
 
-RVL-CDIP consists of grayscale document page images where *layout* is often the strongest cue (header structure, margins, tables, signature blocks).
-Consequently, our preprocessing aims to preserve global layout while making the input compatible with both scratch-trained and ImageNet-pretrained backbones.
+RVL-CDIP consists of grayscale document page images where *layout* is often the strongest cue.
 
 #figure(
   caption: [Document-classifier test examples.],
@@ -91,6 +90,8 @@ Consequently, our preprocessing aims to preserve global layout while making the 
   )
 ] <fig-doc-cls-test-examples>
 
+Inspecting 4 sample figures in @fig-doc-cls-test-examples, we notice that the "documents" exhibit features that are atypical for modern document scans. This lets us suspect that models trained on this dataset may not generalization well to real-world documents.
+
 *Data loading (Hugging Face).* We load RVL-CDIP from the Hugging Face Hub (`chainyo/rvl-cdip`) using `load_dataset(...)` and cache it locally (see `RVLCDIPConfig` in #blink("https://github.com/luroess/traenslenzor/blob/master/traenslenzor/doc_classifier/data_handling/huggingface_rvl_cdip_ds.py")[`traenslenzor/doc_classifier/data_handling/huggingface_rvl_cdip_ds.py`]).
 Transforms are attached through `HFDataset.set_transform(...)` with a pickleable batch wrapper (`_TransformApplier`) to enable Lightning DataLoader multiprocessing.
 For fast iteration and Optuna sweeps, `DocDataModule` supports deterministic subsampling via `limit_num_samples` (shuffle #sym.arrow.r select prefix) in `traenslenzor/doc_classifier/lightning/lit_datamodule.py`.
@@ -99,7 +100,7 @@ For fast iteration and Optuna sweeps, `DocDataModule` supports deterministic sub
 - `LongestMaxSize(max_size=img_size)` to scale the longer side to a fixed bound, preserving aspect ratio.
 - `PadIfNeeded(min_height=img_size, min_width=img_size)` to obtain a square canvas without cropping.
 
-This avoids destroying layout cues that are common failure modes for center-crop style pipelines.
+This avoids destroying layout cues that turned out as failure modes for center-crop and rescale-only stategies that we have initially employed.
 
 *Channel handling and normalization.* The dataset is grayscale, but torchvision backbones (ResNet/ViT) are typically ImageNet-pretrained on RGB.
 Therefore, `TransformConfig` supports (a) replicating grayscale to 3 channels (`convert_to_rgb=true`) and (b) selecting the normalization statistics:
@@ -112,16 +113,17 @@ Therefore, `TransformConfig` supports (a) replicating grayscale to 3 channels (`
   #image("/graphics/doc-classifier-config.svg", width: 100%)
 ] <fig-doc-classifier-config-diagram>
 
+@fig-doc-classifier-config-diagram illustrates the main components of the `doc_classifier` module's training stack and showcases the _config-as-factory_ pattern.
 
 *Augmentation pipelines.* We provide five transform presets as Config-as-Factory targets in #blink("https://github.com/luroess/traenslenzor/blob/master/traenslenzor/doc_classifier/data_handling/transforms.py")[`traenslenzor/doc_classifier/data_handling/transforms.py`]:
-- `TrainTransformConfig`: “document-friendly” heavy augmentation for scratch training (mild rotation/scale/shift, perspective, scanner-like noise/blur, brightness/contrast, gamma).
+- `TrainTransformConfig`: "document-friendly" heavy augmentation for scratch training (mild rotation/scale/shift, perspective, scanner-like noise/blur, brightness/contrast, gamma).
 - `TrainHeavyTransformConfig`: stronger regularization for continued training (affine + distortions, compression/downscale artifacts, CLAHE, coarse/grid dropout).
 - `FineTuneTransformConfig`: light augmentation for pretrained models (resize/pad + mild photometric jitter).
 - `FineTunePlusTransformConfig`: moderate fine-tuning augmentation (small rotation/perspective + mild noise/blur + photometric jitter).
 - `ValTransformConfig`: deterministic preprocessing for evaluation (resize/pad + channel/normalization only).
 
-Concretely, `TrainTransformConfig` keeps geometry close to the original page ($<=$5° rotation, $<=$5% scale, $<=$2% shift) while simulating capture noise (Gaussian noise, mild blur, brightness/contrast, gamma).
-`TrainHeavyTransformConfig` increases geometric variability ($<=$7° rotation + affine/shear + distortion) and adds harder degradations (JPEG compression, downscale, CLAHE, and dropout occlusions) to steer the model towards learning a variety of robust features.
+Concretely, `TrainTransformConfig` keeps geometry close to the original page ($<=$5° rotation, $<=$5% scale, $<=$2% shift) while simulating capture noise (Gaussian noise, mild blur, brightness/contrast, gamma); Starting of with stronger geometic distortions as would be typical for CV tasks on natural images caused our models to perform much worse in our initial experiments.
+`TrainHeavyTransformConfig` increases geometric variability ($<=$7° rotation + affine/shear + distortion) and adds harder degradations (downscale, CLAHE, and dropout occlusions) to steer the model towards learning a variety of robust features.
 
 In addition to choosing a preset per experiment via TOML, the trainer can switch from a lighter to a heavier augmentation policy late in training (implemented as `TrainTransformSwitchCallback`), which we use as a simple augmentation schedule to improve robustness without slowing early optimization.
 
@@ -139,45 +141,46 @@ The callback block in @fig-doc-classifier-config-diagram is configured via `Trai
 - `TrainTransformSwitchCallback` (custom; #blink("https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.Callback.html#lightning.pytorch.callbacks.Callback")[Callback]): Switches from moderate to heavy Albumentations training transforms at a chosen epoch by re-attaching the dataset transform.
 - `PyTorchLightningPruningCallback` (Optuna integration): Prunes underperforming trials early based on the configured monitor (`OptunaConfig.monitor`) to speed up sweeps.
 
-// The backbone LR scale is the strongest signal in the data (bootstrap r ~ 0.76, CI [0.41, 0.99]).
-// This aligns with the mechanism: full-backbone training allows feature adaptation to the document domain,
-// whereas head-only fine-tuning constrains the model to ImageNet-oriented features.
-// AlexNet appears "better" primarily because it is allowed to learn the task end-to-end.
-
 
 ==== Training results and analysis <doc-cls-training-results>
 
 We report the final epoch's train/val losses and accuracies (last logged to W&B) and the best validation loss for the top runs.
 
-#table(
-  columns: (auto, auto, auto, auto, auto, auto, auto, auto, auto),
-  align: (left, left, right, right, right, right, right, right, right),
-  stroke: 0.5pt,
-  inset: 6pt,
-  table.header(
-    [*Run*],
-    [*Backbone*],
-    [*Epoch*],
-    [*Train acc*],
-    [*Val acc*],
-    [*Train loss*],
-    [*Val loss (best)*],
-    [*Test acc*],
-    [*Test loss*],
-  ),
-  [alexnet#1], [ALEXNET], [15], [0.954], [0.992], [0.144], [0.030], [0.992], [0.030],
-  [alexnet#2], [ALEXNET], [7], [0.922], [0.968], [0.242], [0.104], [-], [-],
-  [resnet50-finetune-rvlcdip], [RESNET50], [9], [0.976], [0.912], [0.078], [0.347], [0.958], [0.142],
-  [resnet50-finetune-rvlcdip], [RESNET50], [9], [0.808], [0.819], [0.636], [0.347], [0.958], [0.142],
-  [vitb16-finetune-rvlcdip], [VIT_B16], [9], [0.607], [0.622], [1.313], [1.276], [0.650], [1.139],
-)
+#figure(
+  caption: [Document Class Detector training runs on RVL-CDIP.],
+)[
+  #table(
+    columns: (auto, auto, auto, auto, auto, auto, auto, auto),
+    align: (left, right, right, right, right, right, right, right),
+    stroke: 0.5pt,
+    inset: 6pt,
+    table.header(
+      [*Backbone*], [*Epoch*], [*Train acc*], [*Val acc*], [*Train loss*], [*Val loss*], [*Test acc*], [*Test loss*]
+    ),
+    [ALEXNET], [15], [0.954], [0.992], [0.144], [0.030], [0.992], [0.030],
+    [RESNET50], [6], [0.976], [0.912], [0.078], [0.347], [0.958], [0.142],
+    [VIT_B16], [9], [0.607], [0.622], [1.313], [1.276], [0.650], [1.139],
+  )
+] <tbl-doc-cls-training-runs>
+
+@tbl-doc-cls-training-runs indicates rather unexpected results: the AlexNet-from-scratch model outperforms both ImageNet-pretrained backbones (ResNet-50 and ViT-B/16) by a wide margin (test accuracy 99.2% vs 95.8% / 65.0%).
+
+Our initial hypothesis is that this gap is primarily driven by
+
++ AlexNet was trained end-to-end with the same learning rate for all layers, furthermore it was trained over 15 epochs, while the other two models were only trained for 10 epochs.
++ ResNet and ViT were fine-tuned, with their backbones being frozen for the first two epochs and then receiving a reduced learning rate (scale 0.01) compared to the head.
++ We also suggest that the domain shift form ImageNet to RVL-CDIP might imply that the rich set of features learned by both pretrained backbones are not well suited for document images.
++ Finally, we used the `TrainTransformConfig` augmentation pipeline for AlexNet, switching to the even heavier augmentation pipeline at the middel of the training run (epoch 8), while the pretrained backbones used the lighter `FineTunePlusTransformConfig`, which might have led to less robust features.
++ The stark underperformance of ViT-B/16 beyond ResNet-50 is most likely due to the fact that we have used optimized hyperparameters for both AlexNet and ResNet-50, while ViT was only trained in a few manual experiments without performing a full hyperparameter sweep.
+
+To answer these questions with some more fidelity, we analyze training dynamics, per-class performance, and hyperparameter sweep results below.
+
+
 ==== Training dynamics and OneCycleLR schedule
 
-W&B plot exports are SVGs that rely on HTML embedding and do not render reliably in Typst.
-Therefore, we regenerate the plots from exported CSV histories (`docs/report/analysis/doc_cls_plots.py`).
 
 #figure(
-  caption: [Training curves and scheduler (generated from W&B history exports for selected runs).],
+  caption: [Training curves and OneCycleLR schedule (WandB).],
 )[
   #grid(
     columns: (1fr, 1fr),
@@ -207,10 +210,15 @@ Therefore, we regenerate the plots from exported CSV histories (`docs/report/ana
   )
 ]
 
+The plots in Figure 14 summarize how the models train over `trainer/global_step`:
+- *Validation accuracy / loss:* AlexNet improves steadily and practiacally reaches saturation, while the pretrained backbones plateau earlier and at a worse objective.
+- *Training loss:* the step-wise loss decreases with characteristic stochastic noise from minibatch sampling and data augmentation; the gap to validation curves highlights generalization differences between runs. While the higher learning rate used to train the fine-tuned ResNet lead to an initial rapid decrease in training loss, it also seems to have contributed to the model getting stuck in an early suboptimal minimum, where it plaeaued in terms of validation loss. The ResNet's training loss exhibits a noticable drop in its training loss when the backbone is unfrozen at epoch 2, but this does not translate to an equivalent improvement in validation performance.
+- *OneCycleLR schedule:* learning rates follow a warmup to `max_lr` and then decay; this schedule stabilizes early training and encourages convergence in later steps. We used n warmup of 30% for the pretrained networks and 15% for AlexNet.
+
 ==== Per-class performance (confusion matrices)
 
 #figure(
-  caption: [Row-normalized confusion matrices for selected runs (one per backbone).],
+  caption: [Row-normalized confusion matrices for selected runs.],
 )[
   #grid(
     columns: (1fr, 1fr, 1fr),
@@ -236,47 +244,9 @@ Therefore, we regenerate the plots from exported CSV histories (`docs/report/ana
 
 The AlexNet confusion matrix shows near-perfect per-class recall in this snapshot, while the pretrained backbones exhibit confusion among semantically close document types (e.g., *invoice* vs *letter*, and *memo* vs *news*).
 
-==== Scientific interpretation: Why AlexNet "from scratch" wins here
-
-1. *Training regime dominates architecture.*
-  AlexNet runs are trained end-to-end with backbone LR scale ~ 1.0.
-  ViT/ResNet runs are head-only (or nearly frozen), preventing meaningful adaptation to RVL-CDIP.
-  The data strongly support this mechanism (full-backbone > head-only, and high LR scale correlates with accuracy).
-
-2. *Domain shift penalizes frozen backbones.*
-  RVL-CDIP images are grayscale document pages with high-contrast glyph structure.
-  ImageNet-pretrained backbones optimized for natural RGB textures can be mismatched when frozen,
-  whereas a scratch-trained model can learn document-specific features (strokes, margins, paper noise).
-
-3. *Optimization budget and capacity interplay.*
-  Larger models require either more training steps or more backbone adaptation to realize their capacity.
-  Under limited epochs and head-only fine-tuning, ViT/ResNet underfit the domain,
-  while AlexNet's smaller capacity is sufficient when trained end-to-end.
-
-4. *Batch size and stability.*
-  The best AlexNet runs use smaller batches (~ 44), consistent with the modest negative correlation between batch size and accuracy.
-  This likely improves generalization and gradient noise beneficial for small-data fine-tuning.
-
-==== Recommendations (actionable)
-
-- *Unfreeze and scale the backbone for ViT/ResNet.*
-  Use full training with backbone LR scale in [0.1, 1.0]. Consider staged unfreezing if stability is an issue.
-- *Reduce batch size for fine-tuning.*
-  Target batch sizes in the 32-44 range; use gradient accumulation if needed.
-- *Match normalization to training regime.*
-  For full training, dataset normalization (RVL-CDIP mean/std) is appropriate; for head-only, verify that ImageNet normalization does not dominate early features.
-- *Equalize budgets before concluding architectural superiority.*
-  Compare models under matched epochs/steps and augmentation pipelines; otherwise, training regime dominates the outcome.
-
-==== Conclusion
-
-The observed performance gap is best explained by training regime rather than architecture.
-AlexNet appears superior because it is trained end-to-end while ViT/ResNet are constrained by head-only fine-tuning.
-Allowing ViT/ResNet to adapt their backbones (with appropriate LR scale and batch size) is the most likely path to closing or reversing the gap.
 
 
-
-=== Optuna Hyperparameter Sweeps
+=== Optuna Hyperparameter Sweeps <doc-cls-optuna-sweeps>
 
 #let optuna = json("/analysis/optuna/optuna_summary.json")
 #let optuna_stats = json("/analysis/optuna/optuna_stats.json")
@@ -293,7 +263,7 @@ Allowing ViT/ResNet to adapt their backbones (with appropriate LR scale and batc
 
 We tune a small number of training hyperparameters with Optuna to reduce manual trial-and-error.
 We summarize two studies: `doc-classifier` (ResNet-50 fine-tuning) and `doc-classifier-alexnet-sweep` (AlexNet from scratch).
-The objective is the validation loss (cross-entropy); all studies are minimized (lower is better).
+The objective is the validation loss (cross-entropy); all studies are minimized. All trials run for up to 6 epochs with early pruning based on intermediate validation loss on a reduced subset of the training data (20%) to speed up evaluation.
 
 In the plots below, COMPLETE trials are shown as black circles and PRUNED trials as red X (using the last reported intermediate value).
 Some figures are sparse because non-finite objectives are omitted.
@@ -322,7 +292,7 @@ Some figures are sparse because non-finite objectives are omitted.
 #let study_resnet = optuna.filter(it => it.study_name == "doc-classifier").first()
 #let p_resnet = study_resnet.best_params
 
-This sweep targets the ResNet-50 fine-tune regime and focuses on learning-rate schedule and regularization.
+This sweep targets the ResNet-50 fine-tune regime and focuses on learning-rate schedule, regularization via weight decay, the type of data augmentation, the statistics used for normalization.
 
 *Search space (from the Optuna database).* We sample:
 - `datamodule_config.train_ds.transform_config`: categorical {`train`, `finetune`, `finetune_plus`}
@@ -335,16 +305,17 @@ This sweep targets the ResNet-50 fine-tune regime and focuses on learning-rate s
 
 *Best trial.* Trial #study_resnet.best_trial_number achieves objective #r3(study_resnet.best_value) with:
 - `transform_config`: #p_resnet.at("datamodule_config.train_ds.transform_config")
+- `normalization_mode`: `dataset`
 - `max_lr`: #fmt(p_resnet.at("module_config.scheduler.max_lr"))
 - `pct_start`: #fmt(p_resnet.at("module_config.scheduler.pct_start"))
 - `backbone_lr_scale`: #fmt(p_resnet.at("module_config.optimizer.backbone_lr_scale"))
 - `weight_decay`: #fmt(p_resnet.at("module_config.optimizer.weight_decay"))
 - `backbone_unfreeze_at_epoch`: #p_resnet.at("trainer_config.callbacks.backbone_unfreeze_at_epoch")
 
-*Notes (interpretation).* 
+*Notes (interpretation).*
 - The best configuration uses `finetune_plus` with early backbone adaptation (`backbone_unfreeze_at_epoch = 2`), consistent with the hypothesis that RVL-CDIP benefits from stronger domain-specific augmentation and feature adaptation.
 - With OneCycleLR, the effective backbone peak learning rate is `max_lr * backbone_lr_scale`, here approximately #fmt(p_resnet.at("module_config.scheduler.max_lr") * p_resnet.at("module_config.optimizer.backbone_lr_scale")). This keeps backbone updates conservative while allowing the head to train at the full `max_lr`.
-- The top trials are tightly clustered (best value #r3(study_resnet.best_value)), suggesting a relatively flat optimum under the fixed trial budget; remaining variance is likely dominated by stochasticity (data order, augmentation randomness).
+- The top trials are tightly clustered (best value #r3(study_resnet.best_value)), suggesting a relatively flat optimum under the fixed trial budget.
 
 #wrap-content(
   align: top + right,
@@ -364,11 +335,11 @@ This sweep targets the ResNet-50 fine-tune regime and focuses on learning-rate s
   ],
   [
     The optimization history shows fast convergence among the few finite COMPLETE trials.
-    The importance proxy indicates that the OneCycleLR peak learning rate (`max_lr`) and schedule shape (`pct_start`) dominate this sweep, with regularization and unfreezing acting as secondary knobs.
+    The importance proxy indicates that the OneCycleLR peak learning rate (`max_lr`) and schedule shape (`pct_start`) dominate this sweep, with regularization and unfreezing acting as secondary knobs. The `transform_config` and `normalization_mode` categorical parameters unfortunately do not appear here, since they were not included in all trials and hence are not part of the importance calculation.
   ],
 )
 
-==== ResNet sweep: categorical effects (exploratory)
+==== ResNet sweep: categorical effects
 
 #let resnet_tests = optuna_stats.at("doc-classifier").at("categorical_tests")
 #let norm_test = resnet_tests.filter(it => it.param == "normalization_mode").first()
@@ -379,8 +350,8 @@ This sweep targets the ResNet-50 fine-tune regime and focuses on learning-rate s
 #let transform_groups = transform_test.group_stats.map(it => str(it.group)).join(", ")
 #let unfreeze_groups = unfreeze_test.group_stats.map(it => str(it.group)).join(", ")
 
-This sweep contains many PRUNED and non-finite trials, so we treat the following observations as exploratory.
-Among finite COMPLETE trials, we observe `normalization_mode` in {#norm_groups} and `transform_config` in {#transform_groups}.
+This sweep contains many PRUNED trials that cannot be compared directly with completed trials.
+Among finite COMPLETE trials, we observe that `normalization_mode` and `transform_config` have quickly been settled on `dataset` and `finetune_plus`, respectively. The latter indicates that stronger augmentations result in a more robust model after training for only 6 epochs at 20% of the full dataset size.
 For `backbone_unfreeze_at_epoch` in {#unfreeze_groups}, differences are small relative to noise.
 
 #figure(
@@ -417,7 +388,7 @@ For `backbone_unfreeze_at_epoch` in {#unfreeze_groups}, differences are small re
   )
 ] <fig-doc-cls-optuna-resnet-cats>
 
-*Notes.* The box plots and group statistics suggest that `finetune_plus` is the only transform preset that yields a sizable set of finite COMPLETE trials (n = #transform_test.group_stats.first().n) with low spread (median #r3(transform_test.group_stats.first().median), std #r3(transform_test.group_stats.first().std)).
+*Notes.* The box plots and group statistics suggest that `finetune_plus` is the only transform preset that yields a sizable set of finite COMPLETE trials (n = #transform_test.group_stats.first().n) with low spread (median #r3(transform_test.group_stats.first().median), std #r3(transform_test.group_stats.first().std)). Similarly, `dataset` normalization yields the best median objective (#r3(norm_test.group_stats.first().median)) among finite COMPLETE trials (n = #norm_test.group_stats.first().n). Both findings align with the best trial's configuration.
 For backbone unfreezing, `backbone_unfreeze_at_epoch = 2` has a slightly better median objective (#r3(unfreeze_test.group_stats.at(1).median)) than epoch 1 (#r3(unfreeze_test.group_stats.at(0).median)), but the epoch-1 group has very small n and the ANOVA test is not significant.
 
 ==== AlexNet sweep (doc-classifier-alexnet-sweep)
