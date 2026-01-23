@@ -115,12 +115,57 @@ def create_mask(texts: list[RenderReadyItem], mask_shape: tuple[int, int]) -> ND
 === Transformation Pipeline
 
 Document images undergo perspective correction during preprocessing—specifically, the document deskewing performed by the Text Extractor (@comp_text_extractor).
-When a photograph is taken at an angle, the Text Extractor detects the document boundary and applies a perspective transformation to produce a rectangular image suitable for #gls("ocr").
+When a photograph is taken at an angle, the Text Extractor detects the document boundary and applies a transformation to produce a rectangular image suitable for #gls("ocr").
 
 The renderer must account for this transformation to place translated text correctly on the original document.
-The Text Extractor stores the transformation matrix in the session's `DocumentInfo`, which the renderer retrieves during the final compositing stage.
-After rendering text onto the deskewed image, the renderer applies the inverse transformation to map the result back to the original document's coordinate space.
-The transformed result is then composited onto the original image using alpha blending, preserving any parts of the original that were not affected by text replacement.
+Initially, the system used a corner-based approach: the Text Extractor detected four document corners and computed a perspective transformation matrix, which could be easily inverted using standard homography inversion.
+This approach worked well for documents photographed at simple angles, where the distortion was purely projective.
+
+However, real-world document captures often exhibit more complex distortions—curved pages, lens distortion, or non-planar surfaces.
+To handle these cases, the Text Extractor was enhanced to produce a dense flow field (`map_xy`) instead of a single transformation matrix.
+This flow field encodes, for each pixel in the deskewed image, the corresponding (x, y) coordinates in the original image—effectively a pixel-level forward mapping.
+
+The renderer's inverse transformation uses this flow field to perform a reverse splatting operation.
+For each pixel in the rendered deskewed image, the flow field directly indicates where that pixel should be placed in the original coordinate space.
+The implementation rounds these floating-point coordinates to integer positions and validates that they fall within the original image bounds.
+Valid pixels are then scattered to their destination coordinates, building both the backtransformed image and a boolean mask indicating which regions were filled.
+
+#figure(caption: [Flow field-based inverse transformation: `traenslenzor/doc_scanner/backtransform.py`])[\n#code()[```py
+def backtransform_with_map_xy(
+    extracted_rgb: UInt8[NDArray, "H W 3"],
+    map_xy: Float32[NDArray, "H2 W2 2"],
+    output_shape: tuple[int, int],
+    *,
+    upsample: bool = True,
+) -> tuple[UInt8[NDArray, "H0 W0 3"], Bool[NDArray, "H0 W0"]]:
+    """Project a deskewed image back onto the original canvas using a flow field."""
+    h0, w0 = output_shape
+    h1, w1 = extracted_rgb.shape[:2]
+
+    # Upsample flow field to match extracted image resolution if needed
+    if upsample and map_xy.shape[:2] != (h1, w1):
+        map_x = cv2.resize(map_xy[..., 0], (w1, h1), interpolation=cv2.INTER_LINEAR)
+        map_y = cv2.resize(map_xy[..., 1], (w1, h1), interpolation=cv2.INTER_LINEAR)
+        map_xy_full = np.stack([map_x, map_y], axis=-1).astype(np.float32)
+    else:
+        map_xy_full = map_xy.astype(np.float32)
+
+    # Compute target coordinates in original image space
+    x_t = np.rint(map_xy_full[..., 0]).astype(np.int32)
+    y_t = np.rint(map_xy_full[..., 1]).astype(np.int32)
+    valid = (0 <= x_t) & (x_t < w0) & (0 <= y_t) & (y_t < h0)
+
+    # Scatter pixels to destination coordinates
+    back = np.zeros((h0, w0, 3), dtype=np.uint8)
+    back[y_t[valid], x_t[valid]] = extracted_rgb[valid]
+
+    mask = np.zeros((h0, w0), dtype=bool)
+    mask[y_t[valid], x_t[valid]] = True
+    return back, mask
+```]]
+
+This splatting approach trades simplicity for generality: while it may create small holes where no source pixel maps to a destination (due to coordinate rounding), it seamlessly handles non-linear distortions that a single homography matrix cannot represent.
+The transformed result is composited onto the original image using alpha blending, with the boolean mask ensuring that only the rendered text regions replace the original content.
 
 === MCP Server Integration
 
