@@ -82,7 +82,7 @@ For font size estimation, separate Multi-Layer Perceptrons (MLPs) were trained f
 
 === Final Evaluation <font_eval_final>
 
-A final end-to-end run was performed using the `scientific_publication_Lato_straight` document to evaluate the system after the migration to Tesseract OCR.
+A final end-to-end run was performed using the `scientific_publication_Lato_` `straight` document to evaluate the system after the migration to Tesseract OCR.
 
 ==== Challenges with OCR Migration
 The training data for the size regression model was generated using "tight" bounding boxes around the ink. Tesseract OCR, however, produces "loose" bounding boxes that include line spacing and ascender/descender room. This mismatch initially caused significant size overestimation.

@@ -10,27 +10,26 @@ All components of the image translator are visualized in @components_architectur
 \
 The user interacts through the web-based streamlit user interface described in @comp_user_interface.
 There, the user can upload an image to be translated and specify a prompt with requests for the target language and further alterations of the result.
-Upon the user starting the user interface, a new session is created via an #gls("http") #gls("api") call to the file server component, instantiating a session state with a unique session id.
+Upon the user starting the #gls("ui"), a new session is created via an #gls("http") #gls("api") call to the File Server component, instantiating a session state with a unique session id.
 \
-The file server component described in @comp_file_server serves as the central storage location for all data associated with a session, including image data like the uploaded document and associated metadata such as extracted text and corresponding bounding boxes.
-All data exchange between different tool components, the ui, and the supervisor is orchestrated via the file server component.
-Once the user sends a prompt in the user interface, the supervisor component described in @comp_supervisor is invoked.
+The File Server component described in @comp_file_server serves as the central storage location for all data associated with a session, including image data like the uploaded document and associated metadata such as extracted text and corresponding bounding boxes.
+All data exchange between different tool components, the #gls("ui"), and the Supervisor is orchestrated via the File Server component.
+Once the user sends a prompt in the user interface, the Supervisor component described in @comp_supervisor is invoked.
 \
-The supervisor is the central node of the program, running the agent #gls("llm") and is connected to all tool components.
-Utilizing langchain as the framework for agentic #gls("llm") tasks, all tools are provided to the `gwen3:4b` #gls("llm") model.
+The Supervisor is the central node of the program, running the agent #gls("llm") and is connected to all tool components.
+Utilizing LangChain as the framework for agentic #gls("llm") tasks, all tools are provided to the `gwen3:4b` #gls("llm") model.
 Beginning with the first prompt received by the #gls("llm") in a session, the #gls("llm") will then deduce a logical order for tool execution from the required data dependencies and descriptions provided by the tools.
 A fixed order is not provided.
 In case the #gls("llm") requires further user input such as the destination language, it might respond to the user with a follow-up question for clarification.
 \
-Typically, the text extraction tool described in @comp_text_extractor is called as the first step.
+Typically, the Text Extractor tool described in @comp_text_extractor is called as the first step.
 First, the image borders are recognized and it is deskewed to a fitting rectangle. Then, utilizing an #gls("ocr") library, the text features and their locations are extracted from the image.
-The resulting deskewed image and metadata are then uploaded to the file server.
+The resulting deskewed image and metadata are then uploaded to the File Server.
 \
 Following text extraction, the #gls("llm") typically invokes the Font Detector (@comp_font_detector) and Document Translator (@comp_document_translator) to enrich each text item with font information and translations.
 Once all items are fully processed, the Document Image Renderer (@comp_document_image_renderer) combines these results to produce the final translated document image.
 The renderer uses #gls("ffc")-powered inpainting to remove the original text and places the translated text with matching fonts, preserving the document's original appearance.
 \
-
 
 #warning-note()[
   #strong[For each component:] Add a description (task, input, output, #emph[interesting] technical detail).

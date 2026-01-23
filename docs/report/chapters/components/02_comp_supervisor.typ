@@ -3,7 +3,7 @@
 
 == Supervisor <comp_supervisor>
 
-The supervisor is the central component of the application.
+The Supervisor is the central component of the application.
 It is responsible for interaction with the agent #gls("llm") and provides the #gls("llm") with callable tools.
 Although the implementation is concise, it reflects extensive experimentation to achieve a reliable solution.
 
@@ -100,9 +100,9 @@ As no restrictions on how this should be achieved were specified in the initial 
 
 Most successful, and well compatible with LangChain, proved to be the dynamic addition of tools as soon as the required prerequisites were met.
 This addressed multiple issues we would otherwise face, including incorrect calling order by the #gls("llm") and incorrect call parameters, and it proved reliable in practice.
-Using this method, a fully functional supervisor mockup was implemented in the initial phase of the project.
+Using this method, a fully functional Supervisor mockup was implemented in the initial phase of the project.
 
-Once presented during the first update meeting, the requirements around the supervisor and tool calling were adjusted without prior notice in a way that made this solution no longer applicable.
+Once presented during the first update meeting, the requirements around the Supervisor and tool calling were adjusted without prior notice in a way that made this solution no longer applicable.
 As a result, we had to discard the working implementation and move to a different approach, which required additional effort and workarounds to reach comparable reliability.
 
 ==== LLaMA 3.1/3.2
@@ -125,7 +125,7 @@ To do this, we first considered approaches like #link("https://docs.langchain.co
 Therefore, we considered giving the #gls("llm") a tool to store relevant information in memory directly, which would then be injected into the context itself.
 This, however, did not work and was one of the reasons we switched to the session-based system.
 
-==== React pattern for tools
+==== ReAct pattern for tools
 To encourage reasoning in LLaMA, we attempted to apply the ReAct pattern using a one-shot instruction:
 
 #figure(

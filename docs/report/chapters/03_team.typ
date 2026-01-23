@@ -87,7 +87,7 @@
   "UI",
   [Felix Schladt\ Jan Schaible],[UI1],[
     - Set up the Streamlit #gls("ui").
-    - Built a basic chat interface to interact with the supervisor.
+    - Built a basic chat interface to interact with the Supervisor.
   ]
 )
 
@@ -126,7 +126,7 @@
   ],
   [Felix Schladt\ Jan Schaible], [SV7], [
     - Implemented changes based on the updated session concept.
-    - Injected the session into the supervisor system prompt.
+    - Injected the session into the Supervisor system prompt.
   ],
   [Felix Schladt\ Jan Schaible], [SV10], [
     - Optimized prompts.
@@ -207,8 +207,8 @@
 #contributed(
   "Document Editor",
   [Jan Schaible], [XDE1], [
-    - Implemented a tool for the supervisor to modify session text.
-    - Implemented a tool for the supervisor to retrieve the current session text.
+    - Implemented a tool for the Supervisor to modify session text.
+    - Implemented a tool for the Supervisor to retrieve the current session text.
   ],
   [Felix Schladt\ Jan Schaible], [XDE2], [
     - Implemented a tool to optimize the text stored in the session according to user instructions.
@@ -255,7 +255,7 @@ gantt
   section user_interface
   "Basic UI"       : 2026-1-10, 1w
 
-  section supervisor
+  section Supervisor
   "Technology experiments"       : sv1, 2025-10-13, 2w
   "Supervisor setup"       : sv2, after sv1, 2w
   "Mock Infrastructure"       : sv3, after sv2, 2w

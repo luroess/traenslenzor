@@ -40,11 +40,6 @@ The final output is the deskewed image, along with the corner points and the tra
 
 === PaddleOCR
 
-A first version of the text extractor was realized using PaddleOCR.
-Integrating PaddleOCR into the application proved difficult due to it not being compatible with the used LangChain version 1.0.0.
-As the incompatibility arose only due to two incorrect import paths in a single file, a small shim wrapper[@paddle_shim] requiring import prior to the PaddleOCR library import sufficed to fix the issue.
-
-
 ])
 
 #wrap-content(
@@ -55,12 +50,15 @@ As the incompatibility arose only due to two incorrect import paths in a single 
     #image("/imgs/paddle_ocr_boxes.png")
   ],
   [
+  A first version of the Text Extractor was realized using PaddleOCR.
+  Integrating PaddleOCR into the application proved difficult due to it not being compatible with the used LangChain version 1.0.0.
+  As the incompatibility arose only due to two incorrect import paths in a single file, a small shim wrapper[@paddle_shim] requiring import prior to the PaddleOCR library import sufficed to fix the issue.
 
   A further issue arose in conjunction with PaddleOCR.
   After running the text extraction tool call, log messages kept not showing anymore.
   The Paddle framework resets the application-wide log level configuration.
   The culprit could be identified and fixed through a pull request in the Paddle framework.
-  Until the changes are downstreamed into PaddleOCR, the log level is reset after execution of the text extractor module@noauthor_paddlepaddlepaddle_nodate.
+  Until the changes are downstreamed into PaddleOCR, the log level is reset after execution of the Text Extractor module@noauthor_paddlepaddlepaddle_nodate.
 
   Lastly, a more important and harder to solve problem arose with PaddleOCR.
   Though text recognition worked well, the bounding boxes reported by PaddleOCR proved to be inaccurate.

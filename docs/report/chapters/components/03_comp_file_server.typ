@@ -2,7 +2,7 @@
 
 == File Server <comp_file_server>
 
-The file server component serves as the central node sharing image, text and additional metadata between the different components.
+The File Server component serves as the central node sharing image, text and additional metadata between the different components.
 It was introduced due as other methods of sharing additional data via #gls("mcp") proved to be not viable.
 Sharing image data via Base64 encoding is not really convenient, warranting the original introduction of the File Server. 
 Later, additional metadata was moved into it, due to us trying to limit the #gls("llm") parameter size as much as possible, requiring multiple different arguments to the tool calls proved to confuse the #gls("llm") quite a lot.
@@ -10,7 +10,7 @@ Therefore an #gls("http") server based upon FastAPI dubbed "File Server" was int
 Based upon a session system with a unique `SessionId`, every component can access and alter the `SessionState`. 
 If a component is called, only the `SessionId` must be supplied.
 This architecture allows for multiple #gls("ui") Clients utilizing the same backend runtime simultaneously.
-The file server is the only instance keeping state except the user frontend. All other components are stateless in nature.
+The File Server is the only instance keeping state except the user frontend. All other components are stateless in nature.
 
 === Session State
 #figure(caption: [File Server `SessionState` structure: `traenslenzor/file_server/session_state.py`])[
