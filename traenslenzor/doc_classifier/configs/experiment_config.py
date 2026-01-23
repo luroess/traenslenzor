@@ -284,15 +284,21 @@ class ExperimentConfig(BaseConfig[Trainer]):
         try:
             if resolved_stage is Stage.TRAIN:
                 stage_console.log("Starting training (fit)...")
-                trainer.fit(lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input, weights_only=False)
+                trainer.fit(
+                    lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input, weights_only=False
+                )
                 stage_console.log("Training completed")
             elif resolved_stage is Stage.VAL:
                 stage_console.log("Starting validation...")
-                trainer.validate(lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input, weights_only=False)
+                trainer.validate(
+                    lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input, weights_only=False
+                )
                 stage_console.log("Validation completed")
             elif resolved_stage is Stage.TEST:
                 stage_console.log("Starting testing...")
-                trainer.test(lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input, weights_only=False)
+                trainer.test(
+                    lit_module, datamodule=lit_datamodule, ckpt_path=ckpt_input, weights_only=False
+                )
                 stage_console.log("Testing completed")
         except KeyboardInterrupt:
             stage_console.warn("Keyboard interrupt received. Shutting down.")

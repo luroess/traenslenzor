@@ -576,12 +576,8 @@ def find_best_worst_samples(
     if not worst_heap:
         raise RuntimeError("No incorrect predictions found on the dataset.")
 
-    best = [
-        sample for _, _, sample in sorted(best_heap, key=lambda x: x[0], reverse=True)
-    ]
-    worst = [
-        sample for _, _, sample in sorted(worst_heap, key=lambda x: x[0], reverse=True)
-    ]
+    best = [sample for _, _, sample in sorted(best_heap, key=lambda x: x[0], reverse=True)]
+    worst = [sample for _, _, sample in sorted(worst_heap, key=lambda x: x[0], reverse=True)]
     return best, worst, class_names
 
 
