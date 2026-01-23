@@ -65,7 +65,7 @@ This consistent interface allows swapping backends without changes to the callin
 After inpainting removes the original text, the translated text must be rendered in its place.
 This is complicated by the fact that text in documents is often rotated—either because the document was photographed at an angle, or because text elements themselves have non-horizontal orientations.
 
-The renderer calculates the rotation angle from the four-point polygon bounding box provided by the text extractor.
+The renderer calculates the rotation angle from the four-point polygon bounding box provided by the Text Extractor.
 By analyzing the vector from the upper-left to upper-right corner, the rotation can be computed via arctangent:
 
 #figure(caption: [Rotation angle calculation from bounding box: `traenslenzor/image_renderer/text_operations.py`])[
@@ -182,7 +182,7 @@ class RenderResult:
     rendered_document_id: str
 ```]]
 
-The tool loads images from the file server, processes them through the rendering pipeline, stores the result back to the file server, and updates the session state with the rendered document ID.
+The tool loads images from the File Server, processes them through the rendering pipeline, stores the result back to the File Server, and updates the session state with the rendered document ID.
 Error handling uses `ToolError` exceptions with descriptive messages to guide the #gls("llm") in case of missing prerequisites.
 
 === Testing

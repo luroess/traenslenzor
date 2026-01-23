@@ -102,7 +102,7 @@
   [UI1],
   [
     - Set up the Streamlit #gls("ui").
-    - Built a basic chat interface to interact with the supervisor.
+    - Built a basic chat interface to interact with the Supervisor..
   ],
   [Jan Duchscherer],
   [UI2],
@@ -196,7 +196,7 @@
   [SV7],
   [
     - Implemented changes based on the updated session concept.
-    - Injected the session into the supervisor system prompt.
+    - Injected the session into the Supervisor system prompt.
   ],
   [Felix Schladt\ Jan Schaible],
   [SV10],
@@ -376,8 +376,8 @@
   [Jan Schaible],
   [XDE1],
   [
-    - Implemented a tool for the supervisor to modify session text.
-    - Implemented a tool for the supervisor to retrieve the current session text.
+    - Implemented a tool for the Supervisor to modify session text.
+    - Implemented a tool for the Supervisor to retrieve the current session text.
   ],
   [Felix Schladt\ Jan Schaible],
   [XDE2],
@@ -437,15 +437,15 @@
     "Polling + Progress"       : ui2, 2025-12-22, 4w
     "Session I/O + cleanup"       : ui3, 2026-1-20, 3d
 
-  section supervisor
-    "Technology experiments"       : sv1, 2025-10-13, 2w
-    "Supervisor setup"       : sv2, after sv1, 2w
-    "Mock Infrastructure"       : sv3, after sv2, 2w
-    "Evaluate different LLMs"       : sv4, after sv3, 2w
-    "Multiple tool calls (LLaMA 3)"       : sv5, after sv3, 2w
-    "Memory"       : sv6, after sv5, 1w
-    "Session changes"       : sv7, after sv6, 1w
-    "Bug fixes"       : sv10, 2025-12-20, 2w
+  section Supervisor
+  "Technology experiments"       : sv1, 2025-10-13, 2w
+  "Supervisor setup"       : sv2, after sv1, 2w
+  "Mock Infrastructure"       : sv3, after sv2, 2w
+  "Evaluate different LLMs"       : sv4, after sv3, 2w
+  "Multiple tool calls (LLaMA 3)"       : sv5, after sv3, 2w
+  "Memory"       : sv6, after sv5, 1w
+  "Session changes"       : sv7, after sv6, 1w
+  "Bug fixes"       : sv10, 2025-12-20, 2w
 
     section file_server
     "File Server"       : fs1, after sv3, 1w
@@ -461,11 +461,11 @@
     "Deskew pipeline + Super-res."       : ds2, 2026-1-3, 19d
     "Super-resolution + fixes"       : ds3, 2026-1-18, 4d
 
-    section font_detector
-    "Roadmap & Review"       : ft1, 2025-10-13, 1w
-    "MCP & MLP Baseline"     : ft2, after ft1, 6w
-    "Dataset & MLP Tuning"   : ft3, after ft2, 2w
-    "ResNet & DPI Fix"       : ft4, after ft3, 6w
+  section font_detector
+  "Roadmap & Review"       : ft1, 2025-10-13, 1w
+  "MCP & MLP Baseline"     : ft2, after ft1, 6w
+  "Dataset & MLP Tuning"   : ft3, after ft2, 2w
+  "ResNet & DPI Fix"       : ft4, after ft3, 6w
 
     section document_translator
     "Single-batch testing"       : dt1, 2025-11-24, 3w

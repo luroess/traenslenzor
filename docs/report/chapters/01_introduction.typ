@@ -22,7 +22,7 @@
     It is modeled after similar applications such as Google Translate.
     Users can upload images directly in the chat or load images from locations relative to the working directory.
     The system detects text blocks, translates them into another language, and preserves the original font, size, position, and orientation.
-    In addition, users can modify text within the image via chat input, and the supervisor (#gls("llm")) incorporates these changes, re-rendering the image if necessary.
+    In addition, users can modify text within the image via chat input, and the Supervisor (#gls("llm")) incorporates these changes, re-rendering the image if necessary.
     The system also recognizes document types, producing output that maintains the structure and appearance of the original, as illustrated in @fig-example-translation and @fig-example-straight.
   ],
 )

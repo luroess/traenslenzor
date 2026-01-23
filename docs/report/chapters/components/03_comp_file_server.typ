@@ -1,18 +1,23 @@
 #import "@preview/supercharged-hm:0.1.2": *
 
 == File Server <comp_file_server>
+The File Server component serves as the central node for sharing images, text, and additional metadata among the system's components.
+It was introduced after alternative approaches for transferring auxiliary data via #gls("mcp") proved infeasible.
+In particular, sharing image data through Base64 encoding was impractical, motivating the initial introduction of the File Server.
+Consequently, an #gls("http") server based on FastAPI—referred to as the File Server—was introduced.
 
-The file server component serves as the central node sharing image, text and additional metadata between the different components.
-It was introduced due as other methods of sharing additional data via #gls("mcp") proved to be not viable.
-Sharing image data via Base64 encoding is not really convenient, warranting the original introduction of the File Server. 
-Later, additional metadata was moved into it, due to us trying to limit the #gls("llm") parameter size as much as possible, requiring multiple different arguments to the tool calls proved to confuse the #gls("llm") quite a lot.
-Therefore an #gls("http") server based upon FastAPI dubbed "File Server" was introduced.\
-Based upon a session system with a unique `SessionId`, every component can access and alter the `SessionState`. 
-If a component is called, only the `SessionId` must be supplied.
-This architecture allows for multiple #gls("ui") Clients utilizing the same backend runtime simultaneously.
-The file server is the only instance keeping state except the user frontend. All other components are stateless in nature.
+Later, additional session-related data was also migrated to the File Server.
+This change was driven by the goal of minimizing the #gls("llm") tool parameter count: supplying numerous arguments to tool calls was found to significantly confuse the #gls("llm").
+
+The system is based on a session mechanism identified by a unique `SessionId`, which allows every component to access and modify the shared `SessionState`.
+When invoking a component, only the `SessionId` needs to be provided.
+
+The File Server is the only backend component that maintains state, aside from the user frontend; all other components are stateless by design.
 
 === Session State
+The session state, as shown in @session-state, represents the current state of a single session.
+It is the core data structure shared across all components of the system.
+
 #figure(caption: [File Server `SessionState` structure: `traenslenzor/file_server/session_state.py`])[
 #code()[```py
 class SessionState(BaseModel):
@@ -23,7 +28,7 @@ class SessionState(BaseModel):
     text: list[TextItem] | None = None
     language: str | None = None
     class_probabilities: dict[str, float] | None = None
-```]]
+```]]<session-state>
 
 === Session Progress
 The `Session Progress` can be periodically fetched by the #gls("ui") to provide the user with progress information.
