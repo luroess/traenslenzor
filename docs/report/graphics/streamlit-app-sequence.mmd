@@ -1,0 +1,38 @@
+sequenceDiagram
+autonumber
+actor U as User
+participant ST as Streamlit UI
+participant SC as SessionClient
+participant FC as FileClient
+participant FS as FileServer
+participant SUP as Supervisor
+
+Note over ST: Async IO is executed via AsyncRunner (omitted)
+Note over ST: Polling runs only while supervisor is active (every ~10s)
+Note over ST: st.session_state caches session/progress + images/map_xy
+Note over ST: File fetches only on cache miss (polling prefers cached)
+
+ST->>SC: create() if no session_id
+SC->>FS: POST /sessions (returns session_id)
+
+U->>ST: Upload image
+ST->>SC: prepare_new_doc()
+SC->>FS: GET/PUT session reset
+ST->>FC: put_bytes(image)
+FC->>FS: POST /files (returns raw_file_id)
+ST->>SC: update(rawDocumentId=raw_file_id)
+SC->>FS: PUT /sessions/{id}
+
+U->>ST: Send prompt
+ST->>SUP: run(prompt, session_id) in background
+SUP->>FS: tools read and write session and files
+
+loop While supervisor running (poll)
+  ST->>SC: get_progress() and get()<br/>(refresh Session overview in sidebar)
+  SC->>FS: GET /sessions/{id}/progress and GET /sessions/{id}
+  ST->>FC: get_image(file_id from SessionState) [cache miss]<br/>(refresh Image panel)
+  FC->>FS: GET /files/{file_id}
+end
+
+SUP-->>ST: final assistant message
+ST-->>U: render chat and images

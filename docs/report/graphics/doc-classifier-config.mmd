@@ -1,0 +1,112 @@
+---
+title:
+config:
+  htmlLabels: false
+  flowchart:
+    htmlLabels: false
+---
+
+flowchart LR
+  EC["ExperimentConfig"]
+
+  subgraph Top["Top-level configs"]
+    direction TB
+    TFC["TrainerFactoryConfig"]
+    MCC["DocClassifierConfig"]
+    DMC["DocDataModuleConfig"]
+    TUC["TunerConfig"]
+    OPC["OptunaConfig"]
+    PCC["PathConfig"]
+  end
+
+  subgraph TrainerCfg["Trainer configuration"]
+    direction TB
+    WBC["WandbConfig"]
+    TCC["TrainerCallbacksConfig"]
+
+    subgraph Callbacks["Callbacks"]
+      direction TB
+      Ckpt["ModelCheckpoint"]
+      LRMon["LearningRateMonitor"]
+      Early["EarlyStopping"]
+      Timer["Timer"]
+      Summary["RichModelSummary"]
+      TQDM["CustomTQDMProgressBar"]
+      RichPB["CustomRichProgressBar"]
+      Finetune["OneCycleBackboneFinetuning"]
+      Switch["TrainTransformSwitchCallback"]
+      Pruner["Optuna Pruning Callback"]
+    end
+  end
+
+  subgraph DataCfg["Dataset configuration"]
+    direction TB
+    RDC["RVLCDIPConfig"]
+    TRC["TransformConfig<br/>(discriminated union)"]
+
+    subgraph Presets["Transform presets"]
+      direction TB
+      Train["TrainTransformConfig"]
+      TrainH["TrainHeavyTransformConfig"]
+      FT["FineTuneTransformConfig"]
+      FTP["FineTunePlusTransform<br/>Config"]
+      Val["ValTransformConfig"]
+    end
+  end
+
+  subgraph Runtime["setup_target() outputs"]
+    direction TB
+    Trainer["Trainer"]
+    Module["DocClassifierModule"]
+    DataModule["DocDataModule"]
+    Logger["WandbLogger"]
+    Tuner["Lightning Tuner"]
+    Dataset["Hugging Face Dataset"]
+  end
+
+  %% Composition (config -> config)
+  EC --> TFC
+  EC --> MCC
+  EC --> DMC
+  EC --> TUC
+  EC --> OPC
+  EC --> PCC
+
+  TFC --> WBC
+  TFC --> TCC
+  TCC --> Ckpt
+  TCC --> LRMon
+  TCC --> Early
+  TCC --> Timer
+  TCC --> Summary
+  TCC --> TQDM
+  TCC --> RichPB
+  TCC --> Finetune
+  TCC --> Switch
+
+  DMC --> RDC
+  RDC --> TRC
+  TRC --> Train
+  TRC --> TrainH
+  TRC --> FT
+  TRC --> FTP
+  TRC --> Val
+
+  %% Factory instantiation (config -> runtime)
+  TFC -. "setup_target()" .-> Trainer
+  MCC -. "setup_target()" .-> Module
+  DMC -. "setup_target()" .-> DataModule
+  WBC -. "setup_target()" .-> Logger
+  TUC -. "run_tuning()" .-> Tuner
+  RDC -. "setup_target()" .-> Dataset
+
+  %% Optional wiring
+  OPC -. "pruning callback" .-> Pruner
+
+  %% Styling: rounded cluster hulls + cooler palette.
+  style Top fill:#f0f6ff,stroke:#9db9ff,stroke-width:2px,rx:12,ry:12
+  style TrainerCfg fill:#f0fbff,stroke:#8fd0ff,stroke-width:2px,rx:12,ry:12
+  style Callbacks fill:#ffffff,stroke:#8fd0ff,stroke-width:2px,rx:12,ry:12
+  style DataCfg fill:#f1fff6,stroke:#97ddb5,stroke-width:2px,rx:12,ry:12
+  style Presets fill:#ffffff,stroke:#97ddb5,stroke-width:2px,rx:12,ry:12
+  style Runtime fill:#f7f3ff,stroke:#cdb2ff,stroke-width:2px,rx:12,ry:12
