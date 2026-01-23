@@ -1,5 +1,5 @@
-import json
 import logging
+import re
 
 from ollama import Client
 
@@ -45,13 +45,15 @@ def translate_all(texts: list[TextItem], lang: str) -> list[HasTranslation]:
     if not texts:
         return []
 
+    logger.info(f"Translating {len(texts)} items to {lang}")
+
     input_texts = [t.extractedText for t in texts]
 
     system = {
         "role": "system",
         "content": f"""
             You are an expert translator. Translate the following list of texts into target language: '{lang}'.
-            
+
             You are given existing text in this format:
                 1: Dies ist ein beispiel
                 2: Mehr Text
@@ -69,7 +71,9 @@ def translate_all(texts: list[TextItem], lang: str) -> list[HasTranslation]:
 
     message = {
         "role": "user",
-        "content": "\n".join([f"{i}: {txt}" for i, txt in enumerate(input_texts)]),
+        "content": "\n".join(
+            [f"{i}: {txt.replace(chr(10), ' ')}" for i, txt in enumerate(input_texts)]
+        ),
     }
 
     content = None
@@ -87,46 +91,39 @@ def translate_all(texts: list[TextItem], lang: str) -> list[HasTranslation]:
                 return None
             lines = content.strip().splitlines()
 
-            # Remove numbering and keep clean text lines (optional)
-            translated_lines = []
+            # Parse response with index matching
+            parsed_translations = {}
+            pattern = re.compile(r"^(\d+):\s*(.*)$")
+
             for line in lines:
-                # Expect format "1: corrected text"
-                if ":" in line:
-                    _, content = line.split(":", 1)
-                    translated_lines.append(content.strip())
-                else:
-                    # fallback if numbering missing
-                    translated_lines.append(line.strip())
+                line = line.strip()
+                match = pattern.match(line)
+                if match:
+                    try:
+                        idx = int(match.group(1))
+                        text = match.group(2).strip()
+                        parsed_translations[idx] = text
+                    except ValueError:
+                        continue
 
-            if len(translated_lines) == len(texts):
-                results: list[HasTranslation] = []
-                for i, item in enumerate(texts):
-                    translation_info = TranslationInfo(translatedText=translated_lines[i])
+            logger.info(f"Parsed {len(parsed_translations)} translations from batch response")
+
+            # Retrying missing items individually
+            results: list[HasTranslation] = []
+            for i, item in enumerate(texts):
+                if i in parsed_translations:
+                    translation_info = TranslationInfo(translatedText=parsed_translations[i])
                     results.append(add_translation(item, translation_info))
-                return results
-            else:
-                logger.warning(
-                    "Batch translation returned length mismatch (expected %s, got %s). Preview: %r. Falling back to sequential.",
-                    len(texts),
-                    len(translated_lines),
-                    preview,
-                )
+                else:
+                    logger.warning(f"Missing translation for index {i}, retrying individually")
+                    results.append(translate(item, lang))
+            return results
 
-    except json.JSONDecodeError as e:
-        preview = (content or "").strip()
-        if len(preview) > 200:
-            preview = preview[:200] + "..."
-        logger.error(
-            "Batch translation JSON decode failed: %s. Preview: %r. Falling back to sequential.",
-            e,
-            preview,
-        )
     except Exception as e:
-        logger.exception(
-            f"Unexpected error during batch translation: {e}. Falling back to sequential."
-        )
+        logger.warning(f"Batch translation failed or incomplete: {e}. Falling back to sequential.")
 
     # Fallback to sequential
+    logger.info("Running sequential translation fallback")
     results = []
     for item in texts:
         results.append(translate(item, lang))

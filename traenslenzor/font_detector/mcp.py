@@ -109,8 +109,28 @@ def estimate_font_size_logic(
 
         # Estimate font size
         estimator = get_font_size_estimator()
+
+        # Adjust for DPI if image is provided
+        # The model was trained on PIL-generated images which default to 72 DPI
+        # If the input image has a higher DPI (e.g. 300, iPhone), the pixel dimensions will be larger
+        # leading to over-estimation of font size in points.
+        width_px, height_px = text_box_size
+        if image_path:
+            try:
+                with Image.open(image_path) as img:
+                    dpi = img.info.get("dpi")
+                    if dpi:
+                        current_dpi = float(dpi[0])
+                        # If DPI is significantly different from 72, scale the inputs
+                        if current_dpi > 0 and abs(current_dpi - 72.0) > 1.0:
+                            scale_factor = 72.0 / current_dpi
+                            width_px *= scale_factor
+                            height_px *= scale_factor
+            except Exception:
+                pass
+
         font_size_pt = estimator.estimate(
-            text_box_size=tuple(text_box_size),
+            text_box_size=(width_px, height_px),
             text=text,
             font_name=font_name,
             # num_lines=num_lines,
@@ -256,8 +276,46 @@ async def detect_font_logic(session_id: str) -> str:
         # Get size estimator
         size_estimator = get_font_size_estimator()
 
+        # Check DPI for scaling
+        dpi_scale_factor = 1.0
+        try:
+            current_dpi = 72.0
+
+            # 1. Try metadata first
+            dpi_meta = full_image.info.get("dpi")
+            if dpi_meta:
+                current_dpi = float(dpi_meta[0])
+                logger.info(f"Image metadata DPI: {current_dpi}")
+
+            # 2. A4 assumption
+            # A4 is 210mm x 297mm (8.27 x 11.69 inches)
+            # the image width is assumed to represent the full A4 width (8.27 inches)
+            img_w, img_h = full_image.size
+            if img_w > 500:  # Basic sanity check
+                calculated_dpi = img_w / 8.27
+                logger.info(
+                    f"Calculated DPI from A4 width ({img_w}px / 8.27in): {calculated_dpi:.2f}"
+                )
+
+                # If calculated DPI is significantly different from metadata, calculated DPI is used
+                if abs(calculated_dpi - current_dpi) > 5.0:
+                    logger.info(
+                        f"Using calculated A4 DPI {calculated_dpi:.2f} instead of metadata DPI {current_dpi}"
+                    )
+                    current_dpi = calculated_dpi
+
+            logger.info(f"Final effective DPI for scaling: {current_dpi}")
+
+            if current_dpi > 0 and abs(current_dpi - 72.0) > 1.0:
+                dpi_scale_factor = 72.0 / current_dpi
+                logger.info(f"DPI Scale Factor: {dpi_scale_factor:.4f} (72 / {current_dpi})")
+
+        except Exception as e:
+            logger.warning(f"Failed to determine DPI: {e}")
+
         def update_session(session: SessionState):
             debug_info = []
+
             if session.text is not None:
                 updated_texts: List[HasFontInfo] = []
                 for t in session.text:
@@ -274,6 +332,50 @@ async def detect_font_logic(session_id: str) -> str:
                         height = (
                             (t.bbox[3].x - t.bbox[0].x) ** 2 + (t.bbox[3].y - t.bbox[0].y) ** 2
                         ) ** 0.5
+
+                        # Apply DPI scaling
+                        width *= dpi_scale_factor
+                        height *= dpi_scale_factor
+
+                        # Measure actual ink height to handle loose OCR boxes
+                        try:
+                            # 1. Get axis-aligned crop coordinates
+                            # t.bbox is [UL, UR, LR, LL]
+                            xs = [p.x for p in t.bbox]
+                            ys = [p.y for p in t.bbox]
+                            min_x, max_x = int(min(xs)), int(max(xs))
+                            min_y, max_y = int(min(ys)), int(max(ys))
+
+                            # Validate bounds
+                            if (
+                                0 <= min_x < max_x <= full_image.width
+                                and 0 <= min_y < max_y <= full_image.height
+                            ):
+                                # 2. Crop
+                                crop = full_image.crop((min_x, min_y, max_x, max_y))
+
+                                # 3. Convert to B/W to find ink
+                                # Convert to grayscale
+                                gray = crop.convert("L")
+                                # Threshold: Assume text is dark on light.
+                                # Pixels < 200 become 0 (black/ink), > 200 become 255 (white/bg)
+                                # INK should be non-zero for getbbox()
+                                # So invert: Dark -> 255, Light -> 0
+                                bw = gray.point(lambda p: 255 if p < 200 else 0, mode="1")
+
+                                ink_bbox = bw.getbbox()
+                                if ink_bbox:
+                                    _, ink_top, _, ink_bottom = ink_bbox
+                                    ink_h_px = ink_bottom - ink_top
+
+                                    # Scale ink height to 72 DPI
+                                    ink_h_72 = ink_h_px * dpi_scale_factor
+
+                                    # Use detected ink height
+                                    if ink_h_72 > 4:  # Ignore tiny specks
+                                        height = ink_h_72
+                        except Exception:
+                            pass
 
                         # Estimate size
                         try:

@@ -794,11 +794,8 @@ def fetch_image(
             image = cached
         else:
             try:
-                timeout = 10.0 if stage == "superres" else None
                 max_pixels = 0 if stage == "superres" else 50_000_000
-                image = _run_async(
-                    FileClient.get_image(file_id, timeout=timeout, max_pixels=max_pixels)
-                )
+                image = _run_async(FileClient.get_image(file_id, max_pixels=max_pixels))
             except Exception:
                 logger.exception("Failed to fetch image for stage %s (file_id=%s)", stage, file_id)
                 failure_reason = "Failed to fetch image."

@@ -9,5 +9,6 @@
   (key: "ui", short: "UI", long: "User Interface"),
   (key: "gpu", short: "GPU", long: "Graphical Processing Unit"),
   (key: "repl", short: "REPL", long: "Read–eval–print loop"),
+  (key: "ffc", short: "FFC", long: "Fast Fourier Convolution"),
   // (key: "", short: "", long: ""),
 )

@@ -1,10 +1,10 @@
+import io
 import logging
 
 import cv2
 import numpy as np
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
-from numpy.typing import NDArray
 from PIL import Image
 
 from traenslenzor.file_server.client import FileClient, SessionClient
@@ -58,25 +58,36 @@ async def extract_text(session_id: str) -> str:
         logger.error("Invalid file id, no such document found")
         return f"Document not found: {session.rawDocumentId}"
 
+    # Extract DPI from original image if available
+    original_dpi = None
+    try:
+        with Image.open(io.BytesIO(file_data)) as pil_img:
+            original_dpi = pil_img.info.get("dpi")
+            if original_dpi:
+                logger.info(f"Detected original DPI: {original_dpi}")
+    except Exception as e:
+        logger.warning(f"Failed to extract DPI from original document: {e}")
+
     orig_img = bytes_to_numpy_image(file_data)
 
     if using_existing_extracted:
         flattened_img = orig_img
     else:
         flattening_result = deskew_document(orig_img)
-
-        flattened_img = orig_img
-        transformation_matrix = np.eye(3, dtype=np.float64)
-        document_coordinates: NDArray[np.float32] = np.array([])
-        if flattening_result is not None:
-            logger.info("Image flattening successful")
-            flattened_img, transformation_matrix, document_coordinates = flattening_result
-        else:
-            logger.error("Image flattening failed, proceeding with original image")
+        if flattening_result is None:
+            logger.error("Deskewing failed; cannot extract text.")
+            raise ToolError("Deskewing failed; cannot extract text.")
+        flattened_img, transformation_matrix, document_coordinates = flattening_result
 
         upload_image = cv2.cvtColor(flattened_img, cv2.COLOR_BGR2RGB)
+
+        # Create PIL image and restore DPI metadata
+        pil_upload_image = Image.fromarray(upload_image)
+        if original_dpi:
+            pil_upload_image.info["dpi"] = original_dpi
+
         flattened_image_id = await FileClient.put_img(
-            f"{session_id}_deskewed.png", Image.fromarray(upload_image)
+            f"{session_id}_deskewed.png", pil_upload_image
         )
         if flattened_image_id is None:
             logger.error("Uploading of extracted document image failed")
@@ -95,20 +106,14 @@ async def extract_text(session_id: str) -> str:
     res = run_ocr(flattened_img)
 
     if res is None:
-        raise ToolError("OCR text extraction failed")
-
-    if res is None:
         logger.error("OCR failed to extract text")
-        return "OCR failed to extract text"
+        raise ToolError("OCR text extraction failed")
 
     def update_session(session: SessionState):
         session.text = res  # pyright: ignore[reportAttributeAccessIssue]
         session.extractedDocument = extracted_document
 
     await SessionClient.update(session_id, update_session)
-
-    if res is None:
-        return "Extracted no text from image"
 
     return "\n".join([f"{index}: {text.extractedText}" for index, text in enumerate(res)])
 

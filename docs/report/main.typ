@@ -1,5 +1,5 @@
 
-#import "@preview/supercharged-hm:0.1.1": *
+#import "@preview/supercharged-hm:0.1.2": *
 #import "glossary.typ": glossary
 #import "appendix.typ": appendix
 
