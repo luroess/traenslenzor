@@ -1,0 +1,34 @@
+---
+title:
+config:
+  htmlLabels: false
+  sequence:
+    showSequenceNumbers: false
+---
+
+sequenceDiagram
+  participant Sup as Supervisor
+  participant MCP as DocClassifier MCP
+  participant Sess as SessionClient
+  participant File as FileClient
+  participant RT as DocClassifierRuntime
+  participant Model as DocClassifierModule
+
+  Sup->>MCP: classify_document(session_id)
+  MCP->>Sess: get(session_id)
+  Sess-->>MCP: SessionState
+  MCP->>RT: classify_file_id(extractedDocument.id, top_k=3)
+  RT->>File: get_image(file_id)
+  File-->>RT: Image
+
+  alt checkpoint loaded
+    RT->>Model: forward() + softmax
+    Model-->>RT: probabilities
+  else mock mode
+    RT->>RT: hash bytes -> deterministic probs
+  end
+
+  RT-->>MCP: predictions + class names
+  MCP->>Sess: update(class_probabilities)
+  Sess-->>MCP: ok
+  MCP-->>Sup: label -> probability map

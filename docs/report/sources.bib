@@ -43,7 +43,7 @@
   year      = {2019}
 }
 
-@inproceedings{Verhoeven:UVDoc:2023,
+@inproceedings{VerhoevenUVDoc2023,
   author    = {Verhoeven, Floor and Magne, Tanguy and Sorkine-Hornung, Olga},
   title     = {UVDoc: Neural Grid-based Document Unwarping},
   year      = {2023},
@@ -57,6 +57,14 @@
   numpages  = {10},
   location  = {Sydney, NSW, Australia},
   series    = {SA '23}
+}
+
+@online{OpenVINOTextImageSR0001,
+  title       = {text-image-super-resolution-0001 (Open Model Zoo)},
+  url         = {https://docs.openvino.ai/2023.3/omz_models_model_text_image_super_resolution_0001.html},
+  urldate     = {2026-01-22},
+  organization= {Intel},
+  year        = {2023}
 }
 
 @online{noauthor_paddlepaddlepaddle_nodate,
@@ -167,4 +175,42 @@
   abstract = {Modern image inpainting systems, despite the significant progress, often struggle with large missing areas, complex geometric structures, and high-resolution images. We find that one of the main reasons for that is the lack of an effective receptive field in both the inpainting network and the loss function. To alleviate this issue, we propose a new method called large mask inpainting (LaMa). LaMa is based on i) a new inpainting network architecture that uses fast Fourier convolutions (FFCs), which have the image-wide receptive field; ii) a high receptive field perceptual loss; iii) large training masks, which unlocks the potential of the first two components. Our inpainting network improves the state-of-the-art across a range of datasets and achieves excellent performance even in challenging scenarios, e.g. completion of periodic structures. Our model generalizes surprisingly well to resolutions that are higher than those seen at train time, and achieves this at lower parameter\&time costs than the competitive baselines. The code is available at \textbackslash url\{https://github.com/saic-mdal/lama\}.},
   pubstate = {prepublished},
   keywords = {Computer Science - Computer Vision and Pattern Recognition,Electrical Engineering and Systems Science - Image and Video Processing},
+}
+
+@misc{opencv_tutorial_contour_features,
+  author       = {{OpenCV Team}},
+  title        = {OpenCV: Contour Features},
+  howpublished = {OpenCV-Python Tutorials (OpenCV Documentation)},
+  url          = {https://docs.opencv.org/4.x/dd/d49/tutorial_py_contour_features.html},
+  urldate      = {2026-01-23}
+}
+
+@misc{opencv_tutorial_thresholding_otsu,
+  author       = {{OpenCV Team}},
+  title        = {Image Thresholding},
+  howpublished = {OpenCV-Python Tutorials (OpenCV Documentation)},
+  url          = {https://docs.opencv.org/4.x/d7/d4d/tutorial_py_thresholding.html},
+  urldate      = {2026-01-23}
+}
+
+@article{gradcam,
+   title={Grad-CAM: Visual Explanations from Deep Networks via Gradient-Based Localization},
+   volume={128},
+   ISSN={1573-1405},
+   url={http://dx.doi.org/10.1007/s11263-019-01228-7},
+   DOI={10.1007/s11263-019-01228-7},
+   number={2},
+   journal={International Journal of Computer Vision},
+   publisher={Springer Science and Business Media LLC},
+   author={Selvaraju, Ramprasaath R. and Cogswell, Michael and Das, Abhishek and Vedantam, Ramakrishna and Parikh, Devi and Batra, Dhruv},
+   year={2019},
+   month=oct, pages={336-359}
+}
+
+@misc{captum,
+  author       = {{PyTorch Contributors}},
+  title        = {Captum: Model Interpretability for PyTorch},
+  howpublished = {GitHub repository},
+  url          = {https://github.com/pytorch/captum},
+  urldate      = {2026-01-23}
 }

@@ -38,12 +38,13 @@ The supervisor identifies the need to invoke the document editor tool (@comp_x_d
   For some components (e.g., the font detector or the document class detector), add experiment results (confusion matrices, loss curves, etc.).
 ]
 
-#include("components/01_comp_user_interface.typ")
-#include("components/02_comp_supervisor.typ")
-#include("components/03_comp_file_server.typ")
-#include("components/04_comp_text_extractor.typ")
-#include("components/06_comp_font_detector.typ")
-#include("components/07_comp_document_translator.typ")
-#include("components/08_comp_document_class_detector.typ")
-#include("components/09_comp_x_document_editor.typ")
-#include("components/10_comp_document_image_renderer.typ")
+#include "components/01_comp_user_interface.typ"
+#include "components/02_comp_supervisor.typ"
+#include "components/03_comp_file_server.typ"
+#include "components/05_comp_document_scanner.typ"
+#include "components/04_comp_text_extractor.typ"
+#include "components/06_comp_font_detector.typ"
+#include "components/07_comp_document_translator.typ"
+#include "components/08_comp_document_class_detector.typ"
+#include "components/09_comp_x_document_editor.typ"
+#include "components/10_comp_document_image_renderer.typ"

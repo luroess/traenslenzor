@@ -1,0 +1,62 @@
+{
+  "doc-classifier": {
+    "categorical_tests": [
+      {
+        "param": "normalization_mode",
+        "test": "anova",
+        "p_value": null,
+        "significant": false,
+        "group_stats": [
+          {
+            "group": "dataset",
+            "n": 6,
+            "mean": 0.657412568728129,
+            "median": 0.5430556535720825,
+            "std": 0.19611680020971023
+          }
+        ]
+      },
+      {
+        "param": "transform_config",
+        "test": "anova",
+        "p_value": null,
+        "significant": false,
+        "group_stats": [
+          {
+            "group": "finetune_plus",
+            "n": 14,
+            "mean": 0.4711002771343504,
+            "median": 0.46936753392219543,
+            "std": 0.008341064142714336
+          }
+        ]
+      },
+      {
+        "param": "backbone_unfreeze_at_epoch",
+        "test": "anova",
+        "p_value": 0.8633298971910114,
+        "significant": false,
+        "group_stats": [
+          {
+            "group": 1.0,
+            "n": 2,
+            "mean": 0.5430556535720825,
+            "median": 0.5430556535720825,
+            "std": 0.008963454566508856
+          },
+          {
+            "group": 2.0,
+            "n": 18,
+            "mean": 0.5252093325058619,
+            "median": 0.47426800429821014,
+            "std": 0.14107806694658498
+          }
+        ]
+      }
+    ]
+  },
+  "doc-classifier-alexnet-sweep": {
+    "n_trials": 56,
+    "n_complete": 8
+  }
+}
