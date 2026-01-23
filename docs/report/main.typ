@@ -4,7 +4,7 @@
 #import "appendix.typ": appendix
 
 #show: hm-template(
-  title: "Traenslenzor",
+  title: "Translenzor Document Assistant",
   subtitle: [Advanced Deep Learning],
   authors: authors(
     "Jan Duchscherer",

@@ -700,13 +700,13 @@ def _render_top_right_tools(session: SessionState | None) -> None:
 
 def _render_chat(history: list[dict[str, str]]) -> None:
     """Render the chat history and the running indicator."""
-    st.title("TrÄenslÄnzÖr 0815 Döküment Äsißtänt")
+    st.title("Translenzor Document Assistant")
     for message in history:
         with st.chat_message(message["role"]):
             st.write(message["content"])
     if _is_supervisor_running():
         with st.chat_message("assistant"):
-            st.status("TrÄenslönzing...", state="running", expanded=False)
+            st.status("Translenzing...", state="running", expanded=False)
 
 
 def _draw_document_outline(
