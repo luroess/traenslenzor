@@ -1,4 +1,4 @@
-#import "@preview/supercharged-hm:0.1.1": *
+#import "@preview/supercharged-hm:0.1.2": *
 
 == Document Translator <comp_document_translator>
 
@@ -14,7 +14,8 @@ Translating text items individually would result in several problems:
 To address these issues, the translator implements a batch-first approach:
 - All `TextItem.extractedText` values from a session are collected and enumerated in the format `0: ...`, `1: ...`, etc.
 - A single `client.chat` call is made with a system prompt instructing the #gls("llm") to preserve the original numbering and structure in the output.
-- The response is parsed line-by-line, stripping numbering prefixes and mapping each translated line back to its corresponding `TextItem`.
+- The response is parsed using regex to match indices, ensuring robustness even if the model returns lines out of order.
+- If specific items are missing from the batch response, they are automatically retried individually.
 - Each result is wrapped in a `TranslationInfo` object and attached via `add_translation`, producing a list of `HasTranslation` items.
 
 === Fallback to Sequential Translation
@@ -39,13 +40,16 @@ To address these issues, the translator implements a batch-first approach:
 
     message = {
         "role": "user",
-        "content": "\n".join([f"{i}: {txt}" for i, txt in enumerate(input_texts)]),
+        "content": "\n".join([f"{i}: {txt.replace(chr(10), ' ')}" for i, txt in enumerate(input_texts)]),
     }
     ```]
 ]<translator_batch_format>
 
-If the batch call fails or produces output with mismatched line counts, the translator logs a warning (including a preview of the malformed response) and falls back to translating each `TextItem` individually using the `translate()` function.
-This ensures robustness: even if the #gls("llm") fails to maintain structure in batch mode, every item still receives a translation.
+The translator employs a robust two-stage fallback mechanism.
+First, if the batch response is successfully parsed but some indices are missing, only those specific items are retried individually using the `translate()` function.
+Second, if the batch request fails entirely (e.g., connection error or malformed non-parseable output), a global fallback triggers to translate every item sequentially.
+This ensures robustness: even if the #gls("llm") fails to maintain structure or drops lines in batch mode, every item still receives a translation.
+However, this comes at the cost of execution speed, as the sequential processing of many small requests is significantly slower than a single batch operation.
 
 The fallback function uses a simpler single-item prompt that instructs the #gls("llm") to return only the translation or, if translation is impossible, the original text unchanged.
 

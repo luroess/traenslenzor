@@ -1,4 +1,4 @@
-#import "@preview/supercharged-hm:0.1.1": *
+#import "@preview/supercharged-hm:0.1.2": *
 #import "@preview/pintorita:0.1.4"
 #show raw.where(lang: "pintora"): it => pintorita.render(it.text, style: "default")
 #show figure: set block(breakable: true)
@@ -30,6 +30,8 @@
 #strong[What went wrong:]
 - Some components were less related to machine learning and instead mainly involved traditional software engineering tasks.
 - (Text Extractor) Unfortunately, PaddleOCR did not produce satisfactory results; this should have been evaluated more thoroughly before being integrated into the project.
+- (Font Detector) The late decision to switch the OCR engine (from Paddle to Tesseract) caused regression in the Font Detector, as the model was trained on tight bounding boxes but received loose boxes from Tesseract.
+- (Font Detector) The resolution mismatch between synthetic training data (72 DPI) and high-resolution images was initially overlooked because the primary test image also had 72 DPI. This caused the error to go unnoticed until late-stage testing with high-res images revealed massive size overestimation, which was addressed by implementing DPI scaling.
 - #[
   (Supervisor) In retrospect, we should have evaluated more carefully which model to start with, as working with a suboptimal model consumed a considerable amount of time.
 ]
@@ -65,6 +67,10 @@
     [DT2],[Tried different #gls("llm") models for translation quality.],
     [DT3],[Batch translation implementation with numbered output parsing.],
 
+    [FT1],[Font detector roadmap, model review, and dataset planning.],
+    [FT2],[Font detector MCP server, baseline MLP model, and dataset generation.],
+    [FT3],[Dataset improvements, feature expansion, and MLP training results.],
+    [FT4],[Custom ResNet classifier, cropping updates, and test integration.],
 
     [XDE1],[Direct Version],
     [XDE2],[Separate #gls("llm")],
@@ -105,7 +111,7 @@
   ],
   [Felix Schladt], [SV4], [
     // todo felix
-    - Evaluated multiple #glspl("llm") available on hugging face as replacement for LLaMA 3.
+    - Evaluated multiple #glspl("llm") available on hugging face as replacement for LLaMA 3.2.
     - Settled on qwen3 for its tool calling and comprehension abilities.
   ],
   [Jan Schaible], [SV5], [
@@ -141,10 +147,11 @@
 #contributed(
   "Text Extractor",
   [Felix Schladt], [TE1], [
-    - Converted to grayscale, applied blurring, and detected edges with Canny.
-  ],
+    - Converted to grayscale, applied blurring, and detected edges with Canny
+    - Document extraction and deskewing
+    ],
   [Felix Schladt], [TE2], [
-    - Performed #gls("ocr") using Paddle.
+    - Performed #gls("ocr") using PaddleOCR.
     - Parsed results into the session data structure.
   ],
   [Jan Schaible], [TE3], [
@@ -165,8 +172,36 @@
   ],
   [Benedikt Köhler\ Lukas Röß], [DT3], [
     - Implemented a batch translation prompt that preserves line numbering.
-    - Parsed and mapped translated lines back onto text items.
+    - Implemented robust regex-based response parsing with individual retry logic for text items missing from the batch response.
+    - Added a sequential fallback mechanism for complete batch failures to ensure reliability.
   ],
+)
+
+#contributed(
+  "Font Detector",
+  [Lukas Röß], [FT1], [
+    - Created the roadmap for the font detector.
+    - Reviewed font identifier models.
+    - Planned synthetic dataset generation for five fonts and multiple sizes.
+  ],
+  [Lukas Röß], [FT2], [
+    - Implemented MCP tools for font name detection and size estimation.
+    - Integrated the HuggingFace font-identifier model.
+    - Built dataset generation with 5 fonts and 10k samples per font.
+    - Defined a 30D MLP with ReLU, MSE loss, Adam, and per-font normalization.
+  ],
+  [Lukas Röß], [FT3], [
+    - Improved synthetic data with tight cropping and multiline text.
+    - Expanded the feature vector to include line count and log features.
+    - Trained per-font MLPs and recorded MAE and RMSE results.
+  ],
+  [Lukas Röß], [FT4], [
+    - Replaced the HuggingFace model with a custom ResNet18.
+    - Generated a dedicated synthetic dataset for the classifier.
+    - Added testing scripts and debugged MCP integration.
+    - Disabled the line-count feature due to unreliable behavior on real data.
+    - Implemented DPI scaling to handle Tesseract's loose bounding boxes.
+  ]
 )
 
 #contributed(
@@ -243,12 +278,15 @@ gantt
   "Tool Mock"       : 2025-7-10, 1w
 
   section font_detector
-  "Tool Mock"       : 2025-7-10, 1w
+  "Roadmap & Review"       : ft1, 2025-10-13, 1w
+  "MCP & MLP Baseline"     : ft2, after ft1, 6w
+  "Dataset & MLP Tuning"   : ft3, after ft2, 2w
+  "ResNet & DPI Fix"       : ft4, after ft3, 6w
 
   section document_translator
-  "Single-batch testing"       : dt1, 2025-10-25, 1w
+  "Single-batch testing"       : dt1, 2025-11-24, 3w
   "LLM model comparison"       : dt2, after dt1, 1w
-  "Batch implementation"       : dt3, after dt2, 1w
+  "Batch implementation"       : dt3, after dt2, 4w
 
   section document_class_detector
   "Tool Mock"       : 2025-7-10, 1w

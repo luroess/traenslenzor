@@ -72,32 +72,26 @@ class FontNameDetector:
     def _prepare_image(self, img: Image.Image) -> Image.Image:
         """
         Load and prepare image for inference.
-        Strategy: Center crop 224x224 if larger, pad if smaller. No resizing/scaling.
+        Strategy: Pad to square then resize to 224x224 (matching training).
         """
         if img.mode != "RGB":
             img = img.convert("RGB")
 
         w, h = img.size
-        target_size = 224
 
-        # Create white canvas
-        new_img = Image.new("RGB", (target_size, target_size), "white")
-
-        # If image is larger than target, crop center
-        if w > target_size or h > target_size:
-            # Calculate crop box
-            left = max(0, (w - target_size) // 2)
-            top = max(0, (h - target_size) // 2)
-            right = min(w, left + target_size)
-            bottom = min(h, top + target_size)
-
-            img = img.crop((left, top, right, bottom))
-            w, h = img.size
+        # Square Pad
+        max_wh = max(w, h)
+        new_img = Image.new("RGB", (max_wh, max_wh), "white")
 
         # Paste in center
-        offset_x = (target_size - w) // 2
-        offset_y = (target_size - h) // 2
+        offset_x = (max_wh - w) // 2
+        offset_y = (max_wh - h) // 2
         new_img.paste(img, (offset_x, offset_y))
+
+        # Resize to 224x224
+        target_size = 224
+        if max_wh != target_size:
+            new_img = new_img.resize((target_size, target_size), Image.Resampling.BILINEAR)
 
         return new_img
 

@@ -1,32 +1,37 @@
-#import "@preview/supercharged-hm:0.1.1": *
+#import "@preview/supercharged-hm:0.1.2": *
 #show link: underline
 
 == Supervisor <comp_supervisor>
 
 The supervisor is the central component of the application.
-It is responsible for the interaction with the agent #gls("llm") and provides the #gls("llm") with callable tools.
-Although the implementation is concise, it reflects extensive experimentation to arrive at a reliable solution.
+It is responsible for interaction with the agent #gls("llm") and provides the #gls("llm") with callable tools.
+Although the implementation is concise, it reflects extensive experimentation to achieve a reliable solution.
 
+Substantial time was spent tuning the #gls("llm") prompt, and it remained one of the most sensitive parts of the system.
+Even minor refinements intended to improve alignment could introduce subtle regressions, so each change required careful testing and multiple rounds of iteration.
 
 === Internal Structure 
-One of the requirements was to avoid programming a fixed sequence of tools that the process would follow once all information was gathered. Therefore, we only use LanGraph indirectly via LangChain's create_agent method, which handles tool execution after an #gls("llm") call when specified.
+One of the requirements was to avoid programming a fixed sequence of tools that the process would follow once all information was gathered.
+Therefore, we only use LanGraph indirectly via LangChain's create_agent method, which handles tool execution after an #gls("llm") call when specified.
 
-To provide the current context, we leverage LangChain's dynamic_prompt hook to inject session context into the #gls("llm") (see @sec-prompt for details).
+To provide the current context, we leverage LangChain's `dynamic_prompt` hook to inject session context into the #gls("llm") (see @sec-prompt for details).
 We opted to let the #gls("llm") inject the `session_id` into tool calls directly.
 Programmatic injection would have required modifying the tool definitions, which we deemed unnecessary since the #gls("llm") handles the `session_id` injection seamlessly.
 
 === Model Selection <sec-llm-config>
 #let model(m) = {rgb-raw(m, rgb("#5079ba"))}
 
-Choosing a suitable #gls("llm") was challenging, as the system had to run on consumer hardware without #gls("gpu") support, restricting us to smaller models. This was further complicated by the requirement that the model determine the tool invocation order dynamically at runtime using only tool descriptions and input specifications.
+Choosing a suitable #gls("llm") was challenging, as the system had to run on consumer hardware without #gls("gpu") support, restricting us to smaller models.
+This was further complicated by the requirement that the model determine the tool invocation order dynamically at runtime using only tool descriptions and input specifications.
 Development started using the #model("gemma3:4b")@noauthor_gemma34b_nodate #gls("llm") model, which soon proved to be incompatible due to missing tool-calling abilities @schmid_google_2025.
-Instead, #model("llama3.1:8b")@noauthor_llama31_nodate was chosen, offering good langchain integration and tool-calling abilities. 
+Instead, #model("llama3.1:8b")@noauthor_llama31_nodate was chosen, offering good LangChain integration and tool-calling abilities.
 During later development, however, it became apparent that the model could not reliably select the correct tools for execution and had difficulty following its instructions.
-A short lived switch to #model("llama3.2:3b")@noauthor_llama32_nodate proved it to also not be up to the task, though coping better in some aspects.
+A short-lived switch to #model("llama3.2:3b")@noauthor_llama32_nodate proved it to also not be up to the task, though coping better in some aspects.
 To identify a suitable model capable of reliably handling user input and correctly selecting tools, a broad range of freely available models was evaluated.
-This included #model("gpt-oss:20b")@noauthor_gpt-oss_nodate, #model("gwen3:8b")@noauthor_qwen3_nodate, #model("qwen3:14b"), #model("deepseek-r1:8b")@noauthor_deepseek-r1_nodate and #model("deepseek-r1:14b").
-Though #model("gpt-oss:20b") proved very reliable and accurate, it is also quite resource hungry and usable on our development hardware.
-Instead, #model("gwen3:8b") demonstrated good reasoning capability and reliably identified the correct oder of tools to call. With further testing and prompt refinement a step down to #model("gwen3:4b") also proved to work reliably.
+This included #model("gpt-oss:20b")@noauthor_gpt-oss_nodate, #model("gwen3:8b")@noauthor_qwen3_nodate, #model("qwen3:14b"), #model("deepseek-r1:8b")@noauthor_deepseek-r1_nodate, and #model("deepseek-r1:14b").
+Though #model("gpt-oss:20b") proved very reliable and accurate, it is also quite resource hungry and not usable on our development hardware.
+Instead, #model("gwen3:8b") demonstrated good reasoning capability and reliably identified the correct order of tools to call.
+With further testing and prompt refinement, a step down to #model("gwen3:4b") also proved to work reliably.
 Although #model("gwen3:4b") is comparatively small, its strong reasoning capabilities provide a high level of understanding, albeit at the cost of relatively long response times on our development systems.
 
 === Prompt<sec-prompt>
@@ -86,7 +91,19 @@ Some of the problems we encountered along the way included:
 
 === Failed approaches
 
-In this chapter, we discuss some approaches that were tried but then discarded.
+In this chapter, we discuss some approaches that were tried but later discarded.
+
+==== Successive Tool Unlock
+
+In the initial prototyping phase of the project, the key question was how a reliable tool call order could be ensured.
+As no restrictions on how this should be achieved were specified in the initial project presentation and task description, we evaluated multiple variants to reliably achieve a fixed tool calling order.
+
+Most successful, and well compatible with LangChain, proved to be the dynamic addition of tools as soon as the required prerequisites were met.
+This addressed multiple issues we would otherwise face, including incorrect calling order by the #gls("llm") and incorrect call parameters, and it proved reliable in practice.
+Using this method, a fully functional supervisor mockup was implemented in the initial phase of the project.
+
+Once presented during the first update meeting, the requirements around the supervisor and tool calling were adjusted without prior notice in a way that made this solution no longer applicable.
+As a result, we had to discard the working implementation and move to a different approach, which required additional effort and workarounds to reach comparable reliability.
 
 ==== LLaMA 3.1/3.2
 
@@ -104,12 +121,13 @@ However, it then began calling tools continuously without stopping, which ultima
 
 ==== Memory
 As our first approach was to let the #gls("llm") handle the results returned from the tools directly, we needed some form of persistence that would keep relevant information in the context window even as the amount of data in the window grew.
-To do this, we first thought of approaches like #link("https://docs.langchain.com/oss/python/langchain/middleware/built-in#summarization")[LangChains Summerization], but this might cut relevant information.
+To do this, we first considered approaches like #link("https://docs.langchain.com/oss/python/langchain/middleware/built-in#summarization")[LangChain's Summarization], but this might cut relevant information.
 Therefore, we considered giving the #gls("llm") a tool to store relevant information in memory directly, which would then be injected into the context itself.
 This, however, did not work and was one of the reasons we switched to the session-based system.
 
 ==== React pattern for tools
-To encourage reasoning in LLaMA, we attempted to apply the React pattern using a one-shot instruction:
+To encourage reasoning in LLaMA, we attempted to apply the ReAct pattern using a one-shot instruction:
+
 #figure(
     caption: "One Shot Instruction",
     code()[```json
