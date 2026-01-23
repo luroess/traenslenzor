@@ -111,8 +111,8 @@ The following results compare the ground truth (`scientific_publication_metadata
 ) <fig:font_det_session>
 
 ==== Analysis
-- **Size Accuracy:** The ink-measurement logic proved effective, bringing the body text error down to negligible levels (~1pt). Section headers were slightly underestimated, likely due to their sparse ink density relative to their bounding box height.
-- **Font Identification:** The system correctly identified the font as **Lato-Regular** with **42.87% confidence**. While the confidence score is lower than ideal (likely due to the image quality and the dense scientific layout), the classification was correct.
+- *Size Accuracy:* The ink-measurement logic proved effective, bringing the body text error down to negligible levels (~1pt). Section headers were slightly underestimated, likely due to their sparse ink density relative to their bounding box height.
+- *Font Identification:* The system correctly identified the font as *Lato-Regular* with *42.87% confidence*. While the confidence score is lower than ideal (likely due to the image quality and the dense scientific layout), the classification was correct.
 
 #figure(
   image("../../imgs/scientific_publication_Lato_with_detection_box.png", width: 80%),
